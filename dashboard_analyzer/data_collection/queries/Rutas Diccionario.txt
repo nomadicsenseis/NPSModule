@@ -1,0 +1,7 @@
+EVALUATE
+    SELECTCOLUMNS(
+        Route_Master,
+        [route],
+        [country_name],
+        [gr_region],
+        Route_Master[haul_aggr])

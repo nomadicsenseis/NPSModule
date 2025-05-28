@@ -1,0 +1,53 @@
+DEFINE  
+    VAR __DS0FilterTable =
+        TREATAS({"Business", "Economy", "Premium EC"}, 'Cabin_Master'[Cabin_Show])
+ 
+    VAR __DS0FilterTable2 =
+        TREATAS({"IB","YW"}, 'Company_Master'[Company])
+ 
+    VAR __DS0FilterTable3 =
+        TREATAS({"SH","LH"}, 'Haul_Master'[Haul_Aggr])
+ 
+    VAR __DS0FilterTable4 =
+        FILTER(
+            KEEPFILTERS(VALUES('Date_Master'[Date])),
+            'Date_Master'[Date] =date(2025,05,12)
+        )
+ 
+    VAR __DS0FilterTable5 =
+        TREATAS({1}, 'TouchPoint_Master'[explanatory_drivers])
+ 
+    VAR __DS0FilterTable6 =
+        FILTER(
+            KEEPFILTERS(VALUES('TouchPoint_Master'[filtered_name])),
+            NOT(
+                'TouchPoint_Master'[filtered_name] IN {"Covid measures",
+                    "Ease of contact by IB Plus email",
+                    "Mobile App",
+                    "Response provided to the issue",
+                    "Website"}
+            )
+        )
+    VAR __DS0FilterTable7 =
+        TREATAS({"vs L14D"}, 'Filtro_Comparativa'[Filtro_Comparativa])
+ 
+ 
+    VAR __DS0Core =
+        SUMMARIZECOLUMNS(
+            'TouchPoint_Master'[filtered_name],
+            __DS0FilterTable,
+            __DS0FilterTable2,
+            __DS0FilterTable3,
+            __DS0FilterTable4,
+            __DS0FilterTable5,
+            __DS0FilterTable6,
+            __DS0FilterTable7,
+            "Satisfaction diff", 'Measure'[S_client_satisfaction_diff],
+            "Satisfaction Sig", [Switch_Satisfaction_Sig_Diff],
+            "Satisfaction", 'Measure'[S_Satisfaction_label],
+            "Shapdiff", 'Measure'[S_shap_value_label_2],
+            "NPS diff", [Switch_NPS_Raw_diff]
+        )
+ 
+EVALUATE
+    __DS0Core

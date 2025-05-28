@@ -1,0 +1,27 @@
+DEFINE  
+    VAR __DS0FilterTable =
+        TREATAS({"Business", "Economy", "Premium EC"}, 'Cabin_Master'[Cabin_Show])
+ 
+    VAR __DS0FilterTable2 =
+        TREATAS({"IB","YW"}, 'Company_Master'[Company])
+ 
+    VAR __DS0FilterTable3 =
+        TREATAS({"SH","LH"}, 'Haul_Master'[Haul_Aggr])
+ 
+    VAR __DS0FilterTable4 =
+        FILTER(
+            KEEPFILTERS(VALUES('Date_Master'[Date])),
+            'Date_Master'[Date] =date(2025,05,12)
+        )
+ 
+    var __DS0Core= 
+ADDCOLUMNS(
+    CALCULATETABLE(verbatims_sentiment,
+            __DS0FilterTable,
+            __DS0FilterTable2,
+            __DS0FilterTable3,
+            __DS0FilterTable4), "Verbatim", 
+CALCULATE(min(surveys_maritz[nps_all_t])))
+ 
+EVALUATE
+    __DS0Core

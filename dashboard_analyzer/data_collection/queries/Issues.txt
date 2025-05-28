@@ -1,0 +1,89 @@
+DEFINE  
+    VAR __DS0FilterTable =
+        TREATAS({"Business", "Economy", "Premium EC"}, 'Cabin_Master'[Cabin_Show])
+ 
+    VAR __DS0FilterTable2 =
+        TREATAS({"IB","YW"}, 'Company_Master'[Company])
+ 
+    VAR __DS0FilterTable3 =
+        TREATAS({"SH","LH"}, 'Haul_Master'[Haul_Aggr])
+ 
+    VAR __DS0FilterTable4 =
+        FILTER(
+            KEEPFILTERS(VALUES('Date_Master'[Date])),
+            'Date_Master'[Date] =date(2025,05,12)
+        )
+ 
+    VAR __DS0FilterTable5 =
+        TREATAS({1}, 'Issue_Touchpoint_Dict'[explanatory_drivers])
+ 
+    VAR __DS0FilterTable6 =
+        FILTER(
+            KEEPFILTERS(VALUES('Issue_Touchpoint_Dict'[Touchpoint])),
+            NOT(
+                'Issue_Touchpoint_Dict'[Touchpoint] IN {"Covid measures",
+                    "Ease of contact by IB Plus email",
+                    "Mobile App",
+                    "Response provided to the issue",
+                    "Website"}
+            )
+        )
+    VAR __DS0FilterTable7 =
+        TREATAS({"vs L14D"}, 'Filtro_Comparativa'[Filtro_Comparativa])
+ 
+    VAR __DS0FilterTable8 =
+        FILTER(
+            KEEPFILTERS(VALUES('Issue_Touchpoint_Dict'[issue_type_3])),
+            NOT(
+                'Issue_Touchpoint_Dict'[issue_type_3] IN {"Social distance not respected at security control",
+                    "Social distance was not respected at departure gate",
+                    "Incorrect use of face masks at check-in",
+                    "Incorrect use of face masks at departure gate",
+                    "Incorrect use of face masks at security control",
+                    "Incorrect use of face masks in business lounge",
+                    "Issue with face masks on board",
+                    "Social distance not respected at check-in"}
+            )
+        )
+ 
+   
+ 
+    VAR __DS0Core =
+        SUMMARIZECOLUMNS(
+            'Issue_Touchpoint_Dict'[Touchpoint],
+            __DS0FilterTable,
+            __DS0FilterTable2,
+            __DS0FilterTable3,
+            __DS0FilterTable4,
+            __DS0FilterTable5,
+            __DS0FilterTable6,
+            __DS0FilterTable7,
+            __DS0FilterTable8,
+            "% Affected", 'Measure'[Switch_%_Affected_D&G]*100,
+            "Diff Affected", 'Measure'[Switch_diff_%_D&G],
+            "Impact on NPS", 'Measure'[Switch_NPS_Impact_D&G],
+            "Diff Impact on NPS", 'Measure'[Switch_diff_Impact_D&G]
+        )
+       
+        VAR __DS0Core1 =
+        SUMMARIZECOLUMNS(
+            'Issue_Touchpoint_Dict'[issue_type_3],
+            __DS0FilterTable,
+            __DS0FilterTable2,
+            __DS0FilterTable3,
+            __DS0FilterTable4,
+            __DS0FilterTable5,
+            __DS0FilterTable6,
+            __DS0FilterTable7,
+            __DS0FilterTable8,
+            "% Affected", 'Measure'[Switch_%_Affected_D&G]*100,
+            "Diff Affected", 'Measure'[Switch_diff_%_D&G],
+            "Impact on NPS", 'Measure'[Switch_NPS_Impact_D&G],
+            "Diff Impact on NPS", 'Measure'[Switch_diff_Impact_D&G]
+        )
+ 
+ 
+EVALUATE
+    __DS0Core
+EVALUATE    
+    __DS0Core1

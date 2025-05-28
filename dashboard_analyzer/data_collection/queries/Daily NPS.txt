@@ -1,0 +1,37 @@
+DEFINE
+    VAR __DS0FilterTable =
+        TREATAS({"Business", "Economy", "Premium EC"}, 'Cabin_Master'[Cabin_Show])
+ 
+    VAR __DS0FilterTable2 =
+        TREATAS({"IB","YW"}, 'Company_Master'[Company])
+ 
+    VAR __DS0FilterTable3 =
+        TREATAS({"SH","LH"}, 'Haul_Master'[Haul_Aggr])
+ 
+    VAR __DS0FilterTable4 =
+        TREATAS({"RF0"}, 'Target_file_version_rank'[Version])
+ 
+    VAR __DS0FilterTable5 =
+        FILTER(
+            KEEPFILTERS(VALUES('Date_Master'[Date])),
+            'Date_Master'[Date] > TODAY()-21
+        )
+ 
+ 
+    VAR __DS0Core =
+        SUMMARIZECOLUMNS(
+            'Date_Master'[Date],
+            __DS0FilterTable,
+            __DS0FilterTable2,
+            __DS0FilterTable3,
+            __DS0FilterTable4,
+            __DS0FilterTable5,
+            "Responses", IGNORE('Measure'[n_count]),
+            "NPS_Raw", 'Measure'[NPS_Raw],
+            "Target", [Target_filtered_period_NPS]
+        )
+ 
+ 
+ 
+EVALUATE
+    __DS0Core

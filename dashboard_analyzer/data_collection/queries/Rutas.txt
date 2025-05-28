@@ -1,0 +1,75 @@
+DEFINE
+    VAR __DS0FilterTable9 =
+        FILTER(
+            KEEPFILTERS(VALUES('Route_Master'[route])),
+            NOT(ISBLANK('Route_Master'[route]))
+        )
+ 
+     VAR __DS0FilterTable =
+        TREATAS({"Business", "Economy", "Premium EC"}, 'Cabin_Master'[Cabin_Show])
+ 
+    VAR __DS0FilterTable2 =
+        TREATAS({"IB","YW"}, 'Company_Master'[Company])
+ 
+    VAR __DS0FilterTable3 =
+        TREATAS({"SH","LH"}, 'Haul_Master'[Haul_Aggr])
+ 
+    VAR __DS0FilterTable4 =
+        FILTER(
+            KEEPFILTERS(VALUES('Date_Master'[Date])),
+            'Date_Master'[Date] =date(2025,05,12)
+        )
+ 
+ 
+ 
+    VAR __DS0FilterTable8 =
+        TREATAS({"'surveys_maritz'[issue_category]"}, 'Categories'[Categories Campos])
+ 
+ 
+    VAR __ValueFilterDM2 =
+        FILTER(
+            KEEPFILTERS(
+                SUMMARIZECOLUMNS(
+                    'Route_Master'[route],
+                    __DS0FilterTable,
+                    __DS0FilterTable2,
+                    __DS0FilterTable3,
+                    __DS0FilterTable4,
+                    __DS0FilterTable8,
+                    __DS0FilterTable9,
+                    "Count_total", IGNORE('Measure'[Count_total])
+                )
+            ),
+            [Count_total] >= 1
+        )
+ 
+    VAR __DS0Core =
+        CALCULATETABLE(ADDCOLUMNS(values('Route_Master'[route]),
+            "NPS", 'Measure'[NPS (Route)],
+            "Pax", 'Measure'[n (Route)],
+            "CodeShare", 'Measure'[CodeShare (Route)]*100,
+            "Check_in", 'Measure'[Check-in (Route)],
+            "Lounge", 'Measure'[Lounge (Route)],
+            "Boarding", 'Measure'[Boarding (Route)],
+            "Aircraft_interior", 'Measure'[Aircraft interior (Route)],
+            "Wi-Fi", 'Measure'[Wi-Fi (Route)],
+            "IFE", 'Measure'[IFE (Route)],
+            "F&B", 'Measure'[F&B (Route)],
+            "Crew", 'Measure'[Crew (Route)],
+            "Arrivals", 'Measure'[Arrivals (Route)],
+            "Connections", 'Measure'[Connections (Route)],
+            "Operative", 'Measure'[Operative (Route)],
+            "NonOperative", 'Measure'[NonOperative (Route)]),
+            __ValueFilterDM2,
+            __DS0FilterTable,
+            __DS0FilterTable2,
+            __DS0FilterTable3,
+            __DS0FilterTable4,
+            __DS0FilterTable8,
+            __DS0FilterTable9,
+            __ValueFilterDM2)
+       
+ 
+EVALUATE
+    __DS0Core
+ 

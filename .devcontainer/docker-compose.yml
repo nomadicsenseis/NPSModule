@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+      - ~/.aws:/root/.aws:ro
+    command: sleep infinity
+    working_dir: /workspace
+    environment:
+      - PYTHONPATH=/workspace
+    # Add this to connect to your host network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  default:
+    driver: bridge
