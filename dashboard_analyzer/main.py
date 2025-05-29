@@ -22,6 +22,7 @@ import os
 from dashboard_analyzer.data_collection import PBIDataCollector
 from dashboard_analyzer.anomaly_detection.anomaly_tree import AnomalyTree
 from dashboard_analyzer.anomaly_detection.anomaly_interpreter import AnomalyInterpreter
+from dashboard_analyzer.anomaly_explanation import OperationalDataAnalyzer
 
 def create_date_folder(target_date: str = None) -> str:
     """Create folder name from date (DD_MM_YYYY format)"""
@@ -135,6 +136,13 @@ def run_anomaly_analysis(date_folder: str) -> bool:
         print('📊 Using 7-day moving average (trailing, not centered)')
         print("\n" + "="*80)
         
+        # Initialize operational analyzer
+        print('\n📊 INITIALIZING OPERATIONAL DATA ANALYZER')
+        print('-' * 50)
+        operational_analyzer = OperationalDataAnalyzer(data_base_path="tables")
+        available_nodes = operational_analyzer.get_available_nodes(date_folder)
+        operational_analyzer.load_operative_data(date_folder, available_nodes)
+        
         # Show analysis for each day
         for i, date in enumerate(last_7_days, 1):
             print(f"\n🗓️  DAY {i}/{len(last_7_days)}: {date}")
@@ -149,8 +157,11 @@ def run_anomaly_analysis(date_folder: str) -> bool:
             status_emoji = "🚨" if (plus_count + minus_count) > 0 else "✅"
             print(f"{status_emoji} Summary: +{plus_count} anomalies, -{minus_count} anomalies, {normal_count} normal")
             
-            # Print detailed anomaly tree with NPS values and explanation tags
+            # Print tree with explanation needed tags
             interpreter.print_interpreted_tree(tree, date)
+            
+            # Print tree with operational explanations  
+            interpreter.print_tree_with_operational_explanations(tree, date, operational_analyzer)
             
             # Add separator
             if i < len(last_7_days):

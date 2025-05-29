@@ -437,3 +437,98 @@ class AnomalyInterpreter:
                 print(f"      {company} [{company_state}]")
                 if company_interpretation:
                     print(f"        {company_interpretation}")
+
+    def print_tree_with_operational_explanations(self, tree: AnomalyTree, date: str, 
+                                                operational_analyzer, interpretations: Dict[str, str] = None):
+        """
+        Print the tree with operational explanations replacing [Explanation needed] tags
+        """
+        if interpretations is None:
+            interpretations = self.analyze_tree_for_date(tree, date)
+            
+        if date not in tree.daily_anomalies:
+            print(f"❌ No anomaly data for date: {date}")
+            return
+            
+        print(f"\n🌳 Anomaly Tree with Operational Explanations: {date}")
+        print("-" * 60)
+        
+        anomalies = tree.daily_anomalies[date]
+        
+        # Helper function to get operational explanations
+        def get_operational_explanations(node_path: str) -> str:
+            node_state = anomalies.get(node_path, "?")
+            if node_state not in ["+", "-"]:
+                return ""
+                
+            # Determine anomaly type
+            anomaly_type = "positive" if node_state == "+" else "negative"
+            
+            # Get operational explanations
+            explanations = operational_analyzer.get_specific_explanations(node_path, date, anomaly_type)
+            
+            result = []
+            if explanations['otp_explanation'] != "No OTP data available":
+                result.append(f"    • {explanations['otp_explanation']}")
+            if explanations['load_factor_explanation'] != "No Load Factor data available":
+                result.append(f"    • {explanations['load_factor_explanation']}")
+            
+            if result:
+                return "\n" + "\n".join(result)
+            else:
+                return "\n    • No operational data available for explanation"
+        
+        # Print Global node
+        global_state = anomalies.get("Global", "?")
+        global_interpretation = interpretations.get("Global", "")
+        print(f"Global [{global_state}]")
+        if global_interpretation:
+            print(f"  {global_interpretation}")
+        print(get_operational_explanations("Global"))
+        
+        # Print LH branch
+        lh_state = anomalies.get("Global/LH", "?")
+        lh_interpretation = interpretations.get("Global/LH", "")
+        print(f"  LH [{lh_state}]")
+        if lh_interpretation:
+            print(f"    {lh_interpretation}")
+        print(get_operational_explanations("Global/LH"))
+        
+        lh_cabins = ["Economy", "Business", "Premium"]
+        for cabin in lh_cabins:
+            cabin_path = f"Global/LH/{cabin}"
+            cabin_state = anomalies.get(cabin_path, "?")
+            cabin_interpretation = interpretations.get(cabin_path, "")
+            print(f"    {cabin} [{cabin_state}]")
+            if cabin_interpretation:
+                print(f"      {cabin_interpretation}")
+            print(get_operational_explanations(cabin_path))
+        
+        # Print SH branch
+        sh_state = anomalies.get("Global/SH", "?")
+        sh_interpretation = interpretations.get("Global/SH", "")
+        print(f"  SH [{sh_state}]")
+        if sh_interpretation:
+            print(f"    {sh_interpretation}")
+        print(get_operational_explanations("Global/SH"))
+        
+        sh_cabins = ["Economy", "Business"]
+        for cabin in sh_cabins:
+            cabin_path = f"Global/SH/{cabin}"
+            cabin_state = anomalies.get(cabin_path, "?")
+            cabin_interpretation = interpretations.get(cabin_path, "")
+            print(f"    {cabin} [{cabin_state}]")
+            if cabin_interpretation:
+                print(f"      {cabin_interpretation}")
+            print(get_operational_explanations(cabin_path))
+            
+            # Company subdivisions for SH
+            companies = ["IB", "YW"]
+            for company in companies:
+                company_path = f"Global/SH/{cabin}/{company}"
+                company_state = anomalies.get(company_path, "?")
+                company_interpretation = interpretations.get(company_path, "")
+                print(f"      {company} [{company_state}]")
+                if company_interpretation:
+                    print(f"        {company_interpretation}")
+                print(get_operational_explanations(company_path))

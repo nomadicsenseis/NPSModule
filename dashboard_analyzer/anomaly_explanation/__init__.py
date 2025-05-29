@@ -1,7 +1,10 @@
 """
-Anomaly explanation package for analyzing operational factors behind NPS anomalies
+Anomaly Explanation Module
+
+This module provides operational data analysis to explain NPS anomalies
+using metrics like OTP, Load Factor, Misconex, and Mishandling.
 """
 
-from .data_analyzer import DataAnalyzer
+from .data_analyzer import OperationalDataAnalyzer
 
-__all__ = ['DataAnalyzer']
+__all__ = ['OperationalDataAnalyzer']
