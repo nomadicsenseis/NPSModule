@@ -1,360 +1,251 @@
-## NPS Aggregation Tree – detección de anomalías (+/-/N)
+# NPS Anomaly Detection System
 
-```markdown
-Global: +/-/N
-│
+A comprehensive system for detecting and explaining Net Promoter Score (NPS) anomalies using Power BI data and operational metrics analysis.
+
+## 🚀 Features
+
+- **Automated Data Collection**: Retrieves NPS and operational data from Power BI using MSAL authentication
+- **Anomaly Detection**: 7-day moving average analysis with ±10 point threshold for NPS anomalies
+- **Tree-based Analysis**: Hierarchical anomaly interpretation following organizational structure
+- **Operational Explanations**: Correlates NPS anomalies with operational metrics (OTP, Load Factor)
+- **Smart Interpretation**: Bottom-up analysis with explanation flagging based on anomaly patterns
+
+## 🏗️ System Architecture
+
+### Tree Hierarchy Structure
+
+```
+Global
 ├── LH (Long Haul)
-│   └── +/-/N
-│       ├── Economy
-│       │   └── +/-/N
-│       ├── Business
-│       │   └── +/-/N
-│       └── Premium
-│           └── +/-/N
-│
+│   ├── Economy
+│   ├── Business
+│   └── Premium
 └── SH (Short Haul)
-    └── +/-/N
         ├── Economy
-        │   └── +/-/N
-        │       ├── IB: +/-/N
-        │       └── YW: +/-/N
+    │   ├── IB
+    │   └── YW
         └── Business
-            └── +/-/N
-                ├── IB: +/-/N
-                └── YW: +/-/N
+        ├── IB
+        └── YW
 ```
 
----
+### Module Structure
 
-## Contexto temporal y tipos de análisis
-
-### Análisis Mensual
-- **Propósito**: Evaluar el rendimiento del mes en curso y compararlo con objetivos mensuales.
-- **Fuente de datos**: Valores depurados mensuales de las tablas de cabina.
-- **Contexto**: 
-  - Si hay ≥10 días de mes: se evalúa el mes actual.
-  - Si hay <10 días de mes: se usa el mes anterior como contexto (en el primer lunes tras el cierre).
-
-### Análisis Diario
-- **Propósito**: Monitorear tendencias semanales y detectar desviaciones significativas.
-- **Fuente de datos**: Valores diarios de evolución.
-- **Contexto**: 
-  - Se compara cada día con su media móvil de 7 días (ventana centrada).
-  - Para Global: también se compara con el objetivo mensual.
-  - Si hay <10 días de mes: se usa el mes anterior como referencia para objetivos.
-
----
-
-## Definición de anomalía por nodo (+/-/N)
-
-### Global
-
-* **+** si el NPS mensual actual supera el target en +2 puntos o más y llevamos ≥10 días del mes.
-* **-** si el NPS mensual actual está por debajo del target en -2 puntos o más y llevamos ≥10 días del mes.
-* **+/-** en el primer lunes tras el cierre natural del mes o del proceso de ponderación de pesos, si el NPS del mes anterior supera/difiere del target en ≥2 puntos.
-* **N** en cualquier otro caso.
-
-### LH (Long Haul)
-
-* **+** si el NPS de LH en el periodo supera el target en ≥2 puntos.
-* **-** si el NPS de LH en el periodo está por debajo del target en ≥2 puntos.
-* **+/-** en cierre si cada cabina (Economy o Premium) se sale de ±2 puntos.
-* **N** si la desviación global de LH es <2 puntos y ambas cabinas están dentro de ±2.
-
-### SH (Short Haul)
-
-* **+** si el NPS de SH supera el target en ≥2 puntos.
-* **-** si el NPS de SH está por debajo del target en ≥2 puntos.
-* **N** si la desviación está dentro de ±2 puntos.
-
-#### SH → Economy
-
-* **+** si el NPS supera el target en ≥2 puntos.
-* **-** si el NPS está por debajo del target en ≥2 puntos.
-* **+/-** en cierre de mes si esta cabina (70% del peso) sale de ±2.
-* **N** en caso contrario.
-
-#### SH → Business
-
-* **+** si el NPS supera el target en ≥2 puntos.
-* **-** si el NPS está por debajo del target en ≥2 puntos.
-* **N** en caso contrario.
-
-##### IB (dentro de SH → Business)
-
-* **+** si el NPS supera el target en ≥2 puntos.
-* **-** si el NPS está por debajo del target en ≥2 puntos.
-* **N** en caso contrario.
-
-##### YW (dentro de SH → Business)
-
-* **+** si el NPS supera el target en ≥2 puntos.
-* **-** si el NPS está por debajo del target en ≥2 puntos.
-* **N** en caso contrario.
-
-### Detección de anomalías diarias
-
-* **Propósito**: Detectar desviaciones significativas en el contexto semanal.
-* **Método**: 
-  - Calcular la media los ultimos 7 días.
-  - **+** si el valor diario supera la media en +10 puntos o más.
-  - **-** si el valor diario está por debajo de la media en -10 puntos o más.
-  - Para Global: también se compara con el objetivo mensual (±2 puntos).
-* **Contexto temporal**:
-  - Si hay ≥10 días de mes: se usa el objetivo del mes actual.
-  - Si hay <10 días de mes: se usa el objetivo del mes anterior.
-
-### Ajuste por fase del mes
-
-* **Mes en curso (<10 días):** 
-  - Solo Global y el nodo de cabina principal (LH o SH → Economy) se evalúan provisionalmente.
-  - Se usa el mes anterior como contexto para objetivos.
-  - El resto queda `N` hasta cierre.
-* **Cierre de mes (≥10 días):** 
-  - Se evalúan todos los nodos y subnodos.
-  - Se usa el mes actual como contexto para objetivos.
-
----
-
-## Algoritmo de interpretación de anomalías (bottom-up)
-
-El análisis se realiza de abajo hacia arriba, evaluando primero los nodos hijos y su relación con el padre. Para cada nodo padre, se consideran las siguientes situaciones:
-
-### Casos homogéneos (todos los hijos con el mismo estado)
-
-1. **Todos los hijos son N**
-   * Si el padre es N: Normal, no hay anomalías.
-   * Si el padre es + o -: Inconsistencia detectada. Revisar posibles errores en la ponderación o en la detección de anomalías.
-
-2. **Todos los hijos son +**
-   * Si el padre es +: Anomalía positiva consistente. La causa raíz afecta a todos los hijos.
-   * Si el padre es - o N: Inconsistencia detectada. Revisar posibles errores en la ponderación o en la detección de anomalías.
-
-3. **Todos los hijos son -**
-   * Si el padre es -: Anomalía negativa consistente. La causa raíz afecta a todos los hijos.
-   * Si el padre es + o N: Inconsistencia detectada. Revisar posibles errores en la ponderación o en la detección de anomalías.
-
-### Casos de mezcla
-
-4. **Mezcla de + y - (sin N)**
-   * Si el padre es N: Las anomalías se cancelan entre sí en la ponderación.
-   * Si el padre es +: La anomalía positiva tiene mayor peso en la ponderación.
-   * Si el padre es -: La anomalía negativa tiene mayor peso en la ponderación.
-
-5. **Mezcla de N y + (sin -)**
-   * Si el padre es N: La anomalía positiva se diluye en la ponderación por el peso de los nodos N.
-   * Si el padre es +: La anomalía positiva es suficientemente significativa para afectar al padre.
-   * Si el padre es -: Inconsistencia detectada. Revisar posibles errores.
-
-6. **Mezcla de N y - (sin +)**
-   * Si el padre es N: La anomalía negativa se diluye en la ponderación por el peso de los nodos N.
-   * Si el padre es -: La anomalía negativa es suficientemente significativa para afectar al padre.
-   * Si el padre es +: Inconsistencia detectada. Revisar posibles errores.
-
-7. **Mezcla de N, + y -**
-   * Si el padre es N: Puede ser una combinación de dilución y cancelación de anomalías.
-   * Si el padre es +: La anomalía positiva tiene mayor peso en la ponderación.
-   * Si el padre es -: La anomalía negativa tiene mayor peso en la ponderación.
-
-### Interpretación detallada
-
-Para cada caso, la interpretación debe incluir:
-1. Naturaleza de los nodos hijos (cabina, ruta, etc.)
-2. Naturaleza del nodo padre
-3. Reflexión sobre la relación entre los estados
-4. En caso de anomalías, indicar qué nodos son los principales causantes según la ponderación
-
-Ejemplo de interpretación:
 ```
-SH Business (padre: +)
-├── IB (hijo: +)
-└── YW (hijo: N)
-
-Interpretación: "En SH Business (padre), la anomalía positiva se debe principalmente a IB, 
-mientras que YW se mantiene en valores normales. La anomalía de IB es suficientemente 
-significativa para afectar al padre a pesar de la dilución por YW."
+dashboard_analyzer/
+├── main.py                     # Complete system pipeline
+├── data_collection/
+│   ├── pbi_collector.py        # Power BI data collection
+│   └── queries/                # DAX query templates
+├── anomaly_detection/
+│   ├── anomaly_tree.py         # Tree structure and anomaly detection
+│   └── anomaly_interpreter.py  # Bottom-up interpretation logic
+└── anomaly_explanation/
+    └── data_analyzer.py        # Operational metrics analysis
 ```
 
----
+## 📊 Data Sources
 
-## Fuentes de causalidad
+### NPS Data
+- **Source**: Power BI via DAX queries
+- **Metrics**: Daily NPS scores by segment/date
+- **Granularity**: All tree nodes (12 total)
 
-### Fuentes post-encuesta (perceptivas)
+### Operational Data
+- **OTP15_adjusted**: On-time performance (15min threshold)
+- **Load_Factor**: Cabin occupancy percentage
+- **Misconex**: Connection issues (currently unavailable)
+- **Mishandling**: Baggage mishandling (currently unavailable)
 
-* **Explanatory Drivers**: puntuaciones de otras preguntas de la encuesta.
-* **Verbatims**: respuestas en lenguaje natural.
+## 🔍 Anomaly Detection Logic
 
-### Fuentes objetivas (causas reales)
+### Detection Rules
+1. **7-day Moving Average**: Calculate trailing average for each node
+2. **Threshold**: ±10 NPS points deviation from moving average
+3. **States**: 
+   - `[+]`: Above average +10 points
+   - `[-]`: Below average -10 points  
+   - `[N]`: Within ±10 points (normal)
 
-* **Operative**: OTP, mishandling, missconnections.
-* **NCS**: incidencias operativas registradas.
+### Explanation Requirements
+Based on sibling node patterns:
 
-Relación percepción–realidad: las perceptivas muestran cómo se sintió el cliente; las objetivas, qué ocurrió realmente.
+- **Isolated Anomalies**: Single child with anomaly → needs explanation
+- **Homogeneous Anomalies**: 2+ children with same anomaly → needs explanation
+- **Mixed Anomalies**: Different anomaly types → each needs explanation
 
----
+## 🧠 Interpretation Logic
 
-## Análisis de fuentes de causalidad
+### Bottom-up Analysis
+The system analyzes parent-child relationships:
 
-### Operative
+1. **Consistent**: All children have same state as parent
+2. **Diluted**: Anomalous children's impact reduced by normal children
+3. **Significant**: Anomalous children's impact overcomes dilution
+4. **Cancelled**: Positive and negative children cancel each other
+5. **Contradictory**: Parent-child relationship doesn't follow expected pattern
 
-Para explicar anomalías de NPS con datos operativos:
+### Operational Correlation
+For nodes marked `[Explanation needed]`, the system:
 
-1. Identificar días anómalos en puntualidad (OTP) comparando cada día con la media semanal y con el objetivo.
-2. Confrontar esas fechas con las anomalías diarias de NPS.
-3. Independientemente de la coincidencia, anotar ambos y analizarlos junto a otras fuentes.
+1. **Compares operational metrics** vs 7-day average
+2. **Determines correlation** with NPS anomaly direction
+3. **Generates explanations**:
+   - "explains" when metric change supports NPS anomaly
+   - "contradicts" when metric change opposes NPS anomaly
+   - "no significant impact" when change below threshold
 
-### Explanatory Drivers
+## 🛠️ Installation & Setup
 
-*(Por completar; metodología de uso de puntuaciones de encuesta.)*
+### Prerequisites
+- Python 3.8+
+- Power BI access with MSAL authentication
+- Environment variables configured
 
-### Verbatims
+### Environment Setup
 
-*(Por completar; análisis de comentarios en texto libre.)*
-
-### NCS
-
-*(Por completar; uso del registro de incidencias.)*
-
----
-
-## Interpretación del grafo causal de anomalías
-
-1. **Ejemplo clásico de temporada alta**
-   En verano, a pesar de un OTP bueno, detectamos caídas de NPS.
-
-   * Causa raíz: *load factor* provoca más colas y molestias.
-   * Se refleja en Explanatory Drivers y Verbatims, no en Operative.
-   * En el grafo: Global y cabinas con `+` o `-`, explicadas por variables perceptivas.
-
-2. **Ejemplo de incidencias Operative**
-   Eventos que relacionamos con caídas de NPS en el grafo:
-
-   * Mishandling en Bogotá y Ciudad de México (alta altitud/calor) donde se dejan maletas por límite de peso.
-   * Huelgas de controladores en París y Alemania que, por saturación del ATC europeo, afectan múltiples aeropuertos.
-   * Fallos del SATE en Barajas, paralizando el transporte automático de equipajes.
-
-3. *(Más escenarios por añadir)*
-
-
-** Adicionalmente en Explanatory Drivers, ademas del research de subgrupos anómalos, cabina radio vemos vs 14 dias y vs targets.
-** Asi vemos la evolución, no solo aislado con respecto a los últimos 7 días, y nos da para hacer una comparativa.
-
-### Lógica de explicación de anomalías
-
-El proceso de explicación de anomalías se realiza generación por generación, de abajo hacia arriba en el árbol. Para cada nivel, se analiza la relación padre-hijos de la siguiente manera:
-
-#### Determinación del nivel de la anomalía
-
-1. **Para casos de mezcla (+/-/N)**
-   * La anomalía siempre está a nivel de los hijos individuales
-   * Cada hijo con anomalía requiere su propia explicación
-   * El estado del padre es resultado de la agregación ponderada
-
-2. **Para casos homogéneos (todos + o todos -)**
-   * Se requiere análisis individual de cada hijo usando el agente explicador de anomalías
-   * Si todas las explicaciones son idénticas: la anomalía es a nivel padre
-   * Si las explicaciones son diferentes: son anomalías individuales que coinciden en signo
-
-#### Proceso de construcción del prompt
-
-1. **Análisis generacional**
-   * Comenzar desde los nodos hoja
-   * Para cada nivel:
-     - Analizar la relación padre-hijos
-     - Generar explicaciones para cada anomalía
-     - Determinar si la explicación es a nivel padre o de hijos
-     - Guardar las explicaciones generadas
-
-2. **Construcción del prompt**
-   * Para cada nivel analizado:
-     ```
-     Nivel actual: [nivel]
-     Estado padre: [estado]
-     Estados hijos: [estados]
-     
-     Explicaciones individuales:
-     - Hijo 1: [explicación]
-     - Hijo 2: [explicación]
-     ...
-     
-     Análisis de agregación:
-     [Determinación si es anomalía padre o agregación]
-     
-     Explicación final:
-     [Explicación consolidada para este nivel]
-     ```
-
-3. **Propagación hacia arriba**
-   * Las explicaciones generadas se convierten en contexto para el siguiente nivel
-   * El prompt se enriquece con cada nivel analizado
-   * Se mantiene la trazabilidad de las explicaciones
-
-Ejemplo de proceso:
-```
-Nivel 1 (Hojas):
-SH Business
-├── IB (hijo: +) → Explicación: "Problemas operativos en Barajas"
-└── YW (hijo: +) → Explicación: "Problemas operativos en Barajas"
-
-Análisis: Explicaciones idénticas → Anomalía a nivel padre
-Prompt generado: "Anomalía positiva en SH Business debido a problemas operativos en Barajas"
-
-Nivel 2 (Subiendo):
-SH
-├── Business (hijo: +) → Explicación: "Problemas operativos en Barajas"
-└── Economy (hijo: N)
-
-Análisis: Mezcla de estados → Anomalía a nivel hijo
-Prompt actualizado: "En SH, la anomalía positiva en Business se debe a problemas operativos en Barajas, 
-mientras que Economy se mantiene en valores normales. La anomalía se diluye en el padre debido al peso de Economy."
+Create `.devcontainer/.env` with:
+```bash
+TENANT_ID=your_tenant_id
+CLIENT_ID=your_client_id
+CLIENT_SECRET=your_client_secret
+DATASET_ID=your_dataset_id
+WORKSPACE_ID=your_workspace_id
 ```
 
-Este proceso asegura que:
-1. Cada nivel se analiza de forma independiente
-2. Las explicaciones se construyen de manera incremental
-3. Se mantiene la trazabilidad de las causas
-4. Se distingue claramente entre anomalías a nivel padre y agregaciones de anomalías de hijos
+### Installation
+```bash
+# Clone repository
+git clone https://github.com/nomadicsenseis/NPSModule.git
+cd NPSModule
 
+# Install dependencies
+pip install -r requirements.txt
+```
 
+## 🚀 Usage
 
-Si saltan puntuality, aconnections, load factor mirar operative. Con arrivals mriar los dos operative y verbatims. Y con los demas verbatims. 
+### Complete Analysis Pipeline
+```bash
+# Run full system (download data + analysis)
+python -m dashboard_analyzer.main
 
-## Requisitos de configuración
+# Skip download, analyze existing data
+python -m dashboard_analyzer.main --skip-download
 
-### Autenticación Azure AD
+# Analyze specific date
+python -m dashboard_analyzer.main --date 2025-05-24
+```
 
-Para acceder a los datos de Power BI, se requiere una configuración correcta de Azure AD:
+### Output Format
 
-1. **Credenciales necesarias**:
+The system provides two tree views for each day:
+
+#### 1. Anomaly Tree with Explanation Flags
+```
+🌳 Anomaly Tree: 2025-05-19
+Global [-] [Explanation needed]
+  LH [N]
+    Economy [N]
+    Business [-] [Explanation needed]
+    Premium [-] [Explanation needed]
+  SH [-] [Explanation needed]
+    ...
+```
+
+#### 2. Tree with Operational Explanations
+```
+🌳 Anomaly Tree with Operational Explanations: 2025-05-19
+Global [-]
+    • OTP stable at 90.57% (Δ-1.9pts vs 7-day avg) - no significant impact
+    • Load Factor increased by 3.08pts (85.94% vs 82.86%) - explains NPS anomaly
+  LH [N]
+    ...
+```
+
+## 📈 System Workflow
+
+1. **Data Collection**: Download NPS and operational data from Power BI
+2. **Data Organization**: Save in date-structured folders (`DD_MM_YYYY`)
+3. **Anomaly Detection**: Calculate 7-day moving averages and detect deviations
+4. **Tree Analysis**: Apply bottom-up interpretation logic
+5. **Explanation Flagging**: Mark nodes requiring operational analysis
+6. **Operational Analysis**: Correlate operational metrics with NPS anomalies
+7. **Report Generation**: Display interpreted trees with explanations
+
+## 🔧 Configuration
+
+### Anomaly Thresholds
    ```python
-   tenant_id = "your_tenant_id"        # GUID o nombre del tenant
-   client_id = "your_client_id"        # ID de la aplicación registrada
-   client_secret = "your_secret"       # Secreto de la aplicación
-   ```
+# NPS anomaly threshold
+NPS_THRESHOLD = 10.0  # points
 
-2. **Formato del tenant**:
-   * Debe ser un GUID válido o nombre de tenant
-   * URL base: `https://login.microsoftonline.com/{tenant_id}`
-   * No puede ser "None" o vacío
+# Operational metric thresholds
+THRESHOLDS = {
+    'Load_Factor': 3.0,      # percentage points
+    'OTP15_adjusted': 3.0,   # percentage points
+    'Misconex': 1.0,         # percentage points
+    'Mishandling': 0.5       # per 1000 passengers
+}
+```
 
-3. **Registro de aplicación**:
-   * La aplicación debe estar registrada en Azure AD
-   * Debe tener los permisos necesarios para Power BI
-   * Scope requerido: `https://analysis.windows.net/powerbi/api/.default`
+### Data Structure
+```
+tables/
+└── DD_MM_YYYY/
+    ├── Global/
+    │   ├── daily_NPS.csv
+    │   └── daily_operative.csv
+    ├── Global/LH/
+    │   ├── daily_NPS.csv
+    │   └── daily_operative.csv
+    └── ...
+```
 
-4. **Manejo de errores comunes**:
-   * Error 90002: Tenant no encontrado
-     - Verificar que el tenant_id es correcto
-     - Confirmar que hay suscripciones activas
-     - Comprobar que se está usando la nube correcta
-   * Error de OIDC Discovery:
-     - Verificar el formato de la URL del tenant
-     - Comprobar la conectividad con Azure AD
-     - Validar que el tenant existe y está activo
+## 📊 Sample Output
 
-5. **Variables de entorno recomendadas**:
-   ```bash
-   AZURE_TENANT_ID=your_tenant_id
-   AZURE_CLIENT_ID=your_client_id
-   AZURE_CLIENT_SECRET=your_client_secret
-   ```
+### Week Summary
+```
+📈 WEEK SUMMARY TABLE
+Date         Status   +   -   N   Total 
+────────────────────────────────────────
+2025-05-18   🚨 Alert  1   5   6   12    
+2025-05-19   🚨 Alert  0   8   4   12    
+2025-05-20   ✅ Normal 0   0   12  12    
+2025-05-21   🚨 Alert  1   2   9   12    
+```
+
+### Operational Insights
+- **High Load Factor** correlations with negative NPS (crowded conditions)
+- **Poor OTP performance** directly explains NPS drops
+- **Contradictory signals** highlight complex multi-factor scenarios
+
+## 🔮 Future Enhancements
+
+- **Verbatims Analysis**: Text sentiment analysis for deeper insights
+- **Misconex/Mishandling**: Integration when data becomes available
+- **Predictive Modeling**: Forecast anomalies based on operational trends
+- **Dashboard Interface**: Web-based visualization and interaction
+- **Alert System**: Automated notifications for significant anomalies
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🏷️ Version
+
+**Current Version**: 1.0.0 - Complete NPS Anomaly Detection and Explanation System
+
+**Last Updated**: December 2024
+
+---
+
+*Built with ❤️ for intelligent NPS analysis and operational insights*
