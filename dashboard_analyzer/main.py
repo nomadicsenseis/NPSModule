@@ -62,7 +62,7 @@ def print_week_summary(tree, dates):
     
     print("-" * 40)
 
-async def analyze_week_with_ai_interpretation(tree, interpreter, operational_analyzer, available_dates):
+async def analyze_week_with_ai_interpretation(tree, interpreter, operational_analyzer, available_dates, target_folder=None):
     """Analyze the last 7 days with AI interpretation for each day"""
     # Get last 7 days
     last_7_days = available_dates[-7:] if len(available_dates) >= 7 else available_dates
@@ -93,9 +93,15 @@ async def analyze_week_with_ai_interpretation(tree, interpreter, operational_ana
         print("-" * 40)
         interpreter.print_interpreted_tree(tree, date, interpretations)
         
-        # Show tree with operational explanations
-        print("\n🌳 Tree with Operational Explanations:")
-        print("-" * 40)
+        # Collect verbatims for explanation needed flags for THIS specific date
+        verbatims_output_dir = Path("tables") / target_folder / "daily_anomalies"
+        verbatims_data = interpreter.collect_verbatims_for_explanation_needed(
+            tree, date, output_dir=verbatims_output_dir
+        )
+        
+        # Show tree with operational AND verbatims explanations
+        print("\n🌳 Tree with Operational & Verbatims Explanations:")
+        print("-" * 60)
         tree_with_explanations = interpreter.print_tree_with_operational_explanations(
             tree, date, operational_analyzer, interpretations
         )
@@ -181,6 +187,56 @@ async def analyze_week_with_ai_interpretation(tree, interpreter, operational_ana
         if i < len(last_7_days):
             print("\n" + "="*80)
 
+async def analyze_week_with_verbatims_only(tree, interpreter, operational_analyzer, available_dates, target_folder):
+    """Analyze the last 7 days with verbatims only for each day"""
+    # Get last 7 days
+    last_7_days = available_dates[-7:] if len(available_dates) >= 7 else available_dates
+    
+    print(f"\n🔍 ANALYZING LAST {len(last_7_days)} DAYS WITH VERBATIMS ONLY")
+    print("="*80)
+    
+    for i, date in enumerate(last_7_days, 1):
+        print(f"\n📅 DAY {i}/{len(last_7_days)}: {date}")
+        print("="*60)
+        
+        # Check if this date has any anomalies
+        if date in tree.daily_anomalies:
+            anomalies = tree.daily_anomalies[date]
+            anomaly_count = sum(1 for state in anomalies.values() if state in ['+', '-'])
+            
+            if anomaly_count == 0:
+                print(f"✅ No anomalies detected for {date} - skipping verbatim collection")
+                continue
+            
+            print(f"🚨 {anomaly_count} anomalies detected - collecting verbatims...")
+        
+        # Get interpretations for the date
+        interpretations = interpreter.analyze_tree_for_date(tree, date)
+        
+        # Show tree with explanation flags
+        print("🌳 Tree with [Explanation needed] flags:")
+        print("-" * 40)
+        interpreter.print_interpreted_tree(tree, date, interpretations)
+        
+        # Collect verbatims for explanation needed flags for THIS specific date
+        verbatims_output_dir = Path("tables") / target_folder / "daily_anomalies"
+        verbatims_data = interpreter.collect_verbatims_for_explanation_needed(
+            tree, date, output_dir=verbatims_output_dir
+        )
+        
+        # Show tree with operational AND verbatims explanations
+        print("\n🌳 Tree with Operational & Verbatims Explanations:")
+        print("-" * 60)
+        tree_with_explanations = interpreter.print_tree_with_operational_explanations(
+            tree, date, operational_analyzer, interpretations
+        )
+        
+        print(f"\n✅ Verbatim collection completed for {date}")
+        
+        # Add separator between days
+        if i < len(last_7_days):
+            print("\n" + "="*80)
+
 async def main():
     """Main pipeline function"""
     parser = argparse.ArgumentParser(description='NPS Anomaly Detection System')
@@ -188,6 +244,8 @@ async def main():
                        help='Skip data download, use existing data')
     parser.add_argument('--date', type=str, 
                        help='Analyze specific date (YYYY-MM-DD format)')
+    parser.add_argument('--verbatims-only', action='store_true',
+                       help='Collect verbatims only, skip AI interpretation for faster processing')
     
     args = parser.parse_args()
     logger = setup_logging()
@@ -282,14 +340,29 @@ async def main():
         print("\n🌳 STEP 3: Tree Interpretation") 
         print("-" * 30)
         
-        interpreter = AnomalyInterpreter()
+        # Initialize PBI collector for verbatims collection
+        collector = PBIDataCollector()
+        interpreter = AnomalyInterpreter(pbi_collector=collector)
         operational_analyzer = OperationalDataAnalyzer()
         
         # Load operational data for the same folder
         operational_analyzer.load_operative_data(target_folder, list(tree.nodes.keys()))
         
-        # Analyze with AI interpretation
-        await analyze_week_with_ai_interpretation(tree, interpreter, operational_analyzer, available_dates)
+        # Create daily anomalies base directory and date folders for all days
+        daily_anomalies_base = Path("tables") / target_folder / "daily_anomalies"
+        daily_anomalies_base.mkdir(parents=True, exist_ok=True)
+        
+        last_7_days = available_dates[-7:] if len(available_dates) >= 7 else available_dates
+        for date in last_7_days:
+            date_folder = daily_anomalies_base / date.replace("-", "_")
+            date_folder.mkdir(parents=True, exist_ok=True)
+            print(f"📁 Created/verified folder: {date_folder}")
+        
+        # Analyze with enhanced verbatims integration
+        if args.verbatims_only:
+            await analyze_week_with_verbatims_only(tree, interpreter, operational_analyzer, available_dates, target_folder)
+        else:
+            await analyze_week_with_ai_interpretation(tree, interpreter, operational_analyzer, available_dates, target_folder)
         
         print(f"\n✅ Analysis completed for {target_analysis_date}")
         

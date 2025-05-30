@@ -301,24 +301,76 @@ EVALUATE
         except Exception as e:
             results['daily_operative'] = False
             print(f"  ✗ daily_operative.csv - error: {str(e)}")
-        
-        # Collect verbatims data (for yesterday as example)
-        try:
-            yesterday = datetime.now() - timedelta(days=1)
-            query = self._get_verbatims_query(cabins, companies, hauls, yesterday)
-            df = self._execute_query(query)
-            if not df.empty:
-                df.to_csv(node_dir / 'daily_verbatims.csv', index=False)
-                results['daily_verbatims'] = True
-                print(f"  ✓ daily_verbatims.csv saved ({len(df)} rows)")
-            else:
-                results['daily_verbatims'] = False
-                print(f"  ✗ daily_verbatims.csv - no data")
-        except Exception as e:
-            results['daily_verbatims'] = False
-            print(f"  ✗ daily_verbatims.csv - error: {str(e)}")
             
         return results
+
+    def collect_verbatims_for_date_and_segment(self, node_path: str, date: datetime, output_dir: Path = None) -> pd.DataFrame:
+        """Collect verbatims for a specific date and segment with explanation needed flag"""
+        print(f"🔍 Collecting verbatims for {node_path} on {date.strftime('%Y-%m-%d')}")
+        
+        # Get filters for this node
+        cabins, companies, hauls = self._get_node_filters(node_path)
+        
+        # Use the corrected verbatims query with proper date filtering
+        cabins_str = '", "'.join(cabins)
+        companies_str = '", "'.join(companies)
+        hauls_str = '", "'.join(hauls)
+        
+        query = f'''DEFINE  
+    VAR __DS0FilterTable =
+        TREATAS({{"{cabins_str}"}}, 'Cabin_Master'[Cabin_Show])
+ 
+    VAR __DS0FilterTable2 =
+        TREATAS({{"{companies_str}"}}, 'Company_Master'[Company])
+ 
+    VAR __DS0FilterTable3 =
+        TREATAS({{"{hauls_str}"}}, 'Haul_Master'[Haul_Aggr])
+ 
+    VAR __DS0FilterTable4 =
+        FILTER(
+            KEEPFILTERS(VALUES('Date_Master'[Date])),
+            'Date_Master'[Date] = date({date.year},{date.month},{date.day})
+        )
+ 
+    var __DS0Core= 
+ADDCOLUMNS(
+    CALCULATETABLE(verbatims_sentiment,
+            __DS0FilterTable,
+            __DS0FilterTable2,
+            __DS0FilterTable3,
+            __DS0FilterTable4), "Verbatim", 
+CALCULATE(min(surveys_maritz[nps_all_t])))
+ 
+EVALUATE
+    __DS0Core'''
+        
+        try:
+            print(f"  📝 Collecting verbatims with filters: Cabins={cabins}, Companies={companies}, Hauls={hauls}")
+            df = self._execute_query(query)
+            
+            if not df.empty:
+                print(f"  ✅ Found {len(df)} verbatims for {node_path} on {date.strftime('%Y-%m-%d')}")
+                
+                # Save to structured directory if output_dir is provided
+                if output_dir:
+                    # Create directory structure: output_dir/date/node_path/
+                    date_str = date.strftime("%Y_%m_%d")
+                    segment_dir = output_dir / date_str / node_path
+                    segment_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    filename = 'verbatims.csv'
+                    filepath = segment_dir / filename
+                    df.to_csv(filepath, index=False)
+                    print(f"  💾 Saved to {filepath}")
+                
+                return df
+            else:
+                print(f"  ❌ No verbatims found for {node_path} on {date.strftime('%Y-%m-%d')}")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            print(f"  ❌ Error collecting verbatims for {node_path} on {date.strftime('%Y-%m-%d')}: {str(e)}")
+            return pd.DataFrame()
     
     def collect_all_nodes_data(self, output_base_dir: str = "tables") -> Dict[str, Dict[str, bool]]:
         """Collect data for all nodes in the tree structure"""
@@ -357,3 +409,27 @@ EVALUATE
             all_results[node_path] = self.collect_node_data(node_path, output_dir)
             
         return all_results
+
+    async def collect_all_data(self) -> Tuple[int, int]:
+        """
+        Collect data for all nodes and return success/total counts.
+        This method is called by main.py and wraps collect_all_nodes_data.
+        """
+        results = self.collect_all_nodes_data()
+        
+        # Count successful file collections
+        success_count = 0
+        total_count = 0
+        
+        for node_path, node_results in results.items():
+            for file_type, success in node_results.items():
+                total_count += 1
+                if success:
+                    success_count += 1
+        
+        print(f"\n📊 Data Collection Summary:")
+        print(f"   Total files attempted: {total_count}")
+        print(f"   Successful files: {success_count}")
+        print(f"   Success rate: {success_count/total_count*100:.1f}%")
+        
+        return success_count, total_count

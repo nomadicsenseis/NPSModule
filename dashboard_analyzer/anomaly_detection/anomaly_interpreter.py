@@ -1,5 +1,9 @@
 from typing import List, Tuple, Dict, Any
 from .anomaly_tree import AnomalyTree, AnomalyNode
+from ..data_collection.pbi_collector import PBIDataCollector
+from datetime import datetime
+from pathlib import Path
+import pandas as pd
 
 class AnomalyInterpreter:
     """
@@ -7,8 +11,10 @@ class AnomalyInterpreter:
     following the rules defined in README.md
     """
     
-    def __init__(self):
+    def __init__(self, pbi_collector: PBIDataCollector = None):
         self.interpretations: Dict[str, str] = {}  # node_path -> interpretation
+        self.pbi_collector = pbi_collector  # For verbatims collection
+        self.verbatims_cache: Dict[Tuple[str, str], pd.DataFrame] = {}  # (node_path, date) -> DataFrame
         
     def analyze_node_pattern(self, parent_node: AnomalyNode, date: str, daily_anomalies: Dict[str, str]) -> str:
         """
@@ -473,6 +479,15 @@ class AnomalyInterpreter:
             if explanations['load_factor_explanation'] != "No Load Factor data available":
                 result.append(f"    • {explanations['load_factor_explanation']}")
             
+            # Add verbatims sentiment analysis if available
+            if hasattr(self, 'verbatims_cache'):
+                cache_key = (node_path, date)
+                if cache_key in self.verbatims_cache:
+                    verbatims_df = self.verbatims_cache[cache_key]
+                    verbatims_explanation = self.analyze_verbatims_sentiment_by_topic(verbatims_df, anomaly_type)
+                    if verbatims_explanation and "No verbatims" not in verbatims_explanation:
+                        result.append(f"    • {verbatims_explanation}")
+            
             if result:
                 return "\n" + "\n".join(result)
             else:
@@ -532,3 +547,116 @@ class AnomalyInterpreter:
                 if company_interpretation:
                     print(f"        {company_interpretation}")
                 print(get_operational_explanations(company_path))
+
+    def analyze_verbatims_sentiment_by_topic(self, verbatims_df: pd.DataFrame, anomaly_type: str) -> str:
+        """
+        Analyze verbatims sentiment by topic and return explanation based on anomaly type
+        """
+        if verbatims_df.empty:
+            return "No verbatims data available for sentiment analysis"
+        
+        # Check if required columns exist
+        if 'verbatims_sentiment[topic]' not in verbatims_df.columns or 'verbatims_sentiment[sentiment]' not in verbatims_df.columns:
+            return "Verbatims data missing required sentiment/topic columns"
+        
+        # Get sentiment and topic columns
+        topic_col = 'verbatims_sentiment[topic]'
+        sentiment_col = 'verbatims_sentiment[sentiment]'
+        
+        # Filter based on anomaly type
+        target_sentiment = "Negative" if anomaly_type == "negative" else "Positive"
+        filtered_verbatims = verbatims_df[verbatims_df[sentiment_col] == target_sentiment]
+        
+        if filtered_verbatims.empty:
+            return f"No {target_sentiment.lower()} verbatims found"
+        
+        # Count by topic
+        topic_counts = filtered_verbatims[topic_col].value_counts()
+        
+        if topic_counts.empty:
+            return f"No {target_sentiment.lower()} verbatims by topic found"
+        
+        # Get top topic and total count
+        top_topic = topic_counts.index[0]
+        top_count = topic_counts.iloc[0]
+        total_verbatims = len(filtered_verbatims)
+        
+        # Build explanation
+        explanation = f"Verbatims: {total_verbatims} {target_sentiment.lower()} feedback"
+        
+        if len(topic_counts) > 1:
+            # Multiple topics
+            explanation += f", top issue: '{top_topic}' ({top_count} mentions)"
+            if len(topic_counts) > 2:
+                second_topic = topic_counts.index[1]
+                second_count = topic_counts.iloc[1]
+                explanation += f", followed by '{second_topic}' ({second_count})"
+        else:
+            # Single topic
+            explanation += f" focused on '{top_topic}' ({top_count} mentions)"
+        
+        return explanation
+
+    def collect_verbatims_for_explanation_needed(self, tree: AnomalyTree, date: str, 
+                                               output_dir: Path = None) -> Dict[str, pd.DataFrame]:
+        """
+        Collect verbatims for all nodes that have "explanation needed" flags for a specific date
+        Returns dict of node_path -> verbatims DataFrame
+        """
+        if not self.pbi_collector:
+            print("❌ No PBI collector available for verbatims collection")
+            return {}
+        
+        if date not in tree.daily_anomalies:
+            print(f"❌ No anomaly data for date: {date}")
+            return {}
+            
+        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        anomalies = tree.daily_anomalies[date]
+        verbatims_collected = {}
+        
+        print(f"\n📝 COLLECTING VERBATIMS FOR EXPLANATION NEEDED FLAGS: {date}")
+        print("="*70)
+        
+        # Check each node for explanation needed
+        for node_path, node_state in anomalies.items():
+            if self._node_needs_verbatims_explanation(node_path, node_state, anomalies):
+                print(f"🔍 {node_path} [{node_state}] - collecting verbatims...")
+                
+                # Check cache first
+                cache_key = (node_path, date)
+                if cache_key in self.verbatims_cache:
+                    verbatims_df = self.verbatims_cache[cache_key]
+                    print(f"  📋 Using cached verbatims ({len(verbatims_df)} rows)")
+                else:
+                    # Collect fresh verbatims
+                    verbatims_df = self.pbi_collector.collect_verbatims_for_date_and_segment(
+                        node_path, date_obj, output_dir
+                    )
+                    # Cache the result
+                    self.verbatims_cache[cache_key] = verbatims_df
+                
+                if not verbatims_df.empty:
+                    verbatims_collected[node_path] = verbatims_df
+                    # Show brief summary
+                    anomaly_type = "negative" if node_state == "-" else "positive"
+                    sentiment_summary = self.analyze_verbatims_sentiment_by_topic(verbatims_df, anomaly_type)
+                    if sentiment_summary and "No verbatims" not in sentiment_summary:
+                        print(f"  ✅ {len(verbatims_df)} verbatims - {sentiment_summary}")
+                    else:
+                        print(f"  ✅ {len(verbatims_df)} verbatims collected")
+                else:
+                    print(f"  ❌ No verbatims found")
+        
+        if verbatims_collected:
+            print(f"\n✅ Verbatims collection completed: {len(verbatims_collected)} nodes with data")
+        else:
+            print(f"\n⚠️  No verbatims collected (no explanation needed flags or no data)")
+            
+        return verbatims_collected
+
+    def _node_needs_verbatims_explanation(self, node_path: str, node_state: str, daily_anomalies: Dict[str, str]) -> bool:
+        """
+        Simplified check for verbatims collection - any anomalous node needs verbatims
+        """
+        return node_state in ["+", "-"]
