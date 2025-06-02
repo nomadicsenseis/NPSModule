@@ -451,7 +451,7 @@ class AnomalyInterpreter:
                                                 operational_analyzer, interpretations: Dict[str, str] = None,
                                                 routes_data: Dict[str, List[Dict]] = None):
         """
-        Print the tree with operational and routes explanations replacing [Explanation needed] tags
+        Print the anomaly tree with enhanced formatting and clearer explanations
         """
         if interpretations is None:
             interpretations = self.analyze_tree_for_date(tree, date)
@@ -460,106 +460,117 @@ class AnomalyInterpreter:
             print(f"❌ No anomaly data for date: {date}")
             return
             
-        print(f"\n🌳 Anomaly Tree with Operational & Routes Explanations: {date}")
-        print("-" * 60)
+        print(f"\n🌳 ANOMALY ANALYSIS TREE: {date}")
+        print("="*70)
         
         anomalies = tree.daily_anomalies[date]
         
-        # Helper function to get operational and routes explanations
-        def get_comprehensive_explanations(node_path: str) -> str:
+        # Helper function to format explanations clearly
+        def format_explanations(node_path: str, indent: str = "") -> str:
             node_state = anomalies.get(node_path, "?")
             if node_state not in ["+", "-"]:
                 return ""
                 
-            # Determine anomaly type
             anomaly_type = "positive" if node_state == "+" else "negative"
-            
-            result = []
-            
-            # Get operational explanations
             explanations = operational_analyzer.get_specific_explanations(node_path, date, anomaly_type)
             
-            if explanations['otp_explanation'] != "No OTP data available":
-                result.append(f"    • {explanations['otp_explanation']}")
-            if explanations['load_factor_explanation'] != "No Load Factor data available":
-                result.append(f"    • {explanations['load_factor_explanation']}")
+            result_lines = []
             
-            # Add routes information if available
+            # Operational factors
+            if explanations['otp_explanation'] != "No OTP data available":
+                result_lines.append(f"{indent}  ✈️  On-Time Performance: {explanations['otp_explanation']}")
+            if explanations['load_factor_explanation'] != "No Load Factor data available":
+                result_lines.append(f"{indent}  👥 Load Factor: {explanations['load_factor_explanation']}")
+            
+            # Routes information
             if routes_data and node_path in routes_data:
                 routes_explanation = self.routes_analyzer.format_routes_explanation(
                     routes_data[node_path], node_state
                 )
                 if routes_explanation:
-                    result.append(f"    • {routes_explanation}")
+                    result_lines.append(f"{indent}  🛣️  {routes_explanation}")
             
-            # Add verbatims sentiment analysis if available
+            # Customer feedback
             if hasattr(self, 'verbatims_cache'):
                 cache_key = (node_path, date)
                 if cache_key in self.verbatims_cache:
                     verbatims_df = self.verbatims_cache[cache_key]
                     verbatims_explanation = self.analyze_verbatims_sentiment_by_topic(verbatims_df, anomaly_type)
                     if verbatims_explanation and "No verbatims" not in verbatims_explanation:
-                        result.append(f"    • {verbatims_explanation}")
+                        result_lines.append(f"{indent}  💬 Customer Feedback: {verbatims_explanation}")
             
-            if result:
-                return "\n" + "\n".join(result)
-            else:
-                return "\n    • No operational data available for explanation"
+            return "\n" + "\n".join(result_lines) if result_lines else ""
         
-        # Print Global node
+        # Print the tree structure with clear hierarchy
+        
+        # 1. GLOBAL LEVEL
         global_state = anomalies.get("Global", "?")
         global_interpretation = interpretations.get("Global", "")
-        print(f"Global [{global_state}]")
+        print(f"\n🌍 GLOBAL [{global_state}]")
         if global_interpretation:
-            print(f"  {global_interpretation}")
-        print(get_comprehensive_explanations("Global"))
+            print(f"   📊 Pattern Analysis: {global_interpretation}")
+        print(format_explanations("Global"))
         
-        # Print LH branch
-        lh_state = anomalies.get("Global/LH", "?")
+        # 2. HAUL TYPES
+        print(f"\n┌─ 🛫 LONG HAUL (LH) [{anomalies.get('Global/LH', '?')}]")
         lh_interpretation = interpretations.get("Global/LH", "")
-        print(f"  LH [{lh_state}]")
         if lh_interpretation:
-            print(f"    {lh_interpretation}")
-        print(get_comprehensive_explanations("Global/LH"))
+            print(f"│    📊 Pattern Analysis: {lh_interpretation}")
+        print(format_explanations("Global/LH", "│"))
         
+        # 2.1 LH Cabin Classes
         lh_cabins = ["Economy", "Business", "Premium"]
-        for cabin in lh_cabins:
+        for i, cabin in enumerate(lh_cabins):
             cabin_path = f"Global/LH/{cabin}"
             cabin_state = anomalies.get(cabin_path, "?")
             cabin_interpretation = interpretations.get(cabin_path, "")
-            print(f"    {cabin} [{cabin_state}]")
+            
+            connector = "├──" if i < len(lh_cabins) - 1 else "└──"
+            print(f"│  {connector} 💺 {cabin} [{cabin_state}]")
             if cabin_interpretation:
-                print(f"      {cabin_interpretation}")
-            print(get_comprehensive_explanations(cabin_path))
+                print(f"│      📊 Pattern Analysis: {cabin_interpretation}")
+            explanations = format_explanations(cabin_path, "│  ")
+            if explanations:
+                print(explanations)
         
-        # Print SH branch
-        sh_state = anomalies.get("Global/SH", "?")
+        print(f"\n└─ ✈️  SHORT HAUL (SH) [{anomalies.get('Global/SH', '?')}]")
         sh_interpretation = interpretations.get("Global/SH", "")
-        print(f"  SH [{sh_state}]")
         if sh_interpretation:
-            print(f"    {sh_interpretation}")
-        print(get_comprehensive_explanations("Global/SH"))
+            print(f"     📊 Pattern Analysis: {sh_interpretation}")
+        print(format_explanations("Global/SH", " "))
         
+        # 2.2 SH Cabin Classes and Companies
         sh_cabins = ["Economy", "Business"]
-        for cabin in sh_cabins:
+        for i, cabin in enumerate(sh_cabins):
             cabin_path = f"Global/SH/{cabin}"
             cabin_state = anomalies.get(cabin_path, "?")
             cabin_interpretation = interpretations.get(cabin_path, "")
-            print(f"    {cabin} [{cabin_state}]")
-            if cabin_interpretation:
-                print(f"      {cabin_interpretation}")
-            print(get_comprehensive_explanations(cabin_path))
             
-            # Company subdivisions for SH
+            connector = "├──" if i < len(sh_cabins) - 1 else "└──"
+            print(f"   {connector} 💺 {cabin} [{cabin_state}]")
+            if cabin_interpretation:
+                print(f"   │    📊 Pattern Analysis: {cabin_interpretation}")
+            explanations = format_explanations(cabin_path, "   │")
+            if explanations:
+                print(explanations)
+            
+            # Companies for each SH cabin
             companies = ["IB", "YW"]
-            for company in companies:
+            for j, company in enumerate(companies):
                 company_path = f"Global/SH/{cabin}/{company}"
                 company_state = anomalies.get(company_path, "?")
                 company_interpretation = interpretations.get(company_path, "")
-                print(f"      {company} [{company_state}]")
+                
+                comp_connector = "├──" if j < len(companies) - 1 else "└──"
+                symbol = "├──" if i < len(sh_cabins) - 1 else "   "
+                print(f"   {symbol} │  {comp_connector} 🏢 {company} [{company_state}]")
                 if company_interpretation:
-                    print(f"        {company_interpretation}")
-                print(get_comprehensive_explanations(company_path))
+                    print(f"   {symbol} │      📊 Pattern Analysis: {company_interpretation}")
+                explanations = format_explanations(company_path, f"   {symbol} │  ")
+                if explanations:
+                    print(explanations)
+        
+        print("="*70)
 
     def analyze_verbatims_sentiment_by_topic(self, verbatims_df: pd.DataFrame, anomaly_type: str) -> str:
         """

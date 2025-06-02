@@ -120,51 +120,97 @@ async def analyze_week_with_ai_interpretation(tree, interpreter, operational_ana
                 logger=logging.getLogger("ai_interpreter")
             )
             
-            # Build AI input string from tree data
-            ai_input = f"🌳 Anomaly Tree with Operational Explanations: {date}\n"
+            # Build comprehensive AI input string with operational details
+            ai_input = f"ANOMALY ANALYSIS REPORT: {date}\n\n"
             
             if date in tree.daily_anomalies:
                 anomalies = tree.daily_anomalies[date]
                 
-                # Build hierarchical string
-                global_state = anomalies.get("Global", "?")
-                ai_input += f"Global [{global_state}]\n"
+                # Helper function to get detailed explanations for AI
+                def get_ai_explanations(node_path: str) -> str:
+                    node_state = anomalies.get(node_path, "?")
+                    if node_state not in ["+", "-"]:
+                        return ""
+                    
+                    anomaly_type = "positive" if node_state == "+" else "negative"
+                    explanations = operational_analyzer.get_specific_explanations(node_path, date, anomaly_type)
+                    
+                    details = []
+                    
+                    # Add operational details
+                    if explanations['otp_explanation'] != "No OTP data available":
+                        details.append(f"PUNCTUALITY: {explanations['otp_explanation']}")
+                    if explanations['load_factor_explanation'] != "No Load Factor data available":
+                        details.append(f"CAPACITY: {explanations['load_factor_explanation']}")
+                    
+                    # Add routes information
+                    if routes_data and node_path in routes_data:
+                        routes_explanation = interpreter.routes_analyzer.format_routes_explanation(
+                            routes_data[node_path], node_state
+                        )
+                        if routes_explanation:
+                            details.append(f"ROUTES: {routes_explanation}")
+                    
+                    return " | ".join(details) if details else "No operational data available"
                 
+                # Build hierarchical string with operational details
+                ai_input += f"GLOBAL [{anomalies.get('Global', '?')}]\n"
                 if "Global" in interpretations:
-                    ai_input += f"  {interpretations['Global']}\n"
+                    ai_input += f"  Pattern: {interpretations['Global']}\n"
+                global_explanations = get_ai_explanations("Global")
+                if global_explanations:
+                    ai_input += f"  Operational Details: {global_explanations}\n"
                 
-                # Add LH branch
+                # Add LH branch with details
                 lh_state = anomalies.get("Global/LH", "?")
-                ai_input += f"\n  LH [{lh_state}]\n"
+                ai_input += f"\nLONG HAUL [{lh_state}]\n"
                 if "Global/LH" in interpretations:
-                    ai_input += f"    {interpretations['Global/LH']}\n"
+                    ai_input += f"  Pattern: {interpretations['Global/LH']}\n"
+                lh_explanations = get_ai_explanations("Global/LH")
+                if lh_explanations:
+                    ai_input += f"  Operational Details: {lh_explanations}\n"
                     
                 for cabin in ["Economy", "Business", "Premium"]:
                     cabin_path = f"Global/LH/{cabin}"
                     cabin_state = anomalies.get(cabin_path, "?")
-                    ai_input += f"\n    {cabin} [{cabin_state}]\n"
-                    if cabin_path in interpretations:
-                        ai_input += f"      {interpretations[cabin_path]}\n"
+                    if cabin_state != "?":
+                        ai_input += f"  {cabin} [{cabin_state}]\n"
+                        if cabin_path in interpretations:
+                            ai_input += f"    Pattern: {interpretations[cabin_path]}\n"
+                        cabin_explanations = get_ai_explanations(cabin_path)
+                        if cabin_explanations:
+                            ai_input += f"    Operational Details: {cabin_explanations}\n"
                 
-                # Add SH branch
+                # Add SH branch with details
                 sh_state = anomalies.get("Global/SH", "?")
-                ai_input += f"\n  SH [{sh_state}]\n"
+                ai_input += f"\nSHORT HAUL [{sh_state}]\n"
                 if "Global/SH" in interpretations:
-                    ai_input += f"    {interpretations['Global/SH']}\n"
+                    ai_input += f"  Pattern: {interpretations['Global/SH']}\n"
+                sh_explanations = get_ai_explanations("Global/SH")
+                if sh_explanations:
+                    ai_input += f"  Operational Details: {sh_explanations}\n"
                     
                 for cabin in ["Economy", "Business"]:
                     cabin_path = f"Global/SH/{cabin}"
                     cabin_state = anomalies.get(cabin_path, "?")
-                    ai_input += f"\n    {cabin} [{cabin_state}]\n"
-                    if cabin_path in interpretations:
-                        ai_input += f"      {interpretations[cabin_path]}\n"
-                        
-                    for company in ["IB", "YW"]:
-                        company_path = f"Global/SH/{cabin}/{company}"
-                        company_state = anomalies.get(company_path, "?")
-                        ai_input += f"\n      {company} [{company_state}]\n"
-                        if company_path in interpretations:
-                            ai_input += f"        {interpretations[company_path]}\n"
+                    if cabin_state != "?":
+                        ai_input += f"  {cabin} [{cabin_state}]\n"
+                        if cabin_path in interpretations:
+                            ai_input += f"    Pattern: {interpretations[cabin_path]}\n"
+                        cabin_explanations = get_ai_explanations(cabin_path)
+                        if cabin_explanations:
+                            ai_input += f"    Operational Details: {cabin_explanations}\n"
+                            
+                        for company in ["IB", "YW"]:
+                            company_path = f"Global/SH/{cabin}/{company}"
+                            company_state = anomalies.get(company_path, "?")
+                            if company_state != "?":
+                                ai_input += f"    {company} [{company_state}]\n"
+                                if company_path in interpretations:
+                                    ai_input += f"      Pattern: {interpretations[company_path]}\n"
+                                company_explanations = get_ai_explanations(company_path)
+                                if company_explanations:
+                                    ai_input += f"      Operational Details: {company_explanations}\n"
             
             # Generate AI interpretation
             ai_interpretation = await ai_agent.interpret_anomaly_tree(

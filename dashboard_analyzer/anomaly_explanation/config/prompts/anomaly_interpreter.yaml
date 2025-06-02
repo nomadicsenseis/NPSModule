@@ -4,6 +4,8 @@ system_prompt: |
   En la aerolínea hay distintas segmentaciones que se relaccionan jerarquicamente. 
   Se te va a proporcionar en arbol jerarquico de segmentaciones con información sobre las anomalías de cada nodo,
   posibles fuentes de las mismas si las hubiera, y como se pueden interpretar en el contexto del arbol jerarquico.
+
+  Las fuentes de información sobre las causas de las anomalías van a ser 3: datos operativos, verbatims y rutas.
   
 
   **Objetivo:**  

@@ -280,21 +280,22 @@ class RoutesAnalyzer:
         return ""
     
     def format_routes_explanation(self, routes: List[Dict], anomaly_type: str) -> str:
-        """Format routes information for explanation text"""
+        """Format routes information for explanation text with improved structure"""
         if not routes:
             return ""
         
         try:
             if anomaly_type == "+":
-                intro = "Top performing routes"
+                intro = "Top routes"
             else:
-                intro = "Most affected routes"
+                intro = "Problem routes"
             
             routes_text = []
             for route in routes:
                 country = f" ({route['country']})" if route['country'] else ""
-                pax_info = f" ({route['pax']} pax)" if route['pax'] > 0 else ""
-                routes_text.append(f"{route['route']}{country} {route['nps']:.1f}{pax_info}")
+                nps_indicator = "🔴" if route['nps'] < 0 else "🟡" if route['nps'] < 50 else "🟢"
+                
+                routes_text.append(f"{route['route']}{country} {nps_indicator}{route['nps']:.1f}")
             
             return f"{intro}: {', '.join(routes_text)}"
             
