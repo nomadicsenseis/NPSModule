@@ -44,6 +44,18 @@ class PBIDataCollector:
             }
         }
         
+        # Path to query files
+        self.queries_path = Path(__file__).parent / 'queries'
+        
+    def _load_query_template(self, query_file: str) -> str:
+        """Load DAX query template from file"""
+        query_path = self.queries_path / query_file
+        if not query_path.exists():
+            raise FileNotFoundError(f"Query file not found: {query_path}")
+        
+        with open(query_path, 'r', encoding='utf-8') as f:
+            return f.read()
+        
     def _get_access_token(self) -> str:
         """Get access token for Power BI API"""
         authority = f"https://login.microsoftonline.com/{self.tenant_id}"
@@ -63,142 +75,76 @@ class PBIDataCollector:
         return result["access_token"]
     
     def _get_daily_nps_query(self, cabins: List[str], companies: List[str], hauls: List[str]) -> str:
-        """Generate DAX query for daily NPS data"""
+        """Generate DAX query for daily NPS data using template"""
+        template = self._load_query_template("Daily NPS.txt")
+        
+        # Replace placeholders with actual values
         cabins_str = '", "'.join(cabins)
         companies_str = '", "'.join(companies) 
         hauls_str = '", "'.join(hauls)
         
-        return f'''DEFINE
-    VAR __DS0FilterTable =
-        TREATAS({{"{cabins_str}"}}, 'Cabin_Master'[Cabin_Show])
- 
-    VAR __DS0FilterTable2 =
-        TREATAS({{"{companies_str}"}}, 'Company_Master'[Company])
- 
-    VAR __DS0FilterTable3 =
-        TREATAS({{"{hauls_str}"}}, 'Haul_Master'[Haul_Aggr])
- 
-    VAR __DS0FilterTable4 =
-        TREATAS({{"RF0"}}, 'Target_file_version_rank'[Version])
- 
-    VAR __DS0FilterTable5 =
-        FILTER(
-            KEEPFILTERS(VALUES('Date_Master'[Date])),
-            'Date_Master'[Date] > TODAY()-21
+        # Replace the template placeholders
+        query = template.replace(
+            'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
+            f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
+        ).replace(
+            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
+            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
+        ).replace(
+            'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
+            f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
         )
- 
-    VAR __DS0Core =
-        SUMMARIZECOLUMNS(
-            'Date_Master'[Date],
-            __DS0FilterTable,
-            __DS0FilterTable2,
-            __DS0FilterTable3,
-            __DS0FilterTable4,
-            __DS0FilterTable5,
-            "Responses", IGNORE('Measure'[n_count]),
-            "NPS_Raw", 'Measure'[NPS_Raw],
-            "Target", [Target_filtered_period_NPS]
-        )
- 
-EVALUATE
-    __DS0Core'''
+        
+        return query
     
     def _get_operative_query(self, cabins: List[str], companies: List[str], hauls: List[str]) -> str:
-        """Generate DAX query for operative data"""
+        """Generate DAX query for operative data using template"""
+        template = self._load_query_template("Operativa.txt")
+        
+        # Replace placeholders with actual values
         cabins_str = '", "'.join(cabins)
         companies_str = '", "'.join(companies)
         hauls_str = '", "'.join(hauls)
         
-        return f'''DEFINE
-MEASURE 'Measure'[Load_Factor_CATIA] =
-var lf_economy= divide(sum(Operation_data[pax_economy]),sum(Operation_data[capacity_economy]))
-var lf_business=divide(sum(Operation_data[pax_business]),sum(Operation_data[capacity_business]))
-var lf_premium_ec=divide(sum(Operation_data[pax_premium_ec]),sum(Operation_data[capacity_premium_ec]))
-var lf_economy_and_premium_ec= divide(calculate(SUMx(Operation_data,Operation_data[pax_economy]+Operation_data[pax_premium_ec])),calculate(sumx(Operation_data, Operation_data[capacity_economy] +Operation_data[capacity_premium_ec])))
-VAR lF_OVERALL = DIVIDE(calculate(sumx(Operation_data, Operation_data[pax_business]+ Operation_data[pax_economy] +Operation_data[pax_premium_ec])),CALCULATE(SUMx(Operation_data,Operation_data[capacity_business]+Operation_data[capacity_economy]+Operation_data[capacity_premium_ec])))
-RETURN
-SWITCH(true(),
-    COUNTROWS(Cabin_Master)>1, lF_OVERALL,
-    SELECTEDVALUE(Cabin_Master[Cabin_Show])="Economy",lf_economy,
-    SELECTEDVALUE(Cabin_Master[Cabin_Show])="Business",lf_business,
-    SELECTEDVALUE(Cabin_Master[Cabin_Show])="Premium EC",lf_premium_ec)*100
-   
-MEASURE 'Measure'[Misconex_CATIA] =
-if (DISTINCTCOUNT(Haul_Master[Haul_Aggr])>1 && DISTINCTCOUNT(Cabin_Master[Cabin_Show])>1
-,divide(sum(customer_connections[total_pax_misc]),sum(customer_connections[total_pax_conex]))*100, "")
- 
-MEASURE 'Measure'[Mishandling_CATIA] =
-var _misha=divide(sum(f_mishandling[bags]),sum(f_checkin[num_pax_flown]))*1000
-return
-if (DISTINCTCOUNT(Haul_Master[Haul_Aggr])>1 && DISTINCTCOUNT(Cabin_Master[Cabin_Show])>1,_misha,"")
-   
-    VAR __DS0FilterTable =
-        TREATAS({{"{cabins_str}"}}, 'Cabin_Master'[Cabin_Show])
- 
-    VAR __DS0FilterTable2 =
-        TREATAS({{"{companies_str}"}}, 'Company_Master'[Company])
- 
-    VAR __DS0FilterTable3 =
-        TREATAS({{"{hauls_str}"}}, 'Haul_Master'[Haul_Aggr])
- 
-    VAR __DS0FilterTable4 =
-        FILTER(
-            KEEPFILTERS(VALUES('Date_Master'[Date])),
-            'Date_Master'[Date] > TODAY()-21
+        # Replace the template placeholders
+        query = template.replace(
+            'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
+            f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
+        ).replace(
+            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
+            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
+        ).replace(
+            'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
+            f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
         )
- 
-    VAR __DS0Core =
-        SUMMARIZECOLUMNS(
-            'Date_Master'[Date],
-            'Haul_Master'[Haul_Aggr],
-            'Cabin_Master'[Cabin_Show],
-            'Company_Master'[Company],
-            __DS0FilterTable,
-            __DS0FilterTable2,
-            __DS0FilterTable3,
-            __DS0FilterTable4,
-            "Load_Factor", 'Measure'[Load_Factor_CATIA],
-            "OTP15_adjusted", 'Measure'[OTP15_adjusted],
-            "Misconex", 'Measure'[Misconex_CATIA],
-            "Mishandling", 'Measure'[Mishandling_CATIA]
-        )
- 
-EVALUATE
-    __DS0Core'''
+        
+        return query
     
     def _get_verbatims_query(self, cabins: List[str], companies: List[str], hauls: List[str], date: datetime) -> str:
-        """Generate DAX query for verbatims data"""
+        """Generate DAX query for verbatims data using template"""
+        template = self._load_query_template("Verbatims.txt")
+        
+        # Replace placeholders with actual values
         cabins_str = '", "'.join(cabins)
         companies_str = '", "'.join(companies)
         hauls_str = '", "'.join(hauls)
         
-        return f'''DEFINE  
-    VAR __DS0FilterTable =
-        TREATAS({{"{cabins_str}"}}, 'Cabin_Master'[Cabin_Show])
- 
-    VAR __DS0FilterTable2 =
-        TREATAS({{"{companies_str}"}}, 'Company_Master'[Company])
- 
-    VAR __DS0FilterTable3 =
-        TREATAS({{"{hauls_str}"}}, 'Haul_Master'[Haul_Aggr])
- 
-    VAR __DS0FilterTable4 =
-        FILTER(
-            KEEPFILTERS(VALUES('Date_Master'[Date])),
-            'Date_Master'[Date] = date({date.year},{date.month},{date.day})
+        # Replace the template placeholders
+        query = template.replace(
+            'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
+            f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
+        ).replace(
+            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
+            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
+        ).replace(
+            'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
+            f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
+        ).replace(
+            'date(2025,05,12)',
+            f'date({date.year},{date.month},{date.day})'
         )
- 
-    var __DS0Core= 
-ADDCOLUMNS(
-    CALCULATETABLE(verbatims_sentiment,
-            __DS0FilterTable,
-            __DS0FilterTable2,
-            __DS0FilterTable3,
-            __DS0FilterTable4), "Verbatim", 
-CALCULATE(min(surveys_maritz[nps_all_t])))
- 
-EVALUATE
-    __DS0Core'''
+        
+        return query
     
     def _execute_query(self, query: str) -> pd.DataFrame:
         """Execute a DAX query against Power BI API"""
@@ -311,38 +257,8 @@ EVALUATE
         # Get filters for this node
         cabins, companies, hauls = self._get_node_filters(node_path)
         
-        # Use the corrected verbatims query with proper date filtering
-        cabins_str = '", "'.join(cabins)
-        companies_str = '", "'.join(companies)
-        hauls_str = '", "'.join(hauls)
-        
-        query = f'''DEFINE  
-    VAR __DS0FilterTable =
-        TREATAS({{"{cabins_str}"}}, 'Cabin_Master'[Cabin_Show])
- 
-    VAR __DS0FilterTable2 =
-        TREATAS({{"{companies_str}"}}, 'Company_Master'[Company])
- 
-    VAR __DS0FilterTable3 =
-        TREATAS({{"{hauls_str}"}}, 'Haul_Master'[Haul_Aggr])
- 
-    VAR __DS0FilterTable4 =
-        FILTER(
-            KEEPFILTERS(VALUES('Date_Master'[Date])),
-            'Date_Master'[Date] = date({date.year},{date.month},{date.day})
-        )
- 
-    var __DS0Core= 
-ADDCOLUMNS(
-    CALCULATETABLE(verbatims_sentiment,
-            __DS0FilterTable,
-            __DS0FilterTable2,
-            __DS0FilterTable3,
-            __DS0FilterTable4), "Verbatim", 
-CALCULATE(min(surveys_maritz[nps_all_t])))
- 
-EVALUATE
-    __DS0Core'''
+        # Use the template system for verbatims query
+        query = self._get_verbatims_query(cabins, companies, hauls, date)
         
         try:
             print(f"  📝 Collecting verbatims with filters: Cabins={cabins}, Companies={companies}, Hauls={hauls}")

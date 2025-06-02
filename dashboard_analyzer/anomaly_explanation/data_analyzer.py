@@ -71,7 +71,7 @@ class OperationalDataAnalyzer:
     def analyze_operative_metrics(self, node_path: str, target_date: str) -> Dict[str, any]:
         """
         Analyze operative metrics for a specific node and date
-        Uses same logic as NPS: compare each of last 7 days against their mean
+        Uses flexible date range to handle gaps in operational data
         """
         if node_path not in self.operative_data:
             return {"error": "No operative data available"}
@@ -79,54 +79,62 @@ class OperationalDataAnalyzer:
         df = self.operative_data[node_path]
         target_date_obj = datetime.strptime(target_date, '%Y-%m-%d').date()
         
-        # Get the last 7 days of data (same as NPS logic)
-        if len(df) < 7:
-            return {"error": "Insufficient data (need at least 7 days)"}
-            
-        last_7_days = df.tail(7)
+        # Check if target date exists in the data
+        if target_date_obj not in df['Date_Master'].values:
+            return {"error": f"No data for target date {target_date}"}
         
-        # Check if target_date is within the last 7 days
-        target_in_last_7 = target_date_obj in last_7_days['Date_Master'].values
-        if not target_in_last_7:
-            return {"error": f"Target date {target_date} not in last 7 days of available data"}
+        # Get data for the target date
+        day_data = df[df['Date_Master'] == target_date_obj]
+        if day_data.empty:
+            return {"error": f"No data for date {target_date}"}
+        
+        # Calculate 7-day average for comparison (more flexible approach)
+        # Get the 7 days leading up to and including the target date
+        from datetime import timedelta
+        start_date = target_date_obj - timedelta(days=6)  # 6 days before + target day = 7 days
+        end_date = target_date_obj
+        
+        # Filter data for the 7-day window
+        week_data = df[(df['Date_Master'] >= start_date) & (df['Date_Master'] <= end_date)]
+        
+        if len(week_data) < 3:  # Need at least 3 days for meaningful comparison
+            return {"error": f"Insufficient data for 7-day comparison (only {len(week_data)} days available)"}
         
         analysis = {
             "date": target_date,
             "node_path": node_path,
-            "metrics": {}
+            "metrics": {},
+            "comparison_days": len(week_data)  # Track how many days were used for comparison
         }
         
-        # Analyze each metric using the new logic
+        # Analyze each metric using the flexible logic
         metrics_to_analyze = ['Load_Factor', 'OTP15_adjusted', 'Misconex', 'Mishandling']
         
         for metric in metrics_to_analyze:
             if metric in df.columns:
-                # Calculate mean of last 7 days for this metric
-                last_7_values = last_7_days[metric].dropna()
+                # Get values for the week and the specific day
+                week_values = week_data[metric].dropna()
+                day_values = day_data[metric].dropna()
                 
-                if len(last_7_values) >= 7:  # Need all 7 days for proper comparison
-                    mean_last_7_days = last_7_values.mean()
+                if not week_values.empty and not day_values.empty and len(week_values) >= 3:
+                    week_avg = week_values.mean()
+                    day_value = day_values.iloc[0]
                     
-                    # Get the specific day's value
-                    day_data = last_7_days[last_7_days['Date_Master'] == target_date_obj]
-                    if not day_data.empty:
-                        day_value = day_data[metric].iloc[0]
+                    if not pd.isna(day_value):
+                        delta = day_value - week_avg
                         
-                        if not pd.isna(day_value):
-                            delta = day_value - mean_last_7_days
-                            
-                            # Determine if significant deviation (using different thresholds per metric)
-                            threshold = self._get_metric_threshold(metric)
-                            is_significant = abs(delta) > threshold
-                            
-                            analysis["metrics"][metric] = {
-                                "day_value": round(day_value, 2),
-                                "week_average": round(mean_last_7_days, 2),
-                                "delta": round(delta, 2),
-                                "is_significant": is_significant,
-                                "direction": "higher" if delta > 0 else "lower",
-                                "threshold": threshold
-                            }
+                        # Determine if significant deviation (using different thresholds per metric)
+                        threshold = self._get_metric_threshold(metric)
+                        is_significant = abs(delta) > threshold
+                        
+                        analysis["metrics"][metric] = {
+                            "day_value": round(day_value, 2),
+                            "week_average": round(week_avg, 2),
+                            "delta": round(delta, 2),
+                            "is_significant": is_significant,
+                            "direction": "higher" if delta > 0 else "lower",
+                            "threshold": threshold
+                        }
         
         return analysis
     
