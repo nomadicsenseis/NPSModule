@@ -137,33 +137,42 @@ class AnomalyTree:
         print(f"📅 Date range: {len(self.dates)} days ({self.dates[0]} to {self.dates[-1]})")
         
     def calculate_moving_averages(self, window_days: int = 7):
-        """Calculate 7-day moving averages for each node"""
-        print(f"📈 Calculating {window_days}-day moving averages...")
+        """Calculate mean of last 7 days for each node"""
+        print(f"📈 Calculating mean of last {window_days} days...")
         
         for node_path, node in self.nodes.items():
             if node.data is not None and len(node.data) >= window_days:
-                # Calculate rolling mean for NPS values
-                node.data['moving_avg'] = node.data['NPS'].rolling(window=window_days, min_periods=window_days).mean()
+                # Get the last 7 days of data
+                last_7_days = node.data.tail(window_days)
+                
+                # Calculate the mean of these last 7 days
+                mean_last_7_days = last_7_days['NPS'].mean()
+                
+                # Store this mean for later comparison
+                node.data['mean_last_7_days'] = mean_last_7_days
                 
     def detect_daily_anomalies(self, threshold: float = 10.0):
-        """Detect anomalies for each day comparing with 7-day moving average"""
-        print(f"🔍 Detecting anomalies (threshold: ±{threshold} points)...")
+        """Detect anomalies for each of the last 7 days comparing with their mean"""
+        print(f"🔍 Detecting anomalies in last 7 days (threshold: ±{threshold} points)...")
         
         # Dictionary to store anomaly states for each day
         self.daily_anomalies: Dict[str, Dict[str, str]] = {}  # date -> {node_path -> anomaly_state}
         
-        for date in self.dates:
+        # Only analyze the last 7 days
+        last_7_dates = self.dates[-7:] if len(self.dates) >= 7 else self.dates
+        
+        for date in last_7_dates:
             self.daily_anomalies[date] = {}
             
             for node_path, node in self.nodes.items():
-                if node.data is not None:
+                if node.data is not None and hasattr(node.data, 'mean_last_7_days'):
                     # Find data for this specific date
                     day_data = node.data[node.data['Date'].dt.strftime('%Y-%m-%d') == date]
                     
-                    if not day_data.empty and not pd.isna(day_data.iloc[0]['moving_avg']):
+                    if not day_data.empty:
                         current_nps = day_data.iloc[0]['NPS']
-                        moving_avg = day_data.iloc[0]['moving_avg']
-                        deviation = current_nps - moving_avg
+                        mean_last_7_days = node.data['mean_last_7_days'].iloc[0]  # This is the same for all rows
+                        deviation = current_nps - mean_last_7_days
                         
                         # Determine anomaly state based on README criteria
                         if deviation >= threshold:
@@ -175,9 +184,12 @@ class AnomalyTree:
                             
                         self.daily_anomalies[date][node_path] = anomaly_state
                     else:
-                        # No data or insufficient history for moving average
+                        # No data for this date
                         self.daily_anomalies[date][node_path] = "?"
-                        
+                else:
+                    # No data or insufficient history
+                    self.daily_anomalies[date][node_path] = "?"
+        
     def print_collapsed_tree(self, date: str):
         """Print collapsed tree view for a specific date"""
         if date not in self.daily_anomalies:
@@ -224,13 +236,16 @@ class AnomalyTree:
                 print(f"{company_prefix} {company} [{company_state}]")
                 
     def print_all_days_summary(self):
-        """Print anomaly summary for all days"""
-        print(f"\n📊 ANOMALY DETECTION SUMMARY")
+        """Print anomaly summary for the last 7 days"""
+        print(f"\n📊 ANOMALY DETECTION SUMMARY (Last 7 Days)")
         print("=" * 60)
-        print("Legend: [+] Above average +10pts | [-] Below average -10pts | [N] Normal | [?] No data")
+        print("Legend: [+] Above 7-day mean +10pts | [-] Below 7-day mean -10pts | [N] Normal | [?] No data")
         print()
         
-        for date in self.dates:
+        # Only show dates that we analyzed (last 7 days)
+        analyzed_dates = sorted(self.daily_anomalies.keys())
+        
+        for date in analyzed_dates:
             if date in self.daily_anomalies:
                 # Count anomalies for this day
                 anomalies = self.daily_anomalies[date]
