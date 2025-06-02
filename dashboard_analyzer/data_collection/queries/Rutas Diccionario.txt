@@ -1,7 +1,7 @@
 EVALUATE
     SELECTCOLUMNS(
         Route_Master,
-        [route],
-        [country_name],
-        [gr_region],
-        Route_Master[haul_aggr])
+        "route", [route],
+        "country_name", [country_name],
+        "gr_region", [gr_region],
+        "haul_aggr", Route_Master[haul_aggr])

@@ -27,6 +27,7 @@ class LLMType(Enum):
     GPT4 = 'GPT4'
     GPT4o = 'GPT4o'
     GPT4o_MINI = 'GPT4o_MINI'
+    O4_MINI = 'O4_MINI'
     LLAMA3_70 = 'LLAMA3_70'
     LLAMA3_1_70 = 'LLAMA3_1_70'
     LLAMA3_1_405 = 'LLAMA3_1_405'

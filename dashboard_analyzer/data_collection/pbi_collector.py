@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
+import asyncio
+import aiohttp
 
 class PBIDataCollector:
     """Collects data from Power BI API for each node in the NPS tree hierarchy"""
@@ -22,12 +24,19 @@ class PBIDataCollector:
         self.group_id = os.getenv("GROUP_ID")
         self.dataset_id = os.getenv("DATASET_ID")
         
-        # Validate credentials
         if not all([self.client_id, self.client_secret, self.tenant_id, self.group_id, self.dataset_id]):
-            raise ValueError("Missing required environment variables for Power BI API")
-            
-        # Get access token
+            print("⚠️ Warning: Missing required environment variables for Power BI API")
+            print("Required: CLIENT_ID, CLIENT_SECRET, TENANT_ID, GROUP_ID, DATASET_ID")
+        
+        self.access_token = None
+        
+        # Get access token on initialization
         self.access_token = self._get_access_token()
+        
+        if not self.access_token:
+            print("❌ Failed to get access token")
+        else:
+            print("✅ Successfully authenticated with Power BI API")
         
         # Define the tree structure based on the hierarchy
         self.tree_structure = {
@@ -349,3 +358,37 @@ class PBIDataCollector:
         print(f"   Success rate: {success_count/total_count*100:.1f}%")
         
         return success_count, total_count
+
+    async def _execute_query_async(self, query: str) -> pd.DataFrame:
+        """Execute a DAX query against Power BI API asynchronously"""
+        dax_query = {
+            "queries": [{"query": query}],
+            "serializerSettings": {"includeNulls": True}
+        }
+        
+        url = f"https://api.powerbi.com/v1.0/myorg/groups/{self.group_id}/datasets/{self.dataset_id}/executeQueries"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=dax_query) as response:
+                    if response.status != 200:
+                        response_text = await response.text()
+                        print(f"Error {response.status}: {response_text}")
+                        return pd.DataFrame()
+                        
+                    results = await response.json()
+                    
+                    if not results.get('results') or not results['results'][0].get('tables'):
+                        print("No data returned from query")
+                        return pd.DataFrame()
+                        
+                    rows = results['results'][0]['tables'][0].get('rows', [])
+                    return pd.DataFrame(rows)
+                    
+        except Exception as e:
+            print(f"Error executing async query: {str(e)}")
+            return pd.DataFrame()

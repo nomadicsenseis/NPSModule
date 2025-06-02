@@ -99,11 +99,14 @@ async def analyze_week_with_ai_interpretation(tree, interpreter, operational_ana
             tree, date, output_dir=verbatims_output_dir
         )
         
-        # Show tree with operational AND verbatims explanations
-        print("\n🌳 Tree with Operational & Verbatims Explanations:")
-        print("-" * 60)
+        # Collect routes data for explanation needed flags
+        routes_data = await interpreter.collect_routes_for_explanation_needed(tree, date)
+        
+        # Show tree with operational, verbatims AND routes explanations
+        print("\n🌳 Tree with Operational, Verbatims & Routes Explanations:")
+        print("-" * 70)
         tree_with_explanations = interpreter.print_tree_with_operational_explanations(
-            tree, date, operational_analyzer, interpretations
+            tree, date, operational_analyzer, interpretations, routes_data
         )
         
         # AI Interpretation
@@ -113,7 +116,7 @@ async def analyze_week_with_ai_interpretation(tree, interpreter, operational_ana
         try:
             # Create AI agent
             ai_agent = AnomalyInterpreterAgent(
-                llm_type=LLMType.CLAUDE_SONNET_4,  # Using AWS Claude Sonnet 4 with inference profile
+                llm_type=LLMType.O4_MINI,  # Using Azure OpenAI o4-mini model
                 logger=logging.getLogger("ai_interpreter")
             )
             
@@ -224,11 +227,14 @@ async def analyze_week_with_verbatims_only(tree, interpreter, operational_analyz
             tree, date, output_dir=verbatims_output_dir
         )
         
-        # Show tree with operational AND verbatims explanations
-        print("\n🌳 Tree with Operational & Verbatims Explanations:")
-        print("-" * 60)
+        # Collect routes data for explanation needed flags
+        routes_data = await interpreter.collect_routes_for_explanation_needed(tree, date)
+        
+        # Show tree with operational, verbatims AND routes explanations
+        print("\n🌳 Tree with Operational, Verbatims & Routes Explanations:")
+        print("-" * 70)
         tree_with_explanations = interpreter.print_tree_with_operational_explanations(
-            tree, date, operational_analyzer, interpretations
+            tree, date, operational_analyzer, interpretations, routes_data
         )
         
         print(f"\n✅ Verbatim collection completed for {date}")

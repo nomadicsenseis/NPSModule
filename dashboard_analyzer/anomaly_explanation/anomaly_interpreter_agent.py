@@ -101,7 +101,7 @@ class AnomalyInterpreterAgent:
         """Factory method to create appropriate LLM instance based on type."""
         
         # OpenAI/Azure OpenAI models
-        if llm_type in [LLMType.GPT3_5, LLMType.GPT4, LLMType.GPT4o, LLMType.GPT4o_MINI]:
+        if llm_type in [LLMType.GPT3_5, LLMType.GPT4, LLMType.GPT4o, LLMType.GPT4o_MINI, LLMType.O4_MINI]:
             return self._create_openai_llm(llm_type)
         
         # AWS Bedrock models

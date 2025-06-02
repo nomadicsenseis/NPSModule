@@ -1,9 +1,11 @@
 from typing import List, Tuple, Dict, Any
 from .anomaly_tree import AnomalyTree, AnomalyNode
 from ..data_collection.pbi_collector import PBIDataCollector
+from ..anomaly_explanation.routes_analyzer import RoutesAnalyzer
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
+import asyncio
 
 class AnomalyInterpreter:
     """
@@ -14,6 +16,7 @@ class AnomalyInterpreter:
     def __init__(self, pbi_collector: PBIDataCollector = None):
         self.interpretations: Dict[str, str] = {}  # node_path -> interpretation
         self.pbi_collector = pbi_collector  # For verbatims collection
+        self.routes_analyzer = RoutesAnalyzer(pbi_collector) if pbi_collector else None
         self.verbatims_cache: Dict[Tuple[str, str], pd.DataFrame] = {}  # (node_path, date) -> DataFrame
         
     def analyze_node_pattern(self, parent_node: AnomalyNode, date: str, daily_anomalies: Dict[str, str]) -> str:
@@ -445,9 +448,10 @@ class AnomalyInterpreter:
                     print(f"        {company_interpretation}")
 
     def print_tree_with_operational_explanations(self, tree: AnomalyTree, date: str, 
-                                                operational_analyzer, interpretations: Dict[str, str] = None):
+                                                operational_analyzer, interpretations: Dict[str, str] = None,
+                                                routes_data: Dict[str, List[Dict]] = None):
         """
-        Print the tree with operational explanations replacing [Explanation needed] tags
+        Print the tree with operational and routes explanations replacing [Explanation needed] tags
         """
         if interpretations is None:
             interpretations = self.analyze_tree_for_date(tree, date)
@@ -456,13 +460,13 @@ class AnomalyInterpreter:
             print(f"❌ No anomaly data for date: {date}")
             return
             
-        print(f"\n🌳 Anomaly Tree with Operational Explanations: {date}")
+        print(f"\n🌳 Anomaly Tree with Operational & Routes Explanations: {date}")
         print("-" * 60)
         
         anomalies = tree.daily_anomalies[date]
         
-        # Helper function to get operational explanations
-        def get_operational_explanations(node_path: str) -> str:
+        # Helper function to get operational and routes explanations
+        def get_comprehensive_explanations(node_path: str) -> str:
             node_state = anomalies.get(node_path, "?")
             if node_state not in ["+", "-"]:
                 return ""
@@ -470,14 +474,23 @@ class AnomalyInterpreter:
             # Determine anomaly type
             anomaly_type = "positive" if node_state == "+" else "negative"
             
+            result = []
+            
             # Get operational explanations
             explanations = operational_analyzer.get_specific_explanations(node_path, date, anomaly_type)
             
-            result = []
             if explanations['otp_explanation'] != "No OTP data available":
                 result.append(f"    • {explanations['otp_explanation']}")
             if explanations['load_factor_explanation'] != "No Load Factor data available":
                 result.append(f"    • {explanations['load_factor_explanation']}")
+            
+            # Add routes information if available
+            if routes_data and node_path in routes_data:
+                routes_explanation = self.routes_analyzer.format_routes_explanation(
+                    routes_data[node_path], node_state
+                )
+                if routes_explanation:
+                    result.append(f"    • {routes_explanation}")
             
             # Add verbatims sentiment analysis if available
             if hasattr(self, 'verbatims_cache'):
@@ -499,7 +512,7 @@ class AnomalyInterpreter:
         print(f"Global [{global_state}]")
         if global_interpretation:
             print(f"  {global_interpretation}")
-        print(get_operational_explanations("Global"))
+        print(get_comprehensive_explanations("Global"))
         
         # Print LH branch
         lh_state = anomalies.get("Global/LH", "?")
@@ -507,7 +520,7 @@ class AnomalyInterpreter:
         print(f"  LH [{lh_state}]")
         if lh_interpretation:
             print(f"    {lh_interpretation}")
-        print(get_operational_explanations("Global/LH"))
+        print(get_comprehensive_explanations("Global/LH"))
         
         lh_cabins = ["Economy", "Business", "Premium"]
         for cabin in lh_cabins:
@@ -517,7 +530,7 @@ class AnomalyInterpreter:
             print(f"    {cabin} [{cabin_state}]")
             if cabin_interpretation:
                 print(f"      {cabin_interpretation}")
-            print(get_operational_explanations(cabin_path))
+            print(get_comprehensive_explanations(cabin_path))
         
         # Print SH branch
         sh_state = anomalies.get("Global/SH", "?")
@@ -525,7 +538,7 @@ class AnomalyInterpreter:
         print(f"  SH [{sh_state}]")
         if sh_interpretation:
             print(f"    {sh_interpretation}")
-        print(get_operational_explanations("Global/SH"))
+        print(get_comprehensive_explanations("Global/SH"))
         
         sh_cabins = ["Economy", "Business"]
         for cabin in sh_cabins:
@@ -535,7 +548,7 @@ class AnomalyInterpreter:
             print(f"    {cabin} [{cabin_state}]")
             if cabin_interpretation:
                 print(f"      {cabin_interpretation}")
-            print(get_operational_explanations(cabin_path))
+            print(get_comprehensive_explanations(cabin_path))
             
             # Company subdivisions for SH
             companies = ["IB", "YW"]
@@ -546,7 +559,7 @@ class AnomalyInterpreter:
                 print(f"      {company} [{company_state}]")
                 if company_interpretation:
                     print(f"        {company_interpretation}")
-                print(get_operational_explanations(company_path))
+                print(get_comprehensive_explanations(company_path))
 
     def analyze_verbatims_sentiment_by_topic(self, verbatims_df: pd.DataFrame, anomaly_type: str) -> str:
         """
@@ -660,3 +673,56 @@ class AnomalyInterpreter:
         Simplified check for verbatims collection - any anomalous node needs verbatims
         """
         return node_state in ["+", "-"]
+
+    async def collect_routes_for_explanation_needed(self, tree: AnomalyTree, date: str) -> Dict[str, List[Dict]]:
+        """
+        Collect route data for all nodes that have "explanation needed" flags for a specific date
+        Returns dict of node_path -> list of route info
+        """
+        if not self.routes_analyzer:
+            print("❌ No routes analyzer available for routes collection")
+            return {}
+        
+        if date not in tree.daily_anomalies:
+            print(f"❌ No anomaly data for date: {date}")
+            return {}
+            
+        anomalies = tree.daily_anomalies[date]
+        routes_collected = {}
+        
+        print(f"\n📍 COLLECTING ROUTES DATA FOR EXPLANATION NEEDED FLAGS: {date}")
+        print("="*70)
+        
+        # Load routes data for this date (only once)
+        node_paths_with_explanations = [
+            node_path for node_path, node_state in anomalies.items() 
+            if self._node_needs_verbatims_explanation(node_path, node_state, anomalies)
+        ]
+        
+        if node_paths_with_explanations:
+            await self.routes_analyzer.load_routes_data(date, node_paths_with_explanations)
+        
+        # Check each node for explanation needed and collect routes
+        for node_path, node_state in anomalies.items():
+            if self._node_needs_verbatims_explanation(node_path, node_state, anomalies):
+                print(f"🔍 {node_path} [{node_state}] - analyzing routes...")
+                
+                # Get most affected routes for this segment
+                top_routes = self.routes_analyzer.get_most_affected_routes(
+                    date, node_path, node_state, top_n=3
+                )
+                
+                if top_routes:
+                    routes_collected[node_path] = top_routes
+                    # Format route explanation
+                    routes_explanation = self.routes_analyzer.format_routes_explanation(top_routes, node_state)
+                    print(f"  ✅ {len(top_routes)} routes analyzed - {routes_explanation}")
+                else:
+                    print(f"  ❌ No routes data available for {node_path}")
+        
+        if not routes_collected:
+            print("⚠️  No routes data collected (no explanation needed flags or no data)")
+        else:
+            print(f"✅ Routes collection completed: {len(routes_collected)} nodes with data")
+        
+        return routes_collected
