@@ -17,6 +17,8 @@ class AnomalyNode:
         self.daily_anomaly: Optional['Anomaly'] = None
         self.weekly_anomaly: Optional['Anomaly'] = None
         self.explanation: Optional[str] = None
+        self.insufficient_sample: bool = False  # Flag for insufficient sample size
+        self.insufficient_sample_dates: set = set()  # Set to track dates with insufficient sample
         
     def add_child(self, child: 'AnomalyNode'):
         """Add a child node"""
@@ -151,9 +153,9 @@ class AnomalyTree:
                 # Store this mean for later comparison
                 node.data['mean_last_7_days'] = mean_last_7_days
                 
-    def detect_daily_anomalies(self, threshold: float = 10.0):
+    def detect_daily_anomalies(self, threshold: float = 10.0, min_sample_size: int = 5):
         """Detect anomalies for each of the last 7 days comparing with their mean"""
-        print(f"🔍 Detecting anomalies in last 7 days (threshold: ±{threshold} points)...")
+        print(f"🔍 Detecting anomalies in last 7 days (threshold: ±{threshold} points, min sample: {min_sample_size} responses)...")
         
         # Dictionary to store anomaly states for each day
         self.daily_anomalies: Dict[str, Dict[str, str]] = {}  # date -> {node_path -> anomaly_state}
@@ -171,18 +173,28 @@ class AnomalyTree:
                     
                     if not day_data.empty:
                         current_nps = day_data.iloc[0]['NPS']
-                        mean_last_7_days = node.data['mean_last_7_days'].iloc[0]  # This is the same for all rows
-                        deviation = current_nps - mean_last_7_days
+                        responses = day_data.iloc[0]['Responses'] if 'Responses' in day_data.columns else 0
                         
-                        # Determine anomaly state based on README criteria
-                        if deviation >= threshold:
-                            anomaly_state = "+"
-                        elif deviation <= -threshold:
-                            anomaly_state = "-"
+                        # Check minimum sample size
+                        if responses < min_sample_size:
+                            self.daily_anomalies[date][node_path] = "S"  # S = insufficient Sample
+                            # Mark the node as having insufficient sample for this date
+                            if not hasattr(node, 'insufficient_sample_dates'):
+                                node.insufficient_sample_dates = set()
+                            node.insufficient_sample_dates.add(date)
                         else:
-                            anomaly_state = "N"
+                            mean_last_7_days = node.data['mean_last_7_days'].iloc[0]  # This is the same for all rows
+                            deviation = current_nps - mean_last_7_days
                             
-                        self.daily_anomalies[date][node_path] = anomaly_state
+                            # Determine anomaly state based on README criteria
+                            if deviation >= threshold:
+                                anomaly_state = "+"
+                            elif deviation <= -threshold:
+                                anomaly_state = "-"
+                            else:
+                                anomaly_state = "N"
+                                
+                            self.daily_anomalies[date][node_path] = anomaly_state
                     else:
                         # No data for this date
                         self.daily_anomalies[date][node_path] = "?"
@@ -227,7 +239,7 @@ class AnomalyTree:
             prefix = "    ├──" if i < len(sh_cabins) - 1 else "    └──"
             print(f"{prefix} {cabin} [{cabin_state}]")
             
-            # Company subdivisions for SH
+            # Add company subdivisions for SH
             companies = ["IB", "YW"]
             for j, company in enumerate(companies):
                 company_path = f"Global/SH/{cabin}/{company}"
@@ -239,7 +251,7 @@ class AnomalyTree:
         """Print anomaly summary for the last 7 days"""
         print(f"\n📊 ANOMALY DETECTION SUMMARY (Last 7 Days)")
         print("=" * 60)
-        print("Legend: [+] Above 7-day mean +10pts | [-] Below 7-day mean -10pts | [N] Normal | [?] No data")
+        print("Legend: [+] Above 7-day mean +10pts | [-] Below 7-day mean -10pts | [N] Normal | [S] Insufficient sample (<5) | [?] No data")
         print()
         
         # Only show dates that we analyzed (last 7 days)
@@ -252,59 +264,266 @@ class AnomalyTree:
                 plus_count = sum(1 for state in anomalies.values() if state == "+")
                 minus_count = sum(1 for state in anomalies.values() if state == "-")
                 normal_count = sum(1 for state in anomalies.values() if state == "N")
+                sample_count = sum(1 for state in anomalies.values() if state == "S")
+                no_data_count = sum(1 for state in anomalies.values() if state == "?")
+                total_count = len(anomalies)
                 
-                status_emoji = "🚨" if (plus_count + minus_count) > 0 else "✅"
-                print(f"{status_emoji} {date}: +{plus_count} -{minus_count} N{normal_count}")
+                # Determine overall status
+                if plus_count > 0 or minus_count > 0:
+                    status = "🚨 Alert"
+                else:
+                    status = "✅ Normal"
                 
-    def analyze_date(self, date: str):
-        """Complete analysis for a specific date"""
-        print(f"\n🔍 ANALYZING DATE: {date}")
-        print("=" * 50)
+                print(f"{date}   {status:<12} +{plus_count:2d} -{minus_count:2d} N{normal_count:2d} S{sample_count:2d} ?{no_data_count:2d} Total:{total_count:2d}")
         
+        print("-" * 60)
+        
+    def analyze_date(self, date: str):
+        """Analyze anomalies for a specific date and generate explanations"""
         if date not in self.daily_anomalies:
-            print(f"❌ No data available for {date}")
+            print(f"❌ No anomaly data for date: {date}")
             return
             
-        # Print tree view
-        self.print_collapsed_tree(date)
+        print(f"\n🔍 ANALYZING: {date}")
+        print("=" * 50)
         
-        # Print detailed anomaly info
         anomalies = self.daily_anomalies[date]
-        plus_nodes = [path for path, state in anomalies.items() if state == "+"]
-        minus_nodes = [path for path, state in anomalies.items() if state == "-"]
         
-        if plus_nodes:
-            print(f"\n🔺 POSITIVE ANOMALIES (+10+ points above 7-day average):")
-            for node in plus_nodes:
-                print(f"   • {node}")
-                
-        if minus_nodes:
-            print(f"\n🔻 NEGATIVE ANOMALIES (-10+ points below 7-day average):")
-            for node in minus_nodes:
-                print(f"   • {node}")
-                
-        if not plus_nodes and not minus_nodes:
-            print(f"\n✅ No significant anomalies detected for {date}")
-            
-    def run_full_analysis(self, date_folder: str = "22_05_2025"):
+        # Count different types of anomalies (excluding insufficient samples from anomaly count)
+        plus_anomalies = [path for path, state in anomalies.items() if state == "+"]
+        minus_anomalies = [path for path, state in anomalies.items() if state == "-"]
+        insufficient_samples = [path for path, state in anomalies.items() if state == "S"]
+        
+        total_anomalies = len(plus_anomalies) + len(minus_anomalies)
+        
+        print(f"🚨 {total_anomalies} anomalies detected - performing analysis...")
+        if insufficient_samples:
+            print(f"⚠️  {len(insufficient_samples)} nodes excluded due to insufficient sample size (<5 responses)")
+        
+        # Generate tree interpretation (excluding insufficient samples from logic)
+        tree_explanation = self._generate_tree_explanation(date, exclude_insufficient_sample=True)
+        
+        print("🌳 Tree with [Explanation needed] flags:")
+        print("-" * 40)
+        print(tree_explanation)
+        
+        return {
+            "date": date,
+            "total_anomalies": total_anomalies,
+            "plus_anomalies": plus_anomalies,
+            "minus_anomalies": minus_anomalies,
+            "insufficient_samples": insufficient_samples,
+            "tree_explanation": tree_explanation
+        }
+
+    def run_full_analysis(self, date_folder: str = "22_05_2025", min_sample_size: int = 5):
         """Run complete anomaly detection analysis"""
-        print("🚀 STARTING ANOMALY DETECTION ANALYSIS")
-        print("=" * 60)
+        print("🔍 STEP 2: Anomaly Detection")
+        print("-" * 30)
+        print(f"📊 Using data from: {date_folder}")
         
-        # Step 1: Build tree structure
-        self.build_tree_structure()
-        print(f"✅ Built tree structure with {len(self.nodes)} nodes")
-        
-        # Step 2: Load data
+        # Load data
         self.load_data(date_folder)
         
-        # Step 3: Calculate moving averages
+        # Calculate moving averages (now mean of last 7 days)
         self.calculate_moving_averages()
         
-        # Step 4: Detect anomalies
-        self.detect_daily_anomalies()
+        # Detect anomalies with minimum sample size filter
+        self.detect_daily_anomalies(min_sample_size=min_sample_size)
         
-        # Step 5: Print summary
+        # Print summary
         self.print_all_days_summary()
         
         return self
+
+    def _generate_tree_explanation(self, date: str, exclude_insufficient_sample: bool = True):
+        """Generate tree explanation with hierarchical logic, optionally excluding insufficient samples"""
+        if date not in self.daily_anomalies:
+            return "No data available for this date"
+            
+        anomalies = self.daily_anomalies[date]
+        explanation_lines = []
+        
+        # Helper function to get effective state (excluding insufficient samples if requested)
+        def get_effective_state(path):
+            state = anomalies.get(path, "?")
+            if exclude_insufficient_sample and state == "S":
+                return "?"  # Treat as no data for logic purposes
+            return state
+        
+        # Helper function to get display state (always show actual state)
+        def get_display_state(path):
+            return anomalies.get(path, "?")
+        
+        # Helper function to check if node needs explanation
+        def needs_explanation(path):
+            state = get_effective_state(path)
+            return state in ["+", "-"]
+        
+        explanation_lines.append(f"\n🌳 Anomaly Tree: {date}")
+        explanation_lines.append("-" * 50)
+        
+        # Global level analysis
+        global_state = get_effective_state("Global")
+        global_display = get_display_state("Global")
+        explanation_lines.append(f"Global [{global_display}]")
+        
+        if global_state == "N":
+            # Analyze why Global is normal
+            lh_state = get_effective_state("Global/LH")
+            sh_state = get_effective_state("Global/SH")
+            
+            if lh_state == "N" and sh_state == "N":
+                explanation_lines.append("  All children normal (LH, SH)")
+            elif lh_state in ["+", "-"] and sh_state in ["+", "-"]:
+                if lh_state != sh_state:
+                    explanation_lines.append("  Anomalies in LH and SH cancel each other out")
+                else:
+                    explanation_lines.append("  Both LH and SH show anomalies but diluted at global level")
+            elif lh_state in ["+", "-"]:
+                explanation_lines.append(f"  {lh_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (LH) diluted by normal nodes (SH)")
+            elif sh_state in ["+", "-"]:
+                explanation_lines.append(f"  {sh_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (SH) diluted by normal nodes (LH)")
+        
+        # LH analysis
+        lh_state = get_effective_state("Global/LH")
+        lh_display = get_display_state("Global/LH")
+        explanation_lines.append(f"  LH [{lh_display}]")
+        
+        if needs_explanation("Global/LH"):
+            explanation_lines.append("    [Explanation needed]")
+            
+        if lh_state == "N":
+            # Analyze LH children
+            lh_children = ["Economy", "Business", "Premium"]
+            lh_child_states = [get_effective_state(f"Global/LH/{child}") for child in lh_children]
+            
+            anomaly_children = [child for child, state in zip(lh_children, lh_child_states) if state in ["+", "-"]]
+            normal_children = [child for child, state in zip(lh_children, lh_child_states) if state == "N"]
+            
+            if len(anomaly_children) == 0:
+                explanation_lines.append(f"    All children normal ({', '.join(lh_children)})")
+            elif len(anomaly_children) == 1:
+                explanation_lines.append(f"    {anomaly_children[0]} anomaly diluted by normal nodes ({', '.join(normal_children)})")
+            else:
+                pos_children = [child for child, state in zip(lh_children, lh_child_states) if state == "+"]
+                neg_children = [child for child, state in zip(lh_children, lh_child_states) if state == "-"]
+                if pos_children and neg_children:
+                    explanation_lines.append(f"    Mixed anomalies: positive ({', '.join(pos_children)}), negative ({', '.join(neg_children)}), normal ({', '.join(normal_children)}) balance out")
+                else:
+                    explanation_lines.append(f"    Multiple anomalies diluted by normal nodes")
+        
+        # LH children details
+        for cabin in ["Economy", "Business", "Premium"]:
+            cabin_path = f"Global/LH/{cabin}"
+            cabin_state = get_effective_state(cabin_path)
+            cabin_display = get_display_state(cabin_path)
+            explanation_lines.append(f"    {cabin} [{cabin_display}]")
+            if needs_explanation(cabin_path):
+                explanation_lines.append("      [Explanation needed]")
+        
+        # SH analysis
+        sh_state = get_effective_state("Global/SH")
+        sh_display = get_display_state("Global/SH")
+        explanation_lines.append(f"  SH [{sh_display}]")
+        
+        if needs_explanation("Global/SH"):
+            explanation_lines.append("    [Explanation needed]")
+            
+        if sh_state == "N":
+            # Analyze SH children
+            economy_state = get_effective_state("Global/SH/Economy")
+            business_state = get_effective_state("Global/SH/Business")
+            
+            if economy_state == "N" and business_state == "N":
+                explanation_lines.append("    All children normal (Economy, Business)")
+            elif economy_state in ["+", "-"] and business_state == "N":
+                explanation_lines.append(f"    {economy_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (Economy) diluted by normal nodes (Business)")
+            elif business_state in ["+", "-"] and economy_state == "N":
+                explanation_lines.append(f"    {business_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (Business) diluted by normal nodes (Economy)")
+            elif economy_state in ["+", "-"] and business_state in ["+", "-"]:
+                if economy_state != business_state:
+                    explanation_lines.append("    Economy and Business anomalies cancel each other out")
+                else:
+                    explanation_lines.append("    Both Economy and Business show anomalies but diluted at SH level")
+        
+        # SH Economy analysis
+        economy_state = get_effective_state("Global/SH/Economy")
+        economy_display = get_display_state("Global/SH/Economy")
+        explanation_lines.append(f"    Economy [{economy_display}]")
+        
+        if needs_explanation("Global/SH/Economy"):
+            explanation_lines.append("      [Explanation needed]")
+            
+        if economy_state == "N":
+            # Analyze Economy children (IB, YW)
+            ib_state = get_effective_state("Global/SH/Economy/IB")
+            yw_state = get_effective_state("Global/SH/Economy/YW")
+            
+            if ib_state == "N" and yw_state == "N":
+                explanation_lines.append("      All children normal (IB, YW)")
+            elif ib_state in ["+", "-"] and yw_state == "N":
+                explanation_lines.append(f"      {ib_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (IB) diluted by normal nodes (YW)")
+            elif yw_state in ["+", "-"] and ib_state == "N":
+                explanation_lines.append(f"      {yw_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (YW) diluted by normal nodes (IB)")
+            elif ib_state in ["+", "-"] and yw_state in ["+", "-"]:
+                if ib_state != yw_state:
+                    explanation_lines.append("      IB and YW anomalies cancel each other out")
+                else:
+                    explanation_lines.append(f"      {ib_state.replace('+', 'Positive').replace('-', 'Negative')} anomaly consistent across all children (IB, YW)")
+        
+        # SH Economy children
+        for company in ["IB", "YW"]:
+            company_path = f"Global/SH/Economy/{company}"
+            company_state = get_effective_state(company_path)
+            company_display = get_display_state(company_path)
+            explanation_lines.append(f"      {company} [{company_display}]")
+            if needs_explanation(company_path):
+                explanation_lines.append("        [Explanation needed]")
+        
+        # SH Business analysis
+        business_state = get_effective_state("Global/SH/Business")
+        business_display = get_display_state("Global/SH/Business")
+        explanation_lines.append(f"    Business [{business_display}]")
+        
+        if needs_explanation("Global/SH/Business"):
+            explanation_lines.append("      [Explanation needed]")
+            
+        if business_state == "N":
+            # Analyze Business children (IB, YW)
+            ib_state = get_effective_state("Global/SH/Business/IB")
+            yw_state = get_effective_state("Global/SH/Business/YW")
+            
+            if ib_state == "N" and yw_state == "N":
+                explanation_lines.append("      All children normal (IB, YW)")
+            elif ib_state in ["+", "-"] and yw_state == "N":
+                explanation_lines.append(f"      {ib_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (IB) diluted by normal nodes (YW)")
+            elif yw_state in ["+", "-"] and ib_state == "N":
+                explanation_lines.append(f"      {yw_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (YW) diluted by normal nodes (IB)")
+            elif ib_state in ["+", "-"] and yw_state in ["+", "-"]:
+                if ib_state != yw_state:
+                    explanation_lines.append("      IB and YW anomalies cancel each other out")
+                else:
+                    explanation_lines.append(f"      {ib_state.replace('+', 'Positive').replace('-', 'Negative')} anomaly consistent across all children (IB, YW)")
+        elif business_state in ["+", "-"]:
+            # Check if it's consistent across children
+            ib_state = get_effective_state("Global/SH/Business/IB")
+            yw_state = get_effective_state("Global/SH/Business/YW")
+            
+            if ib_state == business_state and yw_state == business_state:
+                explanation_lines.append(f"      {business_state.replace('+', 'Positive').replace('-', 'Negative')} anomaly consistent across all children (IB, YW)")
+            elif ib_state == business_state and yw_state != business_state:
+                explanation_lines.append(f"      {business_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (IB) significant despite normal nodes (YW)")
+            elif yw_state == business_state and ib_state != business_state:
+                explanation_lines.append(f"      {business_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (YW) significant despite normal nodes (IB)")
+        
+        # SH Business children
+        for company in ["IB", "YW"]:
+            company_path = f"Global/SH/Business/{company}"
+            company_state = get_effective_state(company_path)
+            company_display = get_display_state(company_path)
+            explanation_lines.append(f"      {company} [{company_display}]")
+            if needs_explanation(company_path):
+                explanation_lines.append("        [Explanation needed]")
+        
+        return "\n".join(explanation_lines)

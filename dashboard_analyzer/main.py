@@ -310,7 +310,7 @@ async def main():
         print(f"📊 Using data from: {target_folder}")
         tree.load_data(target_folder)
         tree.calculate_moving_averages()
-        tree.detect_daily_anomalies()
+        tree.detect_daily_anomalies(min_sample_size=5)
         
         available_dates = tree.dates
         if not available_dates:
