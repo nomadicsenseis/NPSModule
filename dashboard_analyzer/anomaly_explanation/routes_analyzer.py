@@ -146,6 +146,15 @@ class RoutesAnalyzer:
             
             print(f"  🎯 Using columns - Route: {route_column}, NPS: {nps_column}, Pax: {pax_column}")
             
+            # Apply minimum response threshold (changed from 5 to 3)
+            if pax_column:
+                filtered_routes = filtered_routes[filtered_routes[pax_column] >= 3]
+                print(f"  🔢 After applying 3+ responses filter: {len(filtered_routes)} routes")
+            
+            if filtered_routes.empty:
+                print(f"❌ No routes meet minimum 3 responses threshold")
+                return []
+            
             # Sort by NPS based on anomaly type
             if anomaly_type == "+":
                 # For positive anomalies, show highest NPS routes first
@@ -224,6 +233,34 @@ class RoutesAnalyzer:
             
             # Filter the routes data to only include matching routes
             filtered_routes = routes_df[routes_df[route_column].isin(matching_route_names)]
+            
+            # Filter by company if specified in node_path and Company column exists
+            if filters.get('company'):
+                company = filters['company']
+                print(f"  🏢 Applying company filter: {company}")
+                
+                # Look for Company column in the routes data
+                company_column = None
+                for col in filtered_routes.columns:
+                    if 'company' in col.lower():
+                        company_column = col
+                        break
+                
+                if company_column:
+                    # Filter using the Company column from the query result
+                    filtered_routes = filtered_routes[filtered_routes[company_column] == company]
+                    print(f"  🏢 After company filter ({company}) using column '{company_column}': {len(filtered_routes)} routes")
+                else:
+                    # Fallback to route name prefix filtering (for backward compatibility)
+                    print(f"  ⚠️ No Company column found, falling back to route prefix filtering")
+                    if company == 'IB':
+                        # IB routes typically start with 'IB' (e.g., IB1234)
+                        filtered_routes = filtered_routes[filtered_routes[route_column].str.startswith('IB')]
+                    elif company == 'YW':
+                        # YW routes typically start with 'YW' (e.g., YW1234)  
+                        filtered_routes = filtered_routes[filtered_routes[route_column].str.startswith('YW')]
+                    
+                    print(f"  🏢 After company filter ({company}) using route prefix: {len(filtered_routes)} routes")
             
             print(f"  ✅ Final filtered routes: {len(filtered_routes)} routes")
             return filtered_routes

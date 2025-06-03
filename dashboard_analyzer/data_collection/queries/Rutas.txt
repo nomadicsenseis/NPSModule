@@ -31,6 +31,7 @@ DEFINE
             KEEPFILTERS(
                 SUMMARIZECOLUMNS(
                     'Route_Master'[route],
+                    'Company_Master'[Company],
                     __DS0FilterTable,
                     __DS0FilterTable2,
                     __DS0FilterTable3,
@@ -45,9 +46,15 @@ DEFINE
  
     VAR __DS0Core =
         CALCULATETABLE(
-            SELECTCOLUMNS(
-                values('Route_Master'[route]),
-                "route", 'Route_Master'[route],
+            SUMMARIZECOLUMNS(
+                'Route_Master'[route],
+                'Company_Master'[Company],
+                __DS0FilterTable,
+                __DS0FilterTable2,
+                __DS0FilterTable3,
+                __DS0FilterTable4,
+                __DS0FilterTable8,
+                __DS0FilterTable9,
                 "NPS", 'Measure'[NPS (Route)],
                 "Pax", 'Measure'[n (Route)],
                 "CodeShare", 'Measure'[CodeShare (Route)]*100,
@@ -64,14 +71,8 @@ DEFINE
                 "Operative", 'Measure'[Operative (Route)],
                 "NonOperative", 'Measure'[NonOperative (Route)]
             ),
-            __ValueFilterDM2,
-            __DS0FilterTable,
-            __DS0FilterTable2,
-            __DS0FilterTable3,
-            __DS0FilterTable4,
-            __DS0FilterTable8,
-            __DS0FilterTable9,
-            __ValueFilterDM2)
+            __ValueFilterDM2
+        )
        
  
 EVALUATE

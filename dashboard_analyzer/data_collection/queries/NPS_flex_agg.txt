@@ -1,0 +1,33 @@
+// DAX Query
+DEFINE
+    VAR __DS0FilterTable =
+        TREATAS({"Business", "Economy", "Premium EC"}, 'Cabin_Master'[Cabin_Show])
+ 
+    VAR __DS0FilterTable2 =
+        TREATAS({"IB","YW"}, 'Company_Master'[Company])
+ 
+    VAR __DS0FilterTable3 =
+        TREATAS({"SH","LH"}, 'Haul_Master'[Haul_Aggr])
+ 
+	VAR __DS0FilterTable4 = 
+		TREATAS({"RF0"}, 'Target_file_version_rank'[Version])
+	
+	var _table= ADDCOLUMNS(Date_Master, "Nueva agrupación", 
+				INT(DATEDIFF( 'Date_Master'[Date],max('Date_Master'[Date]), DAY) / 5) + 1)
+
+	VAR __DS0Core = 
+		CALCULATETABLE(sUMMARIZE(
+			_table,[Nueva agrupación],
+			"NPS_2025", 'Measure'[NPS 2025],
+			"NPS_2024", 'Measure'[NPS 2024],
+			"NPS_2019", 'Measure'[NPS 2019],
+			"Target", 'Measure'[Target_filtered_period_NPS]),
+			 __DS0FilterTable,
+            __DS0FilterTable2,
+            __DS0FilterTable3,
+            __DS0FilterTable4
+		)
+
+EVALUATE
+	__DS0Core
+	order by [Nueva agrupación] asc

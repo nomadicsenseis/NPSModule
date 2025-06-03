@@ -13,6 +13,7 @@ system_prompt: |
   eligiendo el segmento mas pequeño que segun el analisis contenga a todos los clientes afectados por una misma causa. 
   - Si hay indicios de que la causa se explica con alguna de las fuentes proporcionadas, mencionarla. 
   - Sino, mencionar que no hay una causa clara con las fuentes de información disponibles.
+  - Fijate en si las distintas fuentes de ifnormación apuntan a una misma causa.
 
   **Restricciones:**  
   - **Solo** genera la sección de **Conclusión**, sin ningún otro encabezado ni detalle intermedio. 
