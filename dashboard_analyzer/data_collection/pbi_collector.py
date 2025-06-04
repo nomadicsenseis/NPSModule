@@ -129,6 +129,31 @@ class PBIDataCollector:
         
         return query
     
+    def _get_flexible_nps_query(self, aggregation_days: int, cabins: List[str], companies: List[str], hauls: List[str]) -> str:
+        """Generate DAX query for flexible NPS aggregation using template"""
+        template = self._load_query_template("NPS_flex_agg.txt")
+        
+        # Replace placeholders with actual values
+        cabins_str = '", "'.join(cabins)
+        companies_str = '", "'.join(companies)
+        hauls_str = '", "'.join(hauls)
+        
+        # Replace the template placeholders
+        query = template.replace(
+            '{AGGREGATION_DAYS}', str(aggregation_days)
+        ).replace(
+            'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
+            f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
+        ).replace(
+            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
+            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
+        ).replace(
+            'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
+            f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
+        )
+        
+        return query
+    
     def _get_verbatims_query(self, cabins: List[str], companies: List[str], hauls: List[str], date: datetime) -> str:
         """Generate DAX query for verbatims data using template"""
         template = self._load_query_template("Verbatims.txt")
@@ -151,6 +176,32 @@ class PBIDataCollector:
         ).replace(
             'date(2025,05,12)',
             f'date({date.year},{date.month},{date.day})'
+        )
+        
+        return query
+    
+    def _get_verbatims_range_query(self, cabins: List[str], companies: List[str], hauls: List[str], start_date: datetime, end_date: datetime) -> str:
+        """Generate DAX query for verbatims data using date range template"""
+        template = self._load_query_template("Verbatims.txt")
+        
+        # Replace placeholders with actual values
+        cabins_str = '", "'.join(cabins)
+        companies_str = '", "'.join(companies)
+        hauls_str = '", "'.join(hauls)
+        
+        # Replace the template placeholders
+        query = template.replace(
+            'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
+            f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
+        ).replace(
+            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
+            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
+        ).replace(
+            'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
+            f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
+        ).replace(
+            '\'Date_Master\'[Date] =date(2025,05,12)',
+            f'\'Date_Master\'[Date] >= date({start_date.year},{start_date.month},{start_date.day}) && \'Date_Master\'[Date] <= date({end_date.year},{end_date.month},{end_date.day})'
         )
         
         return query
@@ -297,6 +348,44 @@ class PBIDataCollector:
             print(f"  ❌ Error collecting verbatims for {node_path} on {date.strftime('%Y-%m-%d')}: {str(e)}")
             return pd.DataFrame()
     
+    def collect_verbatims_for_date_range(self, node_path: str, start_date: datetime, end_date: datetime, output_dir: Path = None) -> pd.DataFrame:
+        """Collect verbatims for a date range and segment - much more efficient than daily collection"""
+        print(f"🔍 Collecting verbatims for {node_path} from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        
+        # Get filters for this node
+        cabins, companies, hauls = self._get_node_filters(node_path)
+        
+        # Use the date range template system for verbatims query
+        query = self._get_verbatims_range_query(cabins, companies, hauls, start_date, end_date)
+        
+        try:
+            print(f"  📝 Collecting verbatims with filters: Cabins={cabins}, Companies={companies}, Hauls={hauls}")
+            df = self._execute_query(query)
+            
+            if not df.empty:
+                print(f"  ✅ Found {len(df)} verbatims for {node_path} in date range")
+                
+                # Save to structured directory if output_dir is provided
+                if output_dir:
+                    # Create directory structure: output_dir/node_path/
+                    range_str = f"{start_date.strftime('%Y_%m_%d')}_to_{end_date.strftime('%Y_%m_%d')}"
+                    segment_dir = output_dir / node_path / range_str
+                    segment_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    filename = 'verbatims_range.csv'
+                    filepath = segment_dir / filename
+                    df.to_csv(filepath, index=False)
+                    print(f"  💾 Saved to {filepath}")
+                
+                return df
+            else:
+                print(f"  ❌ No verbatims found for {node_path} in date range")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            print(f"  ❌ Error collecting verbatims for {node_path} in date range: {str(e)}")
+            return pd.DataFrame()
+    
     def collect_all_nodes_data(self, output_base_dir: str = "tables") -> Dict[str, Dict[str, bool]]:
         """Collect data for all nodes in the tree structure"""
         base_path = Path(output_base_dir)
@@ -392,3 +481,149 @@ class PBIDataCollector:
         except Exception as e:
             print(f"Error executing async query: {str(e)}")
             return pd.DataFrame()
+
+    async def collect_flexible_data_for_node(self, node_path: str, aggregation_days: int, target_folder: str) -> Dict[str, bool]:
+        """Collect flexible aggregated data for a specific node"""
+        results = {}
+        
+        # Parse node path to get filters
+        cabins, companies, hauls = self._parse_node_path(node_path)
+        
+        # Create node directory
+        node_dir = Path(target_folder) / node_path.replace('/', '_')
+        node_dir.mkdir(parents=True, exist_ok=True)
+        
+        print(f"Collecting flexible data for node: {node_path}")
+        print(f"  Aggregation: {aggregation_days} days")
+        print(f"  Filters - Cabins: {cabins}, Companies: {companies}, Hauls: {hauls}")
+        
+        # Collect flexible NPS data
+        try:
+            query = self._get_flexible_nps_query(aggregation_days, cabins, companies, hauls)
+            df = await self._execute_query_async(query)
+            if not df.empty:
+                # Clean column names
+                df.columns = [col.strip('[]') for col in df.columns]
+                df.to_csv(node_dir / f'flexible_NPS_{aggregation_days}d.csv', index=False)
+                results['flexible_NPS'] = True
+                print(f"  ✓ flexible_NPS_{aggregation_days}d.csv saved ({len(df)} periods)")
+            else:
+                results['flexible_NPS'] = False
+                print(f"  ✗ flexible_NPS_{aggregation_days}d.csv - no data")
+        except Exception as e:
+            results['flexible_NPS'] = False
+            print(f"  ✗ flexible_NPS_{aggregation_days}d.csv - error: {str(e)}")
+        
+        # Collect operative data (reuse existing method)
+        try:
+            query = self._get_operative_query(cabins, companies, hauls)
+            df = await self._execute_query_async(query)
+            if not df.empty:
+                # Clean column names  
+                df.columns = [col.strip('[]') for col in df.columns]
+                df.to_csv(node_dir / 'daily_operative.csv', index=False)
+                results['daily_operative'] = True
+                print(f"  ✓ daily_operative.csv saved ({len(df)} rows)")
+            else:
+                results['daily_operative'] = False
+                print(f"  ✗ daily_operative.csv - no data")
+        except Exception as e:
+            results['daily_operative'] = False
+            print(f"  ✗ daily_operative.csv - error: {str(e)}")
+        
+        return results
+
+    def _parse_node_path(self, node_path: str) -> Tuple[List[str], List[str], List[str]]:
+        """Parse node path to extract cabins, companies, and hauls"""
+        
+        # Default values for Global
+        cabins = ['Business', 'Economy', 'Premium EC']
+        companies = ['IB', 'YW'] 
+        hauls = ['SH', 'LH']
+        
+        # Parse path segments
+        segments = node_path.split('/')
+        
+        # Extract haul information
+        if 'LH' in segments:
+            hauls = ['LH']
+        elif 'SH' in segments:
+            hauls = ['SH']
+        
+        # Extract cabin information
+        if 'Economy' in segments:
+            cabins = ['Economy']
+        elif 'Business' in segments:
+            cabins = ['Business']
+        elif 'Premium' in segments:
+            cabins = ['Premium EC']
+        
+        # Extract company information
+        if 'IB' in segments:
+            companies = ['IB']
+        elif 'YW' in segments:
+            companies = ['YW']
+        
+        return cabins, companies, hauls
+
+    async def collect_explanatory_drivers_for_date_range(self, node_path: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+        """
+        Collect explanatory drivers data for a specific node and date range
+        
+        Args:
+            node_path: Node path like "Global/LH/Business"
+            start_date: Start date for the range
+            end_date: End date for the range
+            
+        Returns:
+            DataFrame with explanatory drivers data
+        """
+        try:
+            # Get filters for this node
+            cabins, companies, hauls = self._get_node_filters(node_path)
+            
+            # Generate the explanatory drivers query for the date range
+            query = self._get_explanatory_drivers_range_query(cabins, companies, hauls, start_date, end_date)
+            
+            # Execute the query
+            df = self._execute_query(query)
+            
+            if not df.empty:
+                # Clean column names
+                df.columns = [col.strip('[]') for col in df.columns]
+                print(f"         ✅ Collected {len(df)} explanatory drivers for analysis")
+            
+            return df
+            
+        except Exception as e:
+            print(f"         ❌ Error collecting explanatory drivers: {str(e)}")
+            return pd.DataFrame()
+    
+    def _get_explanatory_drivers_range_query(self, cabins: List[str], companies: List[str], hauls: List[str], start_date: datetime, end_date: datetime) -> str:
+        """
+        Generate DAX query for explanatory drivers data using date range
+        """
+        # Load the explanatory drivers template
+        template = self._load_query_template("Exp. Drivers.txt")
+        
+        # Replace placeholders with actual values
+        cabins_str = '", "'.join(cabins)
+        companies_str = '", "'.join(companies)
+        hauls_str = '", "'.join(hauls)
+        
+        # Replace the template placeholders
+        query = template.replace(
+            'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
+            f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
+        ).replace(
+            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
+            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
+        ).replace(
+            'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
+            f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
+        ).replace(
+            '\'Date_Master\'[Date] =date(2025,05,12)',
+            f'\'Date_Master\'[Date] >= date({start_date.year},{start_date.month},{start_date.day}) && \'Date_Master\'[Date] <= date({end_date.year},{end_date.month},{end_date.day})'
+        )
+        
+        return query
