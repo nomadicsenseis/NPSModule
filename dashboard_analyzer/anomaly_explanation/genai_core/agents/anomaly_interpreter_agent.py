@@ -14,12 +14,12 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Import GenAI Core components
-from .genai_core.agents.agent import Agent
-from .genai_core.llms.openai_llm import OpenAiLLM
-from .genai_core.llms.aws_llm import AWSLLM
-from .genai_core.utils.enums import LLMType, MessageType
-from .genai_core.message_history import MessageHistory
+# Import GenAI Core components (adjusted for new location)
+from ..agents.agent import Agent
+from ..llms.openai_llm import OpenAiLLM
+from ..llms.aws_llm import AWSLLM
+from ..utils.enums import LLMType, MessageType
+from ..message_history import MessageHistory
 
 
 class AnomalyInterpreterAgent:
@@ -34,8 +34,8 @@ class AnomalyInterpreterAgent:
     
     def __init__(
         self,
-        llm_type: LLMType = LLMType.GPT4o_MINI,
-        config_path: str = "config/prompts/anomaly_interpreter.yaml",
+        llm_type: LLMType = LLMType.O3,
+        config_path: str = "../../config/prompts/anomaly_interpreter.yaml",
         logger: Optional[logging.Logger] = None
     ):
         """
@@ -50,7 +50,7 @@ class AnomalyInterpreterAgent:
         self.llm_type = llm_type
         
         # Load environment variables from .devcontainer/.env
-        dotenv_path = Path(__file__).parent.parent.parent / '.devcontainer' / '.env'
+        dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
         load_dotenv(dotenv_path)
         
         # Load prompt configuration
@@ -101,7 +101,8 @@ class AnomalyInterpreterAgent:
         """Factory method to create appropriate LLM instance based on type."""
         
         # OpenAI/Azure OpenAI models
-        if llm_type in [LLMType.GPT3_5, LLMType.GPT4, LLMType.GPT4o, LLMType.GPT4o_MINI, LLMType.O4_MINI]:
+        if llm_type in [LLMType.GPT3_5, LLMType.GPT4, LLMType.GPT4o, LLMType.GPT4o_MINI, 
+                       LLMType.O1_MINI, LLMType.O3_MINI, LLMType.O3, LLMType.O4_MINI]:
             return self._create_openai_llm(llm_type)
         
         # AWS Bedrock models
@@ -224,7 +225,7 @@ class AnomalyInterpreterAgent:
 async def interpret_anomaly_tree(
     tree_data: str, 
     date: str = None,
-    llm_type: LLMType = LLMType.GPT4o_MINI
+    llm_type: LLMType = LLMType.O3
 ) -> str:
     """
     Quick function to interpret an anomaly tree without creating an agent instance.

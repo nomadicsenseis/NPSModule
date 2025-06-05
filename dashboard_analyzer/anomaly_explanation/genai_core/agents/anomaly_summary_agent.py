@@ -14,12 +14,12 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Import GenAI Core components
-from .genai_core.agents.agent import Agent
-from .genai_core.llms.openai_llm import OpenAiLLM
-from .genai_core.llms.aws_llm import AWSLLM
-from .genai_core.utils.enums import LLMType, MessageType
-from .genai_core.message_history import MessageHistory
+# Import GenAI Core components (adjusted for new location)
+from ..agents.agent import Agent
+from ..llms.openai_llm import OpenAiLLM
+from ..llms.aws_llm import AWSLLM
+from ..utils.enums import LLMType, MessageType
+from ..message_history import MessageHistory
 
 
 class AnomalySummaryAgent:
@@ -37,8 +37,8 @@ class AnomalySummaryAgent:
     
     def __init__(
         self,
-        llm_type: LLMType = LLMType.GPT4o_MINI,
-        config_path: str = "config/prompts/anomaly_summary.yaml",
+        llm_type: LLMType = LLMType.O3,
+        config_path: str = "../../config/prompts/anomaly_summary.yaml",
         logger: Optional[logging.Logger] = None
     ):
         """
@@ -53,7 +53,7 @@ class AnomalySummaryAgent:
         self.llm_type = llm_type
         
         # Load environment variables from .devcontainer/.env
-        dotenv_path = Path(__file__).parent.parent.parent / '.devcontainer' / '.env'
+        dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
         load_dotenv(dotenv_path)
         
         # Load prompt configuration
@@ -104,7 +104,8 @@ class AnomalySummaryAgent:
         """Factory method to create appropriate LLM instance based on type."""
         
         # OpenAI/Azure OpenAI models
-        if llm_type in [LLMType.GPT3_5, LLMType.GPT4, LLMType.GPT4o, LLMType.GPT4o_MINI, LLMType.O4_MINI]:
+        if llm_type in [LLMType.GPT3_5, LLMType.GPT4, LLMType.GPT4o, LLMType.GPT4o_MINI, 
+                       LLMType.O1_MINI, LLMType.O3_MINI, LLMType.O3, LLMType.O4_MINI]:
             return self._create_openai_llm(llm_type)
         
         # AWS Bedrock models
@@ -240,11 +241,60 @@ PERÍODO {period} ({date_range}):
             "model": getattr(self.llm, 'model_name', 'Unknown')
         }
 
+    def _get_message_history_for_consolidated(self, consolidated_input: str):
+        """Create message history for consolidated analysis combining daily and weekly insights"""
+        from ..message_history import MessageHistory
+        from ..utils.enums import MessageType
+        
+        message_history = MessageHistory(logger=self.logger)
+        
+        # Modified system prompt for consolidated analysis
+        consolidated_system_prompt = """
+Eres un experto analista ejecutivo especializado en consolidar análisis de NPS de múltiples escalas temporales (diario y semanal).
+
+Se te proporcionarán:
+- Resúmenes de análisis DIARIO (últimos 7 días)
+- Resúmenes de análisis SEMANAL (últimas 5 semanas) para contexto
+
+Tu objetivo es crear un RESUMEN EJECUTIVO CONSOLIDADO que:
+- Identifique si las anomalías diarias son parte de tendencias semanales más amplias
+- Distinga entre fluctuaciones diarias normales vs patrones preocupantes
+- Proporcione contexto temporal: ¿son los problemas diarios nuevos o parte de tendencias semanales?
+- Identifique prioridades: ¿qué requiere atención inmediata vs seguimiento?
+
+Restricciones:
+- Máximo 300 palabras
+- Tono ejecutivo y estratégico
+- Enfócate en la relación entre análisis diario y semanal
+- No repitas información, sintetiza patrones cruzados
+"""
+        
+        message_history.create_and_add_message(
+            content=consolidated_system_prompt,
+            message_type=MessageType.SYSTEM
+        )
+        
+        # User input with consolidated data
+        user_input = f"""
+Analiza los siguientes análisis DIARIOS y SEMANALES y genera un resumen ejecutivo consolidado que identifique la relación entre ambas escalas temporales:
+
+{consolidated_input}
+
+Genera únicamente el RESUMEN EJECUTIVO CONSOLIDADO enfocándote en la relación entre patrones diarios y semanales.
+"""
+        
+        message_history.create_and_add_message(
+            content=user_input,
+            message_type=MessageType.USER
+        )
+        
+        return message_history
+
 
 # Convenience function for standalone usage
 async def generate_summary_report(
     periods_data: List[Dict[str, Any]], 
-    llm_type: LLMType = LLMType.GPT4o_MINI
+    llm_type: LLMType = LLMType.O3
 ) -> str:
     """
     Standalone function to generate summary report without class instantiation.

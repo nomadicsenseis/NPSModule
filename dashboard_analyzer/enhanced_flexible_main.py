@@ -9,6 +9,10 @@ import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
 import logging
+from typing import List, Dict, Any
+import sys
+import os
+from contextlib import redirect_stdout, redirect_stderr
 
 from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector
 from dashboard_analyzer.anomaly_detection.flexible_detector import FlexibleAnomalyDetector
@@ -203,11 +207,11 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict):
     
     # Initialize AI agent for interpretation
     try:
-        from dashboard_analyzer.anomaly_explanation.anomaly_interpreter_agent import AnomalyInterpreterAgent
+        from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_interpreter_agent import AnomalyInterpreterAgent
         from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType
         
         ai_agent = AnomalyInterpreterAgent(
-            llm_type=LLMType.GPT4o_MINI,
+            llm_type=LLMType.O3,
             logger=logging.getLogger("ai_interpreter")
         )
         ai_available = True
@@ -218,10 +222,10 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict):
     
     # Initialize Summary Agent for final report
     try:
-        from dashboard_analyzer.anomaly_explanation.anomaly_summary_agent import AnomalySummaryAgent
+        from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
         
         summary_agent = AnomalySummaryAgent(
-            llm_type=LLMType.GPT4o_MINI,
+            llm_type=LLMType.O3,
             logger=logging.getLogger("summary_agent")
         )
         summary_available = True
@@ -263,22 +267,24 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict):
         nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
         
         if nodes_with_anomalies:
-            print("🔍 Collecting explanations...")
-            for node_path in nodes_with_anomalies:
-                try:
-                    anomaly_state = period_anomalies.get(node_path, "?")
-                    explanation = await asyncio.wait_for(
-                        interpreter.explain_anomaly(
-                            node_path=node_path,
-                            target_period=period,
-                            aggregation_days=aggregation_days,
-                            anomaly_state=anomaly_state
-                        ),
-                        timeout=30.0
-                    )
-                    explanations[node_path] = explanation
-                except Exception:
-                    explanations[node_path] = "Analysis timeout"
+            # Suppress all output during explanation collection
+            with open(os.devnull, 'w') as devnull:
+                with redirect_stdout(devnull), redirect_stderr(devnull):
+                    for node_path in nodes_with_anomalies:
+                        try:
+                            anomaly_state = period_anomalies.get(node_path, "?")
+                            explanation = await asyncio.wait_for(
+                                interpreter.explain_anomaly(
+                                    node_path=node_path,
+                                    target_period=period,
+                                    aggregation_days=aggregation_days,
+                                    anomaly_state=anomaly_state
+                                ),
+                                timeout=30.0
+                            )
+                            explanations[node_path] = explanation
+                        except Exception:
+                            explanations[node_path] = "Analysis timeout"
         
         # Show the enhanced tree with explanations and parent interpretations
         await print_enhanced_tree_with_explanations_and_interpretations(
@@ -393,23 +399,35 @@ def generate_parent_interpretations(anomalies: dict) -> dict:
         else:
             return ", ".join(children_list[:-1]) + f", {children_list[-1]}"
     
+    # NOTE: IB/YW are leaf nodes - they don't get patterns since they have no children
+    
     # Global interpretation
     lh_state = anomalies.get("Global/LH", "?")
     sh_state = anomalies.get("Global/SH", "?")
     global_state = anomalies.get("Global", "?")
     
     if lh_state != "?" and sh_state != "?":
-        if lh_state == "N" and sh_state == "N":
-            interpretations["Global"] = "All children normal (LH, SH)"
-        elif lh_state in ["+", "-"] and sh_state == "N":
-            interpretations["Global"] = f"{lh_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (LH) diluted by normal nodes (SH)"
-        elif sh_state in ["+", "-"] and lh_state == "N":
-            interpretations["Global"] = f"{sh_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (SH) diluted by normal nodes (LH)"
-        elif lh_state in ["+", "-"] and sh_state in ["+", "-"]:
-            if lh_state != sh_state:
-                interpretations["Global"] = "LH and SH anomalies cancel each other out"
-            else:
-                interpretations["Global"] = f"{lh_state.replace('+', 'Positive').replace('-', 'Negative')} anomaly consistent across all children (LH, SH)"
+        if global_state == "N":
+            if lh_state == "N" and sh_state == "N":
+                interpretations["Global"] = "All children normal (LH, SH)"
+            elif lh_state in ["+", "-"] and sh_state == "N":
+                interpretations["Global"] = f"{lh_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (LH) diluted by normal nodes (SH)"
+            elif sh_state in ["+", "-"] and lh_state == "N":
+                interpretations["Global"] = f"{sh_state.replace('+', 'Positive').replace('-', 'Negative')} nodes (SH) diluted by normal nodes (LH)"
+            elif lh_state in ["+", "-"] and sh_state in ["+", "-"]:
+                if lh_state != sh_state:
+                    interpretations["Global"] = "LH and SH anomalies cancel each other out"
+                else:
+                    interpretations["Global"] = f"{lh_state.replace('+', 'Positive').replace('-', 'Negative')} anomaly consistent across all children (LH, SH)"
+        elif global_state in ["+", "-"]:
+            # Global itself is anomalous
+            contributing_children = []
+            if lh_state in ["+", "-"]:
+                contributing_children.append("LH")
+            if sh_state in ["+", "-"]:
+                contributing_children.append("SH")
+            if contributing_children:
+                interpretations["Global"] = f"Global anomaly driven by {format_children(contributing_children)}"
     
     # LH interpretation
     lh_children = ["Economy", "Business", "Premium"]
@@ -447,7 +465,7 @@ def generate_parent_interpretations(anomalies: dict) -> dict:
             else:
                 interpretations["Global/SH"] = f"{economy_state.replace('+', 'Positive').replace('-', 'Negative')} anomaly consistent across all children (Economy, Business)"
     
-    # SH/Economy interpretation
+    # SH/Economy interpretation (IB vs YW) - only if Economy itself is normal
     ib_eco_state = anomalies.get("Global/SH/Economy/IB", "?")
     yw_eco_state = anomalies.get("Global/SH/Economy/YW", "?")
     
@@ -464,7 +482,7 @@ def generate_parent_interpretations(anomalies: dict) -> dict:
             else:
                 interpretations["Global/SH/Economy"] = f"{ib_eco_state.replace('+', 'Positive').replace('-', 'Negative')} anomaly consistent across all children (IB, YW)"
     
-    # SH/Business interpretation
+    # SH/Business interpretation (IB vs YW) - only if Business itself is normal
     ib_bus_state = anomalies.get("Global/SH/Business/IB", "?")
     yw_bus_state = anomalies.get("Global/SH/Business/YW", "?")
     
@@ -542,16 +560,83 @@ def build_ai_input_string(period: int, anomalies: dict, deviations: dict,
         if node_path in explanations and state in ['+', '-']:
             explanation = explanations[node_path]
             ai_input_part += f"{indent}  └─ Analysis:\n"
-            # Clean up explanation for AI
-            if " | " in explanation:
-                parts = explanation.split(" | ")[1:]  # Skip period description
-                for part in parts:
-                    if part.strip():
-                        clean_part = part.strip()
-                        # Remove emoji prefixes for cleaner AI input
-                        clean_part = clean_part.replace("💬", "").replace("🛣️", "").replace("🔧", "").replace("🚚", "")
-                        clean_part = clean_part.replace("Customer feedback:", "Verbatims:").replace("Routes:", "Routes:").replace("Operational:", "Operations:").replace("Drivers:", "Key Drivers:")
-                        ai_input_part += f"{indent}     • {clean_part.strip()}\n"
+            
+            # Split explanation into components and clean them up
+            parts = explanation.split(" | ")
+            
+            has_verbatims = False
+            has_routes = False
+            has_explanatory_drivers = False
+            
+            for part in parts:
+                part = part.strip()
+                if not part or part.startswith("Period"):
+                    continue
+                
+                # Clean up and format different explanation types
+                if part.startswith("💬") and "Customer feedback:" in part:
+                    has_verbatims = True
+                    if "predominantly negative" in part:
+                        sentiment = "negative feedback"
+                    elif "predominantly positive" in part:
+                        sentiment = "positive feedback"
+                    else:
+                        sentiment = "mixed feedback"
+                    
+                    topics = ""
+                    if "main topics:" in part:
+                        topics_part = part.split("main topics:")[1].strip()
+                        if topics_part and not topics_part.endswith("("):
+                            topics = f", topics: {topics_part}"
+                    
+                    count = ""
+                    if "verbatims collected" in part:
+                        try:
+                            count_part = part.split(" verbatims collected")[0]
+                            count_num = count_part.split()[-1]
+                            count = f"{count_num} verbatims, "
+                        except:
+                            pass
+                    
+                    ai_input_part += f"{indent}     • Verbatims: {count}{sentiment}{topics}\n"
+                
+                elif part.startswith("🛣️") and ("routes analyzed" in part or "Routes:" in part):
+                    has_routes = True
+                    clean_part = part.replace("🛣️ Routes: 🛣️ Routes:", "Routes:")
+                    clean_part = clean_part.replace("🛣️ 🛣️", "").replace("🛣️", "").strip()
+                    
+                    if clean_part and "routes analyzed" in clean_part:
+                        ai_input_part += f"{indent}     • Routes: {clean_part}\n"
+                
+                elif part.startswith("🔧"):
+                    clean_part = part.replace("🔧 Operational:", "").strip()
+                    if clean_part:
+                        ai_input_part += f"{indent}     • Operations: {clean_part}\n"
+                
+                elif part.startswith("🚚") and ("NPS change:" in part or "touchpoints analyzed" in part):
+                    has_explanatory_drivers = True
+                    clean_part = part.replace("🚚 Drivers: 🚚 Drivers:", "").replace("🚚 Drivers:", "").replace("🚚 🚚", "").replace("🚚", "").strip()
+                    
+                    if clean_part:
+                        ai_input_part += f"{indent}     • Explanatory Drivers: {clean_part}\n"
+            
+            # Add missing data disclaimers
+            if not has_routes:
+                ai_input_part += f"{indent}     • Routes: Not enough answers for statistical analysis\n"
+            
+            if not has_verbatims:
+                ai_input_part += f"{indent}     • Verbatims: Not enough answers for statistical analysis\n"
+            
+            # Always show explanatory drivers section
+            if not has_explanatory_drivers:
+                ai_input_part += f"{indent}     • Explanatory Drivers: Not enough answers for statistical analysis\n"
+        
+        elif state in ['+', '-']:
+            # Anomalous node but no explanation available
+            ai_input_part += f"{indent}  └─ Analysis:\n"
+            ai_input_part += f"{indent}     • Routes: Not enough answers for statistical analysis\n"
+            ai_input_part += f"{indent}     • Verbatims: Not enough answers for statistical analysis\n"
+            ai_input_part += f"{indent}     • Explanatory Drivers: Not enough answers for statistical analysis\n"
         
         return ai_input_part
     
@@ -623,18 +708,22 @@ async def print_enhanced_tree_with_explanations_and_interpretations(
             explanation = explanations[node_path]
             print(f"{indent}  └─ ANALYSIS:")
             
-            # Debug: Show raw explanation
             if explanation == "Analysis timeout":
                 print(f"{indent}     • Analysis timeout occurred")
                 return
             elif not explanation or explanation.strip() == "":
-                print(f"{indent}     • No explanation data available")
+                print(f"{indent}     • Routes: Not enough answers for statistical analysis")
+                print(f"{indent}     • Verbatims: Not enough answers for statistical analysis")
+                print(f"{indent}     • Explanatory Drivers: Not enough answers for statistical analysis")
                 return
             
             # Split explanation into components and clean them up
             parts = explanation.split(" | ")
             
-            displayed_count = 0
+            has_verbatims = False
+            has_routes = False
+            has_explanatory_drivers = False
+            
             for part in parts:
                 part = part.strip()
                 if not part or part.startswith("Period"):
@@ -642,6 +731,7 @@ async def print_enhanced_tree_with_explanations_and_interpretations(
                 
                 # Clean up and format different explanation types
                 if part.startswith("💬") and "Customer feedback:" in part:
+                    has_verbatims = True
                     if "predominantly negative" in part:
                         sentiment = "negative feedback"
                     elif "predominantly positive" in part:
@@ -665,38 +755,43 @@ async def print_enhanced_tree_with_explanations_and_interpretations(
                             pass
                     
                     print(f"{indent}     • Verbatims: {count}{sentiment}{topics}")
-                    displayed_count += 1
                 
                 elif part.startswith("🛣️") and ("routes analyzed" in part or "Routes:" in part):
+                    has_routes = True
                     clean_part = part.replace("🛣️ Routes: 🛣️ Routes:", "Routes:")
                     clean_part = clean_part.replace("🛣️ 🛣️", "").replace("🛣️", "").strip()
                     
                     if clean_part and "routes analyzed" in clean_part:
                         print(f"{indent}     • Routes: {clean_part}")
-                        displayed_count += 1
                 
                 elif part.startswith("🔧"):
                     clean_part = part.replace("🔧 Operational:", "").strip()
                     if clean_part:
                         print(f"{indent}     • Operations: {clean_part}")
-                        displayed_count += 1
                 
                 elif part.startswith("🚚") and ("NPS change:" in part or "touchpoints analyzed" in part):
+                    has_explanatory_drivers = True
                     clean_part = part.replace("🚚 Drivers: 🚚 Drivers:", "").replace("🚚 Drivers:", "").replace("🚚 🚚", "").replace("🚚", "").strip()
                     
                     if clean_part:
-                        print(f"{indent}     • Key Drivers: {clean_part}")
-                        displayed_count += 1
+                        print(f"{indent}     • Explanatory Drivers: {clean_part}")
             
-            # If no parts were displayed, show debug info
-            if displayed_count == 0:
-                print(f"{indent}     • Debug: Raw explanation = '{explanation[:100]}...'")
-                print(f"{indent}     • Debug: Parts found = {len(parts)}")
-                for i, part in enumerate(parts[:3]):  # Show first 3 parts
-                    print(f"{indent}       Part {i}: '{part[:50]}...'")
+            # Add missing data disclaimers
+            if not has_routes:
+                print(f"{indent}     • Routes: Not enough answers for statistical analysis")
+            
+            if not has_verbatims:
+                print(f"{indent}     • Verbatims: Not enough answers for statistical analysis")
+            
+            # Always show explanatory drivers section
+            if not has_explanatory_drivers:
+                print(f"{indent}     • Explanatory Drivers: Not enough answers for statistical analysis")
+        
         else:
             print(f"{indent}  └─ ANALYSIS:")
-            print(f"{indent}     • No explanation available for {node_path}")
+            print(f"{indent}     • Routes: Not enough answers for statistical analysis")
+            print(f"{indent}     • Verbatims: Not enough answers for statistical analysis")
+            print(f"{indent}     • Explanatory Drivers: Not enough answers for statistical analysis")
     
     # Count actual anomalies (not normal deviations)
     actual_anomalies = [node for node, state in anomalies.items() if state in ['+', '-']]
@@ -816,8 +911,8 @@ async def main():
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Enhanced Flexible NPS Anomaly Detection')
-    parser.add_argument('--mode', choices=['download', 'analyze', 'both'], default='both',
-                       help='Mode: download data, analyze existing data, or both')
+    parser.add_argument('--mode', choices=['download', 'analyze', 'both', 'comprehensive', 'clean-daily'], default='both',
+                       help='Mode: download data, analyze existing data, both, comprehensive (daily + weekly), or clean-daily (only AI summaries)')
     parser.add_argument('--folder', type=str, 
                        help='Specific folder to analyze (e.g., tables/flexible_7d_04_06_2025)')
     parser.add_argument('--aggregation-days', type=int, default=7,
@@ -828,6 +923,16 @@ async def main():
     args = parser.parse_args()
     
     try:
+        if args.mode == 'clean-daily':
+            # Run clean daily analysis: only AI summaries and trees
+            await run_clean_daily_analysis()
+            return
+        
+        if args.mode == 'comprehensive':
+            # Run comprehensive analysis: Daily (last 7 days) + Weekly (current vs 3-week average) + Consolidated Summary
+            await run_comprehensive_analysis()
+            return
+        
         if args.mode in ['download', 'both']:
             # Download data
             print("\n📥 STEP 1: Data Collection")
@@ -958,6 +1063,667 @@ async def run_flexible_analysis(data_folder: str):
             'total_periods': 7,
             'periods_analyzed': periods_to_analyze
         }
+
+async def run_comprehensive_analysis():
+    """
+    Run comprehensive analysis: Daily (last 7 days) + Weekly (current vs 3-week average) + Consolidated Summary
+    """
+    print("🚀 COMPREHENSIVE NPS ANALYSIS")
+    print("=" * 80)
+    
+    # Initialize Summary Agent for consolidated report
+    try:
+        from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType
+        
+        summary_agent = AnomalySummaryAgent(
+            llm_type=LLMType.O3,
+            logger=logging.getLogger("summary_agent")
+        )
+        summary_available = True
+        print("📋 Summary Agent initialized for consolidated report")
+    except Exception as e:
+        print(f"⚠️ Summary Agent not available: {str(e)}")
+        summary_available = False
+    
+    # Store all analysis results for consolidated summary
+    consolidated_data = []
+    
+    try:
+        # === DAILY ANALYSIS (Last 7 Days) ===
+        print("\n" + "="*60)
+        print("📅 DAILY ANALYSIS (Last 7 Days)")
+        print("="*60)
+        print("📥 Collecting daily data...")
+        daily_folder = await run_flexible_data_download_silent(
+            aggregation_days=1,
+            periods=7,
+            start_date=datetime.now().date()
+        )
+        
+        daily_summary_data = []
+        if daily_folder:
+            print("🔍 Analyzing daily patterns...")
+            daily_analysis = await run_flexible_analysis_silent(daily_folder)
+            
+            if daily_analysis:
+                anomaly_count = len(daily_analysis.get('anomaly_periods', []))
+                print(f"📊 Found anomalies in {anomaly_count} of 7 days")
+                
+                # Show daily trees and AI interpretations
+                daily_summary_data = await show_silent_anomaly_analysis(daily_analysis, "DAILY")
+                
+                # Add to consolidated data
+                if daily_summary_data:
+                    consolidated_data.append({
+                        'analysis_type': 'DIARIO',
+                        'periods': 7,
+                        'summary': daily_summary_data
+                    })
+        
+        # === WEEKLY ANALYSIS (Current Week vs 3-Week Average) ===
+        print("\n" + "="*60)
+        print("📅 WEEKLY ANALYSIS (Current Week vs 3-Week Average)")
+        print("="*60)
+        print("📥 Collecting weekly data...")
+        weekly_folder = await run_flexible_data_download_silent(
+            aggregation_days=7,
+            periods=4,  # Current week + 3 weeks for average
+            start_date=datetime.now().date()
+        )
+        
+        weekly_summary_data = []
+        if weekly_folder:
+            print("🔍 Analyzing weekly patterns...")
+            weekly_analysis = await run_weekly_current_vs_average_analysis_silent(weekly_folder)
+            
+            if weekly_analysis:
+                anomaly_count = len(weekly_analysis.get('anomaly_periods', []))
+                if anomaly_count > 0:
+                    print(f"📊 Found anomalies in current week")
+                else:
+                    print(f"📊 Current week shows normal patterns")
+                
+                # ALWAYS show weekly trees and AI interpretations (whether anomalies or not)
+                weekly_summary_data = await show_silent_anomaly_analysis(weekly_analysis, "WEEKLY", show_all_periods=True)
+                
+                # Add to consolidated data
+                if weekly_summary_data:
+                    consolidated_data.append({
+                        'analysis_type': 'SEMANAL',
+                        'periods': 1,
+                        'summary': weekly_summary_data
+                    })
+            else:
+                print("⚠️ Weekly analysis failed")
+        else:
+            print("❌ Weekly data collection failed")
+        
+        # === CONSOLIDATED SUMMARY ===
+        if summary_available and consolidated_data:
+            print("\n" + "="*80)
+            print("📋 CONSOLIDATED EXECUTIVE SUMMARY")
+            print("="*80)
+            
+            try:
+                print("🤖 Generating comprehensive summary across daily and weekly analyses...")
+                consolidated_summary = await generate_consolidated_summary(summary_agent, consolidated_data)
+                
+                print(f"\n{consolidated_summary}")
+                
+                # Performance metrics
+                metrics = summary_agent.get_performance_metrics()
+                print(f"\n📊 Summary Generation Metrics:")
+                print(f"   • Input tokens: {metrics.get('input_tokens', 0)}")
+                print(f"   • Output tokens: {metrics.get('output_tokens', 0)}")
+                print(f"   • LLM: {metrics.get('llm_type', 'Unknown')}")
+                
+            except Exception as e:
+                print(f"❌ Consolidated summary generation failed: {str(e)}")
+                print(f"   Manual review recommended")
+            
+            print("="*80)
+        
+        elif not consolidated_data:
+            print("\n📋 CONSOLIDATED SUMMARY:")
+            print("No anomalies detected in either daily or weekly analysis.")
+            print("All segments are operating within normal NPS variation ranges.")
+        
+        elif not summary_available:
+            print("\n⚠️ Consolidated summary not available (Summary Agent initialization failed)")
+            if consolidated_data:
+                total_periods = sum(data['periods'] for data in consolidated_data)
+                print(f"   Individual analyses completed for {len(consolidated_data)} timeframes with {total_periods} total periods")
+        
+        print("\n🎯 COMPREHENSIVE ANALYSIS COMPLETED")
+        
+    except Exception as e:
+        print(f"❌ Error during comprehensive analysis: {str(e)}")
+        import traceback
+        print(f"Debug info: {traceback.format_exc()}")
+
+async def run_weekly_current_vs_average_analysis_silent(data_folder: str):
+    """Run weekly analysis silently focusing only on current week (period 1) vs 3-week average"""
+    import os
+    from contextlib import redirect_stdout, redirect_stderr
+    
+    # Extract aggregation days from folder name (should be 7 for weekly)
+    folder_name = Path(data_folder).name
+    if 'flexible_' in folder_name and 'd_' in folder_name:
+        try:
+            aggregation_days = int(folder_name.split('flexible_')[1].split('d_')[0])
+        except:
+            aggregation_days = 7  # Default for weekly
+    else:
+        aggregation_days = 7
+    
+    detector = FlexibleAnomalyDetector(
+        aggregation_days=aggregation_days,
+        threshold=10.0,
+        min_sample_size=5
+    )
+    
+    # Analyze only period 1 (current week vs 3-week moving average) silently
+    current_week_period = 1
+    anomaly_periods = []
+    
+    # Suppress all output during analysis
+    with open(os.devnull, 'w') as devnull:
+        with redirect_stdout(devnull), redirect_stderr(devnull):
+            try:
+                # Analyze only the current week (period 1)
+                period_anomalies, period_deviations, period_explanations = detector.analyze_period(data_folder, current_week_period)
+                
+                # Check if current week has any anomaly
+                has_anomaly = any(state in ['+', '-'] for state in period_anomalies.values())
+                if has_anomaly:
+                    anomaly_periods.append(current_week_period)
+            
+            except Exception:
+                return None
+    
+    return {
+        'detector': detector,
+        'data_folder': data_folder,
+        'aggregation_days': aggregation_days,
+        'anomaly_periods': anomaly_periods,
+        'total_periods': 1,  # Only analyzing current week
+        'periods_analyzed': [current_week_period]
+    }
+
+async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, show_all_periods=False):
+    """Show only trees and AI summaries for periods with anomalies - silent version"""
+    import os
+    from contextlib import redirect_stdout, redirect_stderr
+    
+    detector = analysis_data['detector']
+    data_folder = analysis_data['data_folder']
+    aggregation_days = analysis_data['aggregation_days']
+    anomaly_periods = analysis_data['anomaly_periods']
+    periods_analyzed = analysis_data.get('periods_analyzed', anomaly_periods)
+    
+    # Initialize interpreter for explanations
+    pbi_collector = PBIDataCollector()
+    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector)
+    
+    # Initialize AI agent for interpretation
+    try:
+        from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_interpreter_agent import AnomalyInterpreterAgent
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType
+        
+        ai_agent = AnomalyInterpreterAgent(
+            llm_type=LLMType.O3,
+            logger=logging.getLogger("ai_interpreter")
+        )
+        ai_available = True
+    except Exception:
+        ai_available = False
+    
+    # Collect data for summary
+    all_periods_data = []
+    
+    # Show only periods with anomalies
+    periods_with_anomalies = [p for p in periods_analyzed if p in anomaly_periods]
+    
+    # If show_all_periods is True, show all periods analyzed, not just those with anomalies
+    if show_all_periods:
+        periods_to_show = periods_analyzed
+    else:
+        periods_to_show = periods_with_anomalies
+    
+    if not periods_to_show:
+        print(f"✅ No periods to analyze in {analysis_type.lower()} analysis")
+        return []
+    
+    # Show detailed analysis for selected periods
+    for period in periods_to_show:
+        print(f"\n{'='*60}")
+        print(f"{analysis_type} PERIOD {period} ANALYSIS")
+        print("="*60)
+        
+        # Get anomalies for this period
+        period_anomalies, period_deviations, _ = detector.analyze_period(data_folder, period)
+        
+        # Get date range
+        date_range = interpreter._get_period_date_range(period, aggregation_days)
+        if date_range:
+            start_date, end_date = date_range
+            print(f"📅 Date Range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+            date_range_str = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+        else:
+            date_range_str = "Unknown dates"
+        
+        # Generate parent interpretations
+        parent_interpretations = generate_parent_interpretations(period_anomalies)
+        
+        # Collect explanations for anomalous nodes silently
+        explanations = {}
+        nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
+        
+        if nodes_with_anomalies:
+            # Suppress all output during explanation collection
+            with open(os.devnull, 'w') as devnull:
+                with redirect_stdout(devnull), redirect_stderr(devnull):
+                    for node_path in nodes_with_anomalies:
+                        try:
+                            anomaly_state = period_anomalies.get(node_path, "?")
+                            explanation = await asyncio.wait_for(
+                                interpreter.explain_anomaly(
+                                    node_path=node_path,
+                                    target_period=period,
+                                    aggregation_days=aggregation_days,
+                                    anomaly_state=anomaly_state
+                                ),
+                                timeout=30.0
+                            )
+                            explanations[node_path] = explanation
+                        except Exception:
+                            explanations[node_path] = "Analysis timeout"
+        
+        # Show the tree
+        await print_enhanced_tree_with_explanations_and_interpretations(
+            period_anomalies, period_deviations, explanations, parent_interpretations,
+            aggregation_days, period, date_range
+        )
+        
+        # AI Interpretation
+        ai_interpretation = None
+        if ai_available:
+            print(f"\n🤖 AI INTERPRETATION:")
+            print("-" * 40)
+            
+            try:
+                # Build AI input (works for both anomalous and normal periods)
+                ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
+                                               parent_interpretations, explanations, date_range)
+                
+                ai_interpretation = await asyncio.wait_for(
+                    ai_agent.interpret_anomaly_tree(ai_input, 
+                                                   start_date.strftime('%Y-%m-%d') if date_range else None),
+                    timeout=45.0
+                )
+                
+                print(ai_interpretation)
+                
+            except Exception as e:
+                ai_interpretation = f"AI interpretation failed: {str(e)}"
+                print(ai_interpretation)
+        
+        # Collect period data for summary
+        period_data = {
+            'period': period,
+            'date_range': date_range_str,
+            'ai_interpretation': ai_interpretation or "No AI interpretation available"
+        }
+        all_periods_data.append(period_data)
+    
+    return all_periods_data
+
+async def generate_consolidated_summary(agent: 'AnomalySummaryAgent', consolidated_data: List[Dict]) -> str:
+    """Generate a consolidated summary from multiple analysis types."""
+    # Format the consolidated input
+    formatted_sections = []
+    
+    for data in consolidated_data:
+        analysis_type = data['analysis_type']
+        periods_count = data['periods']
+        summary_data = data['summary']
+        
+        section = f"\n=== ANÁLISIS {analysis_type} ===\n"
+        section += f"Períodos analizados: {periods_count}\n\n"
+        
+        for period_data in summary_data:
+            period = period_data['period']
+            date_range = period_data['date_range']
+            interpretation = period_data['ai_interpretation']
+            
+            section += f"Período {period} ({date_range}):\n{interpretation}\n\n"
+        
+        formatted_sections.append(section)
+    
+    # Create consolidated input
+    consolidated_input = "\n".join(formatted_sections)
+    
+    # Use a modified prompt for consolidated analysis
+    message_history = agent._get_message_history_for_consolidated(consolidated_input)
+    
+    response, _, _ = await agent.agent.invoke(messages=message_history.get_messages())
+    return response.content.strip()
+
+async def run_flexible_analysis_limited(data_folder: str, periods: int = 5):
+    """Run flexible analysis for limited number of periods"""
+    print(f"🔄 Analyzing {periods} periods in: {data_folder}")
+    
+    # Extract aggregation days from folder name
+    folder_name = Path(data_folder).name
+    if 'flexible_' in folder_name and 'd_' in folder_name:
+        try:
+            aggregation_days = int(folder_name.split('flexible_')[1].split('d_')[0])
+        except:
+            aggregation_days = 7  # Default
+    else:
+        aggregation_days = 7
+    
+    detector = FlexibleAnomalyDetector(
+        aggregation_days=aggregation_days,
+        threshold=10.0,
+        min_sample_size=5
+    )
+    
+    # Analyze the specified number of periods
+    print(f"🔍 Analyzing the {periods} most recent periods...")
+    periods_to_analyze = list(range(1, periods + 1))
+    anomaly_periods = []
+    
+    try:
+        for period in periods_to_analyze:
+            period_anomalies, period_deviations, period_explanations = detector.analyze_period(data_folder, period)
+            
+            # Check if any node has an anomaly
+            has_anomaly = any(state in ['+', '-'] for state in period_anomalies.values())
+            if has_anomaly:
+                anomaly_periods.append(period)
+    
+    except Exception as e:
+        print(f"⚠️ Analysis stopped: {str(e)}")
+    
+    if anomaly_periods:
+        print(f"🚨 Found anomalies in {len(anomaly_periods)} of {periods} periods: {anomaly_periods}")
+        return {
+            'detector': detector,
+            'data_folder': data_folder,
+            'aggregation_days': aggregation_days,
+            'anomaly_periods': anomaly_periods,
+            'total_periods': periods,
+            'periods_analyzed': periods_to_analyze
+        }
+    else:
+        print(f"✅ No anomalies detected in the {periods} most recent periods")
+        return {
+            'detector': detector,
+            'data_folder': data_folder,
+            'aggregation_days': aggregation_days,
+            'anomaly_periods': [],
+            'total_periods': periods,
+            'periods_analyzed': periods_to_analyze
+        }
+
+async def run_clean_daily_analysis():
+    """
+    Run clean daily analysis: Last 7 days with only AI summaries and trees
+    """
+    # Download daily data silently
+    daily_folder = await run_flexible_data_download_silent(
+        aggregation_days=1,
+        periods=7,
+        start_date=datetime.now().date()
+    )
+    
+    if not daily_folder:
+        print("❌ Data collection failed")
+        return
+    
+    # Run analysis silently
+    daily_analysis = await run_flexible_analysis_silent(daily_folder)
+    
+    if not daily_analysis:
+        print("❌ Analysis failed")
+        return
+    
+    # Show only trees and AI summaries
+    await show_clean_anomaly_analysis(daily_analysis)
+
+async def run_flexible_data_download_silent(aggregation_days: int, periods: int, start_date):
+    """Run flexible data download completely silently"""
+    # Generate folder name
+    current_date = datetime.now()
+    date_str = current_date.strftime('%d_%m_%Y')
+    target_folder = f"tables/flexible_{aggregation_days}d_{date_str}"
+    
+    collector = PBIDataCollector()
+    
+    # Define all node paths
+    node_paths = [
+        "Global",
+        "Global/LH",
+        "Global/LH/Economy", 
+        "Global/LH/Business", 
+        "Global/LH/Premium",
+        "Global/SH",
+        "Global/SH/Economy", 
+        "Global/SH/Business",
+        "Global/SH/Economy/IB", 
+        "Global/SH/Economy/YW",
+        "Global/SH/Business/IB", 
+        "Global/SH/Business/YW"
+    ]
+    
+    # Collect data for all nodes completely silently
+    total_success = 0
+    total_attempted = 0
+    
+    # Suppress all output during data collection
+    with open(os.devnull, 'w') as devnull:
+        with redirect_stdout(devnull), redirect_stderr(devnull):
+            for node_path in node_paths:
+                try:
+                    results = await collector.collect_flexible_data_for_node(
+                        node_path, aggregation_days, target_folder
+                    )
+                    total_attempted += len(results)
+                    total_success += sum(results.values())
+                except Exception:
+                    pass
+    
+    if total_success > 0:
+        return target_folder
+    else:
+        return None
+
+async def run_flexible_analysis_silent(data_folder: str):
+    """Run flexible analysis completely silently"""
+    import os
+    from contextlib import redirect_stdout, redirect_stderr
+    
+    # Extract aggregation days from folder name
+    folder_name = Path(data_folder).name
+    if 'flexible_' in folder_name and 'd_' in folder_name:
+        try:
+            aggregation_days = int(folder_name.split('flexible_')[1].split('d_')[0])
+        except:
+            aggregation_days = 7  # Default
+    else:
+        aggregation_days = 7
+    
+    detector = FlexibleAnomalyDetector(
+        aggregation_days=aggregation_days,
+        threshold=10.0,
+        min_sample_size=5
+    )
+    
+    # Analyze the 7 most recent periods completely silently
+    periods_to_analyze = list(range(1, 8))  # Periods 1, 2, 3, 4, 5, 6, 7
+    anomaly_periods = []
+    
+    # Suppress all output during analysis
+    with open(os.devnull, 'w') as devnull:
+        with redirect_stdout(devnull), redirect_stderr(devnull):
+            try:
+                for period in periods_to_analyze:
+                    period_anomalies, period_deviations, period_explanations = detector.analyze_period(data_folder, period)
+                    
+                    # Check if any node has an anomaly
+                    has_anomaly = any(state in ['+', '-'] for state in period_anomalies.values())
+                    if has_anomaly:
+                        anomaly_periods.append(period)
+            
+            except Exception:
+                return None
+    
+    return {
+        'detector': detector,
+        'data_folder': data_folder,
+        'aggregation_days': aggregation_days,
+        'anomaly_periods': anomaly_periods,
+        'total_periods': 7,
+        'periods_analyzed': periods_to_analyze
+    }
+
+async def show_clean_anomaly_analysis(analysis_data: dict):
+    """Show only trees and AI summaries for periods with anomalies"""
+    import os
+    from contextlib import redirect_stdout, redirect_stderr
+    
+    detector = analysis_data['detector']
+    data_folder = analysis_data['data_folder']
+    aggregation_days = analysis_data['aggregation_days']
+    anomaly_periods = analysis_data['anomaly_periods']
+    periods_analyzed = analysis_data.get('periods_analyzed', anomaly_periods)
+    
+    # Initialize interpreter for explanations
+    pbi_collector = PBIDataCollector()
+    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector)
+    
+    # Initialize AI agent for interpretation
+    try:
+        from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_interpreter_agent import AnomalyInterpreterAgent
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType
+        
+        ai_agent = AnomalyInterpreterAgent(
+            llm_type=LLMType.O3,
+            logger=logging.getLogger("ai_interpreter")
+        )
+        ai_available = True
+    except Exception:
+        ai_available = False
+    
+    # Collect data for summary
+    all_periods_data = []
+    
+    # Show only periods with anomalies
+    periods_with_anomalies = [p for p in periods_analyzed if p in anomaly_periods]
+    
+    # Show detailed analysis for periods with anomalies
+    for period in periods_with_anomalies:
+        print(f"\n{'='*60}")
+        print(f"PERIOD {period} ANALYSIS")
+        print("="*60)
+        
+        # Get anomalies for this period
+        period_anomalies, period_deviations, _ = detector.analyze_period(data_folder, period)
+        
+        # Get date range
+        date_range = interpreter._get_period_date_range(period, aggregation_days)
+        if date_range:
+            start_date, end_date = date_range
+            print(f"📅 Date Range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+            date_range_str = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+        else:
+            date_range_str = "Unknown dates"
+        
+        # Generate parent interpretations
+        parent_interpretations = generate_parent_interpretations(period_anomalies)
+        
+        # Collect explanations for anomalous nodes
+        explanations = {}
+        nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
+        
+        if nodes_with_anomalies:
+            # Suppress all output during explanation collection
+            with open(os.devnull, 'w') as devnull:
+                with redirect_stdout(devnull), redirect_stderr(devnull):
+                    for node_path in nodes_with_anomalies:
+                        try:
+                            anomaly_state = period_anomalies.get(node_path, "?")
+                            explanation = await asyncio.wait_for(
+                                interpreter.explain_anomaly(
+                                    node_path=node_path,
+                                    target_period=period,
+                                    aggregation_days=aggregation_days,
+                                    anomaly_state=anomaly_state
+                                ),
+                                timeout=30.0
+                            )
+                            explanations[node_path] = explanation
+                        except Exception:
+                            explanations[node_path] = "Analysis timeout"
+        
+        # Show the tree
+        await print_enhanced_tree_with_explanations_and_interpretations(
+            period_anomalies, period_deviations, explanations, parent_interpretations,
+            aggregation_days, period, date_range
+        )
+        
+        # AI Interpretation
+        ai_interpretation = None
+        if ai_available and nodes_with_anomalies:
+            print(f"\n🤖 AI INTERPRETATION:")
+            print("-" * 40)
+            
+            try:
+                # Build AI input
+                ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
+                                               parent_interpretations, explanations, date_range)
+                
+                ai_interpretation = await asyncio.wait_for(
+                    ai_agent.interpret_anomaly_tree(ai_input, 
+                                                   start_date.strftime('%Y-%m-%d') if date_range else None),
+                    timeout=45.0
+                )
+                
+                print(ai_interpretation)
+                
+            except Exception as e:
+                ai_interpretation = f"AI interpretation failed: {str(e)}"
+                print(ai_interpretation)
+        
+        # Collect period data for summary
+        if ai_interpretation:
+            period_data = {
+                'period': period,
+                'date_range': date_range_str,
+                'ai_interpretation': ai_interpretation
+            }
+            all_periods_data.append(period_data)
+    
+    # Generate Summary Report
+    if summary_available and all_periods_data:
+        print(f"\n" + "="*80)
+        print(f"📋 EXECUTIVE SUMMARY")
+        print("="*80)
+        
+        try:
+            summary_report = await asyncio.wait_for(
+                summary_agent.generate_summary_report(all_periods_data),
+                timeout=60.0
+            )
+            
+            print(f"\n{summary_report}")
+            
+        except Exception as e:
+            print(f"Executive summary generation failed: {str(e)}")
+        
+        print("="*80)
 
 if __name__ == "__main__":
     asyncio.run(main()) 

@@ -27,7 +27,10 @@ class LLMType(Enum):
     GPT4 = 'GPT4'
     GPT4o = 'GPT4o'
     GPT4o_MINI = 'GPT4o_MINI'
-    O4_MINI = 'O4_MINI'
+    O1_MINI = 'O1_MINI'  # o1-mini in Azure OpenAI
+    O3_MINI = 'O3_MINI'  # o3-mini in Azure OpenAI
+    O3 = 'O3'            # o3 in Azure OpenAI
+    O4_MINI = 'O4_MINI'  # o4-mini in Azure OpenAI
     LLAMA3_70 = 'LLAMA3_70'
     LLAMA3_1_70 = 'LLAMA3_1_70'
     LLAMA3_1_405 = 'LLAMA3_1_405'

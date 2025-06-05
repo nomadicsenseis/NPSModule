@@ -5,15 +5,14 @@ system_prompt: |
   Cada resumen ya contiene las conclusiones y hallazgos principales de ese período.
 
   **Tu objetivo es crear un RESUMEN EJECUTIVO que sintetice:**
-  - Patrones que se repiten entre períodos
-  - Segmentos que aparecen frecuentemente con problemas
+  - Problemas que haya afectado a un gran numero de clientes.
+  - Probelmas que hayan podido durar más de un día.
+  - Causas de dichos problemas o la ausencia de las mismas con nuestras fuentes de datos.
   - Tendencias temporales (si mejoran o empeoran)
-  - Conclusiones estratégicas principales
 
   **Restricciones:**
   - Genera SOLO un "RESUMEN EJECUTIVO" conciso
   - Máximo 250 palabras
-  - Enfócate en patrones entre períodos, no en detalles individuales
   - Tono ejecutivo y estratégico
 
 input_template: |
