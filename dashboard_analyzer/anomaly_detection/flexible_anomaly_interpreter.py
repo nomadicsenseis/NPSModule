@@ -107,10 +107,22 @@ class FlexibleAnomalyInterpreter:
         try:
             # Load one of the CSV files to get the period mapping
             data_folder_path = Path(self.data_folder)
-            global_folder = data_folder_path / "Global"
-            flexible_file = global_folder / f'flexible_NPS_{aggregation_days}d.csv'
             
-            if not flexible_file.exists():
+            # Try different possible paths for the flexible NPS file
+            possible_paths = [
+                data_folder_path / "Global" / f'flexible_NPS_{aggregation_days}d.csv',
+                data_folder_path / "Global_LH" / f'flexible_NPS_{aggregation_days}d.csv',
+                data_folder_path / "Global_SH" / f'flexible_NPS_{aggregation_days}d.csv',
+            ]
+            
+            # Find any existing file from possible paths
+            flexible_file = None
+            for path in possible_paths:
+                if path.exists():
+                    flexible_file = path
+                    break
+            
+            if not flexible_file:
                 return None
                 
             df = pd.read_csv(flexible_file)
@@ -303,8 +315,17 @@ class FlexibleAnomalyInterpreter:
                 if route_data.empty:
                     return f"🛣️ Routes: No route data found for this period"
                 
-                # Analyze the route performance with anomaly type
-                analysis = self._analyze_route_performance(route_data, node_path, anomaly_type)
+                # Adjust minimum surveys threshold based on date range
+                days_in_range = (end_date - start_date).days + 1
+                if days_in_range <= 1:
+                    min_surveys_threshold = 3  # Daily analysis - very low threshold
+                elif days_in_range <= 7:
+                    min_surveys_threshold = 4  # Weekly analysis - low threshold
+                else:
+                    min_surveys_threshold = 5  # Monthly or longer - normal threshold
+                
+                # Analyze the route performance with anomaly type and adaptive threshold
+                analysis = self._analyze_route_performance(route_data, node_path, anomaly_type, min_surveys_threshold)
                 return f"🛣️ Routes: {analysis}"
                 
             except Exception as e:
@@ -362,7 +383,7 @@ class FlexibleAnomalyInterpreter:
         
         return query
     
-    def _analyze_route_performance(self, route_data: pd.DataFrame, node_path: str, anomaly_type: str = None) -> str:
+    def _analyze_route_performance(self, route_data: pd.DataFrame, node_path: str, anomaly_type: str = None, min_surveys: int = 5) -> str:
         """
         Analyze route performance and identify key insights based on anomaly type
         """
@@ -389,8 +410,7 @@ class FlexibleAnomalyInterpreter:
             if not nps_col or not route_col:
                 return f"Missing required columns (NPS: {nps_col}, Route: {route_col})"
             
-            # Filter routes with enough passengers (minimum 5 surveys as requested)
-            min_surveys = 5
+            # Filter routes with enough passengers (using adaptive threshold)
             if pax_col and pax_col in route_data.columns:
                 significant_routes = route_data[route_data[pax_col] >= min_surveys].copy()
             else:
@@ -495,19 +515,19 @@ class FlexibleAnomalyInterpreter:
         
         # Operational factors
         if operational and "No " not in operational and "Error" not in operational:
-            explanation_parts.append(f"🔧 Operational: {operational}")
+            explanation_parts.append(f"Operational: {operational}")
         
         # Customer feedback
         if verbatims and "No " not in verbatims and "Error" not in verbatims:
-            explanation_parts.append(f"💬 {verbatims}")
+            explanation_parts.append(f"Customer feedback: {verbatims}")
         
-        # Routes
-        if routes and "No " not in routes and "Error" not in routes and "not yet implemented" not in routes:
-            explanation_parts.append(f"🛣️ Routes: {routes}")
+        # Routes - always include if we have content (even if it mentions low survey volume)
+        if routes and "Error" not in routes and "not yet implemented" not in routes:
+            explanation_parts.append(f"Routes: {routes}")
         
-        # Drivers
-        if drivers and "No " not in drivers and "Error" not in drivers and "not yet implemented" not in drivers:
-            explanation_parts.append(f"🚚 Drivers: {drivers}")
+        # Drivers - always include if we have content (even if it mentions insufficient volume)
+        if drivers and "Error" not in drivers and "not yet implemented" not in drivers:
+            explanation_parts.append(f"Drivers: {drivers}")
         
         # If no explanations found
         if len(explanation_parts) == 1:
@@ -522,12 +542,22 @@ class FlexibleAnomalyInterpreter:
         """
         try:
             if not self.pbi_collector:
-                return "🚚 Drivers: PBI collector not available"
+                return "Drivers: PBI collector not available"
             
             print(f"         🔍 Analyzing explanatory drivers from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
             
             # First, check if we have enough survey volume for meaningful driver analysis
-            survey_threshold = self.drivers_survey_threshold  # Minimum surveys needed for explanatory drivers analysis
+            # Adjust threshold based on date range - for daily analysis, use lower threshold
+            days_in_range = (end_date - start_date).days + 1
+            if days_in_range <= 1:
+                # Daily analysis - use much lower threshold
+                survey_threshold = 10
+            elif days_in_range <= 7:
+                # Weekly analysis - moderate threshold
+                survey_threshold = 30
+            else:
+                # Monthly or longer - use full threshold
+                survey_threshold = self.drivers_survey_threshold
             
             # Get survey count from verbatims for this period (as a proxy for survey volume)
             try:
@@ -536,10 +566,10 @@ class FlexibleAnomalyInterpreter:
                 )
                 
                 survey_count = len(verbatims_data) if not verbatims_data.empty else 0
-                print(f"         📊 Survey count check: {survey_count} surveys (threshold: {survey_threshold})")
+                print(f"         📊 Survey count check: {survey_count} surveys (threshold: {survey_threshold} for {days_in_range}-day period)")
                 
                 if survey_count < survey_threshold:
-                    return f"🚚 Drivers: Insufficient survey volume ({survey_count} < {survey_threshold}) for meaningful driver analysis"
+                    return f"Drivers: Insufficient survey volume ({survey_count} < {survey_threshold}) for meaningful driver analysis"
                 
             except Exception as e:
                 print(f"         ⚠️ Could not check survey volume: {str(e)[:50]}")
@@ -552,17 +582,17 @@ class FlexibleAnomalyInterpreter:
                 )
                 
                 if drivers_data.empty:
-                    return f"🚚 Drivers: No explanatory drivers data found for this period"
+                    return f"Drivers: No explanatory drivers data found for this period"
                 
                 # Analyze the drivers data
                 analysis = self._analyze_drivers_performance(drivers_data, anomaly_type)
-                return f"🚚 Drivers: {analysis}"
+                return f"Drivers: {analysis}"
                 
             except Exception as e:
-                return f"🚚 Drivers: Error collecting drivers data - {str(e)[:100]}"
+                return f"Drivers: Error collecting drivers data - {str(e)[:100]}"
             
         except Exception as e:
-            return f"🚚 Drivers: Error during analysis - {str(e)[:100]}"
+            return f"Drivers: Error during analysis - {str(e)[:100]}"
     
     def _analyze_drivers_performance(self, drivers_data: pd.DataFrame, anomaly_type: str = None) -> str:
         """

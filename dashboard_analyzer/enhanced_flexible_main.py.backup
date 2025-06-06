@@ -18,14 +18,6 @@ from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector
 from dashboard_analyzer.anomaly_detection.flexible_detector import FlexibleAnomalyDetector
 from dashboard_analyzer.anomaly_detection.flexible_anomaly_interpreter import FlexibleAnomalyInterpreter
 
-# Global debug flag
-DEBUG_MODE = False
-
-def debug_print(message):
-    """Print debug message only when debug mode is enabled"""
-    if DEBUG_MODE:
-        print(f"🔍 DEBUG: {message}")
-
 async def collect_flexible_data(aggregation_days: int, target_folder: str, segment: str = "Global"):
     """Collect data using flexible aggregation for specified segment"""
     print(f"📥 STEP 1: Flexible Data Collection ({aggregation_days} days) - Segment: {segment}")
@@ -40,24 +32,19 @@ async def collect_flexible_data(aggregation_days: int, target_folder: str, segme
     print(f"Segment focus: {segment}")
     print(f"Nodes to collect: {len(node_paths)} ({', '.join(node_paths)})")
     
-    debug_print(f"Full node paths list: {node_paths}")
-    
     # Collect data for selected nodes
     total_success = 0
     total_attempted = 0
     
     for node_path in node_paths:
         try:
-            debug_print(f"Collecting data for node: {node_path}")
             results = await collector.collect_flexible_data_for_node(
                 node_path, aggregation_days, target_folder
             )
             total_attempted += len(results)
             total_success += sum(results.values())
-            debug_print(f"Node {node_path}: {sum(results.values())}/{len(results)} files successful")
         except Exception as e:
             print(f"❌ Error collecting data for {node_path}: {e}")
-            debug_print(f"Error details for {node_path}: {type(e).__name__}: {str(e)}")
     
     print(f"\n📊 Flexible Data Collection Summary:")
     print(f"   Total files attempted: {total_attempted}")
@@ -269,30 +256,24 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
         nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
         
         if nodes_with_anomalies:
-            # Collect explanations for anomalous nodes
-            for node_path in nodes_with_anomalies:
-                try:
-                    anomaly_state = period_anomalies.get(node_path, "?")
-                    print(f"      🔍 Collecting explanation for {node_path} (state: {anomaly_state})")
-                    explanation = await asyncio.wait_for(
-                        interpreter.explain_anomaly(
-                            node_path=node_path,
-                            target_period=period,
-                            aggregation_days=aggregation_days,
-                            anomaly_state=anomaly_state
-                        ),
-                        timeout=30.0
-                    )
-                    explanations[node_path] = explanation
-                    print(f"         ✅ Explanation collected: {len(explanation)} chars")
-                except Exception as e:
-                    print(f"         ❌ Explanation failed: {str(e)}")
-                    explanations[node_path] = "Analysis timeout"
-        
-        # Debug: Print collected explanations
-        debug_print(f"📊 Collected {len(explanations)} explanations:")
-        for node_path, explanation in explanations.items():
-            debug_print(f"  {node_path}: {explanation[:200] if explanation else 'None'}...")
+            # Suppress all output during explanation collection
+            with open(os.devnull, 'w') as devnull:
+                with redirect_stdout(devnull), redirect_stderr(devnull):
+                    for node_path in nodes_with_anomalies:
+                        try:
+                            anomaly_state = period_anomalies.get(node_path, "?")
+                            explanation = await asyncio.wait_for(
+                                interpreter.explain_anomaly(
+                                    node_path=node_path,
+                                    target_period=period,
+                                    aggregation_days=aggregation_days,
+                                    anomaly_state=anomaly_state
+                                ),
+                                timeout=30.0
+                            )
+                            explanations[node_path] = explanation
+                        except Exception:
+                            explanations[node_path] = "Analysis timeout"
         
         # Show the enhanced tree with explanations and parent interpretations
         await print_enhanced_tree_with_explanations_and_interpretations(
@@ -309,17 +290,13 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             try:
                 # Build comprehensive input for AI
                 ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                                 parent_interpretations, explanations, date_range, segment)
-                
-                debug_print(f"AI input string length: {len(ai_input)} characters")
-                debug_print(f"AI input preview: {ai_input[:500]}...")
+                                               parent_interpretations, explanations, date_range, segment)
                 
                 ai_interpretation = await asyncio.wait_for(
                     ai_agent.interpret_anomaly_tree(ai_input, 
                                                    start_date.strftime('%Y-%m-%d') if date_range else None),
                     timeout=45.0
                 )
-                debug_print(f"AI interpretation received: {len(ai_interpretation) if ai_interpretation else 0} characters")
                 
                 print(ai_interpretation)
                 print("="*60)  # Clear separator after each period
@@ -464,7 +441,7 @@ def generate_parent_interpretations(anomalies: dict) -> dict:
     economy_state = anomalies.get("Global/SH/Economy", "?")
     business_state = anomalies.get("Global/SH/Business", "?")
     
-    if economy_state != "?" and business_state != "?" and anomalies.get("Global/SH", "?") == "N":
+    if economy_state != "?" and business_state != "?" and sh_state == "N":
         if economy_state == "N" and business_state == "N":
             interpretations["Global/SH"] = "All children normal (Economy, Business)"
         elif economy_state in ["+", "-"] and business_state == "N":
@@ -577,77 +554,86 @@ def build_ai_input_string(period: int, anomalies: dict, deviations: dict,
             ai_input_part += f"{indent}  └─ Pattern: {interpretations[node_path]}\n"
         
         # Add explanation if available and is actual anomaly
-        if state in ['+', '-']:
+        if node_path in explanations and state in ['+', '-']:
+            explanation = explanations[node_path]
             ai_input_part += f"{indent}  └─ Analysis:\n"
             
-            # Initialize with default values
-            routes_content = "Not enough answers for statistical analysis"
-            verbatims_content = "Not enough answers for statistical analysis"
-            drivers_content = "Not enough answers for statistical analysis"
+            # Split explanation into components and clean them up
+            parts = explanation.split(" | ")
             
-            if node_path in explanations:
-                explanation = explanations[node_path]
+            has_verbatims = False
+            has_routes = False
+            has_explanatory_drivers = False
+            
+            for part in parts:
+                part = part.strip()
+                if not part or part.startswith("Period"):
+                    continue
                 
-                if explanation and explanation != "Analysis timeout":
-                    # Split explanation into components and clean them up
-                    parts = explanation.split(" | ")
+                # Clean up and format different explanation types
+                if part.startswith("💬") and "Customer feedback:" in part:
+                    has_verbatims = True
+                    if "predominantly negative" in part:
+                        sentiment = "negative feedback"
+                    elif "predominantly positive" in part:
+                        sentiment = "positive feedback"
+                    else:
+                        sentiment = "mixed feedback"
                     
-                    for part in parts:
-                        part = part.strip()
-                        if not part or part.startswith("Period"):
-                            continue
-                        
-                        # Clean up and format different explanation types (look for text patterns, not emojis)
-                        if "Customer feedback:" in part or "verbatims collected" in part or "predominantly" in part:
-                            if "predominantly negative" in part:
-                                sentiment = "negative feedback"
-                            elif "predominantly positive" in part:
-                                sentiment = "positive feedback"
-                            else:
-                                sentiment = "mixed feedback"
-                            
-                            topics = ""
-                            if "main topics:" in part:
-                                topics_part = part.split("main topics:")[1].strip()
-                                if topics_part and not topics_part.endswith("("):
-                                    topics = f", topics: {topics_part}"
-                            
-                            count = ""
-                            if "verbatims collected" in part:
-                                try:
-                                    count_part = part.split(" verbatims collected")[0]
-                                    count_num = count_part.split()[-1]
-                                    count = f"{count_num} verbatims, "
-                                except:
-                                    pass
-                            
-                            # Remove emoji and clean the part
-                            clean_part = part.replace("💬", "").replace("Customer feedback:", "").strip()
-                            if clean_part:
-                                verbatims_content = f"{count}{sentiment}{topics} - {clean_part}"
-                            else:
-                                verbatims_content = f"{count}{sentiment}{topics}"
-                        
-                        elif "routes analyzed" in part or "Routes:" in part:
-                            clean_part = part.replace("🛣️ Routes:", "").replace("🛣️", "").replace("Routes:", "").strip()
-                            if clean_part:
-                                routes_content = clean_part
-                        
-                        elif "Operational:" in part:
-                            clean_part = part.replace("🔧 Operational:", "").replace("🔧", "").strip()
-                            if clean_part:
-                                # We can add operational data here if needed, or skip it
-                                pass
-                        
-                        elif "NPS change:" in part or "touchpoints analyzed" in part or "Drivers:" in part:
-                            clean_part = part.replace("🚚 Drivers:", "").replace("🚚", "").replace("Drivers:", "").strip()
-                            if clean_part:
-                                drivers_content = clean_part
+                    topics = ""
+                    if "main topics:" in part:
+                        topics_part = part.split("main topics:")[1].strip()
+                        if topics_part and not topics_part.endswith("("):
+                            topics = f", topics: {topics_part}"
+                    
+                    count = ""
+                    if "verbatims collected" in part:
+                        try:
+                            count_part = part.split(" verbatims collected")[0]
+                            count_num = count_part.split()[-1]
+                            count = f"{count_num} verbatims, "
+                        except:
+                            pass
+                    
+                    ai_input_part += f"{indent}     • Verbatims: {count}{sentiment}{topics}\n"
+                
+                elif part.startswith("🛣️") and ("routes analyzed" in part or "Routes:" in part):
+                    has_routes = True
+                    clean_part = part.replace("🛣️ Routes: 🛣️ Routes:", "Routes:")
+                    clean_part = clean_part.replace("🛣️ 🛣️", "").replace("🛣️", "").strip()
+                    
+                    if clean_part and "routes analyzed" in clean_part:
+                        ai_input_part += f"{indent}     • Routes: {clean_part}\n"
+                
+                elif part.startswith("🔧"):
+                    clean_part = part.replace("🔧 Operational:", "").strip()
+                    if clean_part:
+                        ai_input_part += f"{indent}     • Operations: {clean_part}\n"
+                
+                elif part.startswith("🚚") and ("NPS change:" in part or "touchpoints analyzed" in part):
+                    has_explanatory_drivers = True
+                    clean_part = part.replace("🚚 Drivers: 🚚 Drivers:", "").replace("🚚 Drivers:", "").replace("🚚 🚚", "").replace("🚚", "").strip()
+                    
+                    if clean_part:
+                        ai_input_part += f"{indent}     • Explanatory Drivers: {clean_part}\n"
             
-            # Always show all three categories in consistent order
-            ai_input_part += f"{indent}     • Routes: {routes_content}\n"
-            ai_input_part += f"{indent}     • Verbatims: {verbatims_content}\n"
-            ai_input_part += f"{indent}     • Explanatory Drivers: {drivers_content}\n"
+            # Add missing data disclaimers
+            if not has_routes:
+                ai_input_part += f"{indent}     • Routes: Not enough answers for statistical analysis\n"
+            
+            if not has_verbatims:
+                ai_input_part += f"{indent}     • Verbatims: Not enough answers for statistical analysis\n"
+            
+            # Always show explanatory drivers section
+            if not has_explanatory_drivers:
+                ai_input_part += f"{indent}     • Explanatory Drivers: Not enough answers for statistical analysis\n"
+        
+        elif state in ['+', '-']:
+            # Anomalous node but no explanation available
+            ai_input_part += f"{indent}  └─ Analysis:\n"
+            ai_input_part += f"{indent}     • Routes: Not enough answers for statistical analysis\n"
+            ai_input_part += f"{indent}     • Verbatims: Not enough answers for statistical analysis\n"
+            ai_input_part += f"{indent}     • Explanatory Drivers: Not enough answers for statistical analysis\n"
         
         return ai_input_part
     
@@ -739,18 +725,18 @@ async def print_enhanced_tree_with_explanations_and_interpretations(
         normalized_segment = 'Global/SH/Business'
     
     # DEBUG: Show what's in the filtered data
-    debug_print(f"Filtered anomalies for segment {segment_filter} (normalized: {normalized_segment}):")
-    debug_print(f"  Anomalies: {filtered_anomalies}")
-    debug_print(f"  Deviations: {filtered_deviations}")
-    debug_print(f"  Explanations available: {list(explanations.keys())}")
-    debug_print(f"  Interpretations available: {list(interpretations.keys())}")
+    # print(f"🔍 DEBUG - Filtered anomalies for segment {segment_filter} (normalized: {normalized_segment}):")
+    # for node, state in filtered_anomalies.items():
+    #     deviation = filtered_deviations.get(node, 0)
+    #     print(f"   {node}: {state} ({deviation:+.1f} pts)")
+    # print()
     
     def get_state_description(state):
         """Get clear state description"""
         if state == "+":
             return "POSITIVE ANOMALY"
         elif state == "-":
-            return "NEGATIVE ANOMALY"
+            return "NEGATIVE ANOMALY" 
         elif state == "N":
             return "Normal"
         elif state == "S":
@@ -773,79 +759,94 @@ async def print_enhanced_tree_with_explanations_and_interpretations(
             print(f"{indent}  └─ Pattern: {interpretations[node_path]}")
     
     def print_explanation(node_path, indent=""):
-        print(f"{indent}  └─ ANALYSIS:")
-        
-        # Initialize with default values
-        routes_content = "Not enough answers for statistical analysis"
-        verbatims_content = "Not enough answers for statistical analysis"
-        drivers_content = "Not enough answers for statistical analysis"
-        
         if node_path in explanations:
             explanation = explanations[node_path]
+            print(f"{indent}  └─ ANALYSIS:")
             
             if explanation == "Analysis timeout":
                 print(f"{indent}     • Analysis timeout occurred")
                 return
-            elif explanation and explanation.strip() != "":
-                # Split explanation into components and clean them up
-                parts = explanation.split(" | ")
+            elif not explanation or explanation.strip() == "":
+                print(f"{indent}     • Routes: Not enough answers for statistical analysis")
+                print(f"{indent}     • Verbatims: Not enough answers for statistical analysis")
+                print(f"{indent}     • Explanatory Drivers: Not enough answers for statistical analysis")
+                return
+            
+            # Split explanation into components and clean them up
+            parts = explanation.split(" | ")
+            
+            has_verbatims = False
+            has_routes = False
+            has_explanatory_drivers = False
+            
+            for part in parts:
+                part = part.strip()
+                if not part or part.startswith("Period"):
+                    continue
                 
-                for part in parts:
-                    part = part.strip()
-                    if not part or part.startswith("Period"):
-                        continue
+                # Clean up and format different explanation types
+                if part.startswith("💬") and "Customer feedback:" in part:
+                    has_verbatims = True
+                    if "predominantly negative" in part:
+                        sentiment = "negative feedback"
+                    elif "predominantly positive" in part:
+                        sentiment = "positive feedback"
+                    else:
+                        sentiment = "mixed feedback"
                     
-                    # Clean up and format different explanation types (look for text patterns, not emojis)
-                    if "Customer feedback:" in part or "verbatims collected" in part or "predominantly" in part:
-                        if "predominantly negative" in part:
-                            sentiment = "negative feedback"
-                        elif "predominantly positive" in part:
-                            sentiment = "positive feedback"
-                        else:
-                            sentiment = "mixed feedback"
-                        
-                        topics = ""
-                        if "main topics:" in part:
-                            topics_part = part.split("main topics:")[1].strip()
-                            if topics_part and not topics_part.endswith("("):
-                                topics = f", topics: {topics_part}"
-                        
-                        count = ""
-                        if "verbatims collected" in part:
-                            try:
-                                count_part = part.split(" verbatims collected")[0]
-                                count_num = count_part.split()[-1]
-                                count = f"{count_num} verbatims, "
-                            except:
-                                pass
-                        
-                        # Remove emoji and clean the part
-                        clean_part = part.replace("💬", "").replace("Customer feedback:", "").strip()
-                        if clean_part:
-                            verbatims_content = f"{count}{sentiment}{topics} - {clean_part}"
-                        else:
-                            verbatims_content = f"{count}{sentiment}{topics}"
+                    topics = ""
+                    if "main topics:" in part:
+                        topics_part = part.split("main topics:")[1].strip()
+                        if topics_part and not topics_part.endswith("("):
+                            topics = f", topics: {topics_part}"
                     
-                    elif "Routes:" in part or "🛣️" in part:
-                        clean_part = part.replace("🛣️ Routes:", "").replace("🛣️", "").replace("Routes:", "").strip()
-                        if clean_part:
-                            routes_content = clean_part
-                    
-                    elif "Operational:" in part:
-                        clean_part = part.replace("🔧 Operational:", "").replace("🔧", "").strip()
-                        if clean_part:
-                            # We can add operational data here if needed, or skip it
+                    count = ""
+                    if "verbatims collected" in part:
+                        try:
+                            count_part = part.split(" verbatims collected")[0]
+                            count_num = count_part.split()[-1]
+                            count = f"{count_num} verbatims, "
+                        except:
                             pass
                     
-                    elif "Drivers:" in part or "🚚" in part:
-                        clean_part = part.replace("🚚 Drivers:", "").replace("🚚", "").replace("Drivers:", "").strip()
-                        if clean_part:
-                            drivers_content = clean_part
+                    print(f"{indent}     • Verbatims: {count}{sentiment}{topics}")
+                
+                elif part.startswith("🛣️") and ("routes analyzed" in part or "Routes:" in part):
+                    has_routes = True
+                    clean_part = part.replace("🛣️ Routes: 🛣️ Routes:", "Routes:")
+                    clean_part = clean_part.replace("🛣️ 🛣️", "").replace("🛣️", "").strip()
+                    
+                    if clean_part and "routes analyzed" in clean_part:
+                        print(f"{indent}     • Routes: {clean_part}")
+                
+                elif part.startswith("🔧"):
+                    clean_part = part.replace("🔧 Operational:", "").strip()
+                    if clean_part:
+                        print(f"{indent}     • Operations: {clean_part}")
+                
+                elif part.startswith("🚚") and ("NPS change:" in part or "touchpoints analyzed" in part):
+                    has_explanatory_drivers = True
+                    clean_part = part.replace("🚚 Drivers: 🚚 Drivers:", "").replace("🚚 Drivers:", "").replace("🚚 🚚", "").replace("🚚", "").strip()
+                    
+                    if clean_part:
+                        print(f"{indent}     • Explanatory Drivers: {clean_part}")
+            
+            # Add missing data disclaimers
+            if not has_routes:
+                print(f"{indent}     • Routes: Not enough answers for statistical analysis")
+            
+            if not has_verbatims:
+                print(f"{indent}     • Verbatims: Not enough answers for statistical analysis")
+            
+            # Always show explanatory drivers section
+            if not has_explanatory_drivers:
+                print(f"{indent}     • Explanatory Drivers: Not enough answers for statistical analysis")
         
-        # Always show all three categories in consistent order
-        print(f"{indent}     • Routes: {routes_content}")
-        print(f"{indent}     • Verbatims: {verbatims_content}")
-        print(f"{indent}     • Explanatory Drivers: {drivers_content}")
+        else:
+            print(f"{indent}  └─ ANALYSIS:")
+            print(f"{indent}     • Routes: Not enough answers for statistical analysis")
+            print(f"{indent}     • Verbatims: Not enough answers for statistical analysis")
+            print(f"{indent}     • Explanatory Drivers: Not enough answers for statistical analysis")
     
     # Print tree based on normalized segment filter
     if normalized_segment == "Global":
@@ -1077,7 +1078,6 @@ async def run_comprehensive_analysis(analysis_date, date_parameter, segment: str
         print("📅 DAILY ANALYSIS (Last 7 Days)")
         print("="*60)
         print("📥 Collecting daily data...")
-        debug_print(f"Daily analysis parameters: 1 day aggregation, 7 periods, start_date={analysis_date}")
         daily_folder = await run_flexible_data_download_silent_with_date(
             aggregation_days=1,
             periods=7,
@@ -1085,18 +1085,14 @@ async def run_comprehensive_analysis(analysis_date, date_parameter, segment: str
             date_parameter=f"{date_parameter}_daily",
             segment=segment
         )
-        debug_print(f"Daily data collected in folder: {daily_folder}")
-    
+        
         daily_summary_data = []
         if daily_folder:
             print("🔍 Analyzing daily patterns...")
-            debug_print(f"Running daily analysis on folder: {daily_folder}")
             daily_analysis = await run_flexible_analysis_silent(daily_folder)
-            debug_print(f"Daily analysis results: {daily_analysis is not None}")
-        
+            
             if daily_analysis:
                 anomaly_count = len(daily_analysis.get('anomaly_periods', []))
-                debug_print(f"Daily anomaly periods: {daily_analysis['anomaly_periods']}")
                 print(f"📊 Found anomalies in {anomaly_count} of 7 days")
                 
                 # Show daily trees and AI interpretations
@@ -1118,12 +1114,12 @@ async def run_comprehensive_analysis(analysis_date, date_parameter, segment: str
         
         try:
             # Add timeout for weekly data collection
-            debug_print("Weekly collection parameters:")
-            debug_print(f"   • aggregation_days: 7")
-            debug_print(f"   • periods: 4")
-            debug_print(f"   • start_date: {analysis_date}")
-            debug_print(f"   • date_parameter: {date_parameter}_weekly")
-            debug_print(f"   • segment: {segment}")
+            print(f"🔍 DEBUG - Weekly collection parameters:")
+            print(f"   • aggregation_days: 7")
+            print(f"   • periods: 4")
+            print(f"   • start_date: {analysis_date}")
+            print(f"   • date_parameter: {date_parameter}_weekly")
+            print(f"   • segment: {segment}")
             
             weekly_folder = await asyncio.wait_for(
                 run_flexible_data_download_silent_with_date(
@@ -1145,14 +1141,12 @@ async def run_comprehensive_analysis(analysis_date, date_parameter, segment: str
         weekly_summary_data = []
         if weekly_folder:
             print("🔍 Analyzing weekly patterns...")
-            debug_print(f"Running weekly analysis on folder: {weekly_folder}")
             try:
                 # Add timeout for weekly analysis
                 weekly_analysis = await asyncio.wait_for(
                     run_weekly_current_vs_average_analysis_silent(weekly_folder),
                     timeout=60.0  # 1 minute timeout for weekly analysis
                 )
-                debug_print(f"Weekly analysis results: {weekly_analysis is not None}")
             except asyncio.TimeoutError:
                 print("⏰ Weekly analysis timed out (>1 minute)")
                 weekly_analysis = None
@@ -1160,7 +1154,7 @@ async def run_comprehensive_analysis(analysis_date, date_parameter, segment: str
                 print(f"❌ Weekly analysis failed: {str(e)}")
                 weekly_analysis = None
         
-            if weekly_analysis:
+        if weekly_analysis:
                 anomaly_count = len(weekly_analysis.get('anomaly_periods', []))
                 if anomaly_count > 0:
                     print(f"📊 Found anomalies in current week")
@@ -1236,10 +1230,12 @@ async def run_comprehensive_analysis(analysis_date, date_parameter, segment: str
             except Exception as e:
                 print(f"❌ Consolidated summary generation failed: {str(e)}")
                 print(f"   Manual review recommended")
+        
         elif not consolidated_data:
             print("\n📋 CONSOLIDATED SUMMARY:")
             print("No anomalies detected in either daily or weekly analysis.")
             print("All segments are operating within normal NPS variation ranges.")
+        
         elif not summary_available:
             print("\n⚠️ Consolidated summary not available (Summary Agent initialization failed)")
             if consolidated_data:
@@ -1429,10 +1425,10 @@ async def run_weekly_current_vs_average_analysis_silent(data_folder: str):
             try:
                 # Analyze only the current week (period 1)
                 period_anomalies, period_deviations, period_explanations = detector.analyze_period(data_folder, current_week_period)
-                
+                    
                 # Check if current week has any anomaly
-                has_anomaly = any(state in ['+', '-'] for state in period_anomalies.values())
-                if has_anomaly:
+                    has_anomaly = any(state in ['+', '-'] for state in period_anomalies.values())
+                    if has_anomaly:
                     anomaly_periods.append(current_week_period)
             
             except Exception:
@@ -1530,7 +1526,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
                                 timeout=30.0
                             )
                             explanations[node_path] = explanation
-                        except Exception:
+    except Exception:
                             explanations[node_path] = "Analysis timeout"
         
         # Show the tree
@@ -1548,7 +1544,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
             try:
                 # Build AI input (works for both anomalous and normal periods)
                 ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                                 parent_interpretations, explanations, date_range, segment)
+                                               parent_interpretations, explanations, date_range, segment)
                 
                 ai_interpretation = await asyncio.wait_for(
                     ai_agent.interpret_anomaly_tree(ai_input, 
@@ -1663,7 +1659,7 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
             try:
                 # Build AI input
                 ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                                 parent_interpretations, explanations, date_range, segment)
+                                               parent_interpretations, explanations, date_range, segment)
                 
                 ai_interpretation = await asyncio.wait_for(
                     ai_agent.interpret_anomaly_tree(ai_input, 
@@ -1676,7 +1672,7 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
             except Exception as e:
                 ai_interpretation = f"AI interpretation failed: {str(e)}"
                 print(ai_interpretation)
-
+        
 async def generate_consolidated_summary(agent, consolidated_data: List[Dict]) -> str:
     """Generate a consolidated summary from multiple analysis types."""
     # Format the consolidated input
@@ -1734,18 +1730,7 @@ async def main():
     parser.add_argument('--segment', type=str, default='Global',
                        help='Root segment to analyze (e.g., Global, SH, Global/SH/Economy, Global/LH). Default: Global (full tree)')
     
-    # Debug mode parameter
-    parser.add_argument('--debug', action='store_true',
-                       help='Enable debug mode with verbose print statements')
-    
     args = parser.parse_args()
-    
-    # Set global debug mode based on flag
-    global DEBUG_MODE
-    DEBUG_MODE = args.debug
-    
-    if DEBUG_MODE:
-        print("🔍 DEBUG MODE ENABLED - Verbose output activated")
     
     # Calculate the analysis start date based on date parameters
     today = datetime.now().date()
@@ -1841,7 +1826,7 @@ async def main():
             folder_pattern = f'{date_parameter}_{date_str}_flexible_{args.aggregation_days}d'
             
             matching_folders = [f for f in tables_dir.iterdir() 
-                                if f.is_dir() and folder_pattern in f.name]
+                              if f.is_dir() and folder_pattern in f.name]
             
             if not matching_folders:
                 print(f"❌ No folders found matching pattern '{folder_pattern}'. Run download first.")
@@ -1877,9 +1862,10 @@ async def main():
                     print(f"   🔍 Anomaly periods: {anomaly_periods}")
                 else:
                     print(f"   ✅ All periods normal")
+    
     except KeyboardInterrupt:
         print("\n⏸️ Analysis interrupted by user")
-    except Exception as e:
+        except Exception as e:
         print(f"\n❌ Error during analysis: {str(e)}")
         import traceback
         print(f"Debug info: {traceback.format_exc()}")
@@ -2125,4 +2111,4 @@ def print_single_node(node_path, anomalies, get_state_description, get_deviation
         print_explanation(node_path, "")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main()) 
