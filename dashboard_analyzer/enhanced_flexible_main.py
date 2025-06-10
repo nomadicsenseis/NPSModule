@@ -790,6 +790,7 @@ async def print_enhanced_tree_with_explanations_and_interpretations(
         print(f"{indent}  └─ ANALYSIS:")
         
         # Initialize with default values
+        operational_content = "No operational data available"
         routes_content = "Not enough answers for statistical analysis"
         verbatims_content = "Not enough answers for statistical analysis"
         drivers_content = "Not enough answers for statistical analysis"
@@ -846,17 +847,17 @@ async def print_enhanced_tree_with_explanations_and_interpretations(
                             routes_content = clean_part
                     
                     elif "Operational:" in part:
-                        clean_part = part.replace("🔧 Operational:", "").replace("🔧", "").strip()
+                        clean_part = part.replace("🔧 Operational:", "").replace("🔧", "").replace("Operational:", "").strip()
                         if clean_part:
-                            # We can add operational data here if needed, or skip it
-                            pass
+                            operational_content = clean_part
                     
                     elif "Drivers:" in part or "🚚" in part:
                         clean_part = part.replace("🚚 Drivers:", "").replace("🚚", "").replace("Drivers:", "").strip()
                         if clean_part:
                             drivers_content = clean_part
         
-        # Always show all three categories in consistent order
+        # Always show all four categories in consistent order
+        print(f"{indent}     • Operational: {operational_content}")
         print(f"{indent}     • Routes: {routes_content}")
         print(f"{indent}     • Verbatims: {verbatims_content}")
         print(f"{indent}     • Explanatory Drivers: {drivers_content}")

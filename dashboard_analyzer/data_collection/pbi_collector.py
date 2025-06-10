@@ -106,7 +106,7 @@ class PBIDataCollector:
         
         return query
     
-    def _get_operative_query(self, cabins: List[str], companies: List[str], hauls: List[str]) -> str:
+    def _get_operative_query(self, cabins: List[str], companies: List[str], hauls: List[str], target_date: datetime = None, comparison_days: int = 7) -> str:
         """Generate DAX query for operative data using template"""
         template = self._load_query_template("Operativa.txt")
         
@@ -126,6 +126,19 @@ class PBIDataCollector:
             'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
             f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
         )
+        
+        # If target_date is provided, modify the date filter to look for a specific date range
+        if target_date:
+            # Original filter: 'Date_Master'[Date] > TODAY()-21
+            # New filter: target date and previous (comparison_days-1) days for anomaly comparison
+            start_date = target_date - timedelta(days=comparison_days-1)  # Include target date in the count
+            end_date = target_date  # Include target date
+            
+            old_date_filter = "'Date_Master'[Date] > TODAY()-21"
+            new_date_filter = f"'Date_Master'[Date] >= DATE({start_date.year},{start_date.month},{start_date.day}) && 'Date_Master'[Date] <= DATE({end_date.year},{end_date.month},{end_date.day})"
+            
+            query = query.replace(old_date_filter, new_date_filter)
+            print(f"  📅 Operative date filter: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')} ({comparison_days} days for anomaly comparison)")
         
         return query
     
@@ -534,7 +547,7 @@ class PBIDataCollector:
         
         # Collect operative data (reuse existing method)
         try:
-            query = self._get_operative_query(cabins, companies, hauls)
+            query = self._get_operative_query(cabins, companies, hauls, analysis_date, comparison_days=7)
             df = await self._execute_query_async(query)
             if not df.empty:
                 # Clean column names  
@@ -583,6 +596,53 @@ class PBIDataCollector:
             companies = ['YW']
         
         return cabins, companies, hauls
+
+    async def collect_operative_data_for_date(self, node_path: str, target_date: datetime, comparison_days: int = 7) -> pd.DataFrame:
+        """
+        Collect operational data for a specific date and the preceding days for comparison
+        
+        Args:
+            node_path: Node path like "Global/LH/Business"
+            target_date: The specific date we're analyzing (e.g., 2025-01-20)
+            comparison_days: Number of days to include for comparison (default: 7)
+            
+        Returns:
+            DataFrame with operational data including target date and previous comparison_days-1 dates
+        """
+        try:
+            # Get filters for this node
+            cabins, companies, hauls = self._get_node_filters(node_path)
+            
+            # Generate the operative query with specific date range
+            query = self._get_operative_query(cabins, companies, hauls, target_date, comparison_days)
+            
+            # Execute the query
+            df = self._execute_query(query)
+            
+            if not df.empty:
+                # Clean column names
+                df.columns = [col.strip('[]') for col in df.columns]
+                
+                # Convert date column to datetime
+                if 'Date_Master[Date' in df.columns:
+                    df.rename(columns={'Date_Master[Date': 'Date_Master'}, inplace=True)
+                
+                if 'Date_Master' in df.columns:
+                    df['Date_Master'] = pd.to_datetime(df['Date_Master']).dt.date
+                
+                print(f"         ✅ Collected {len(df)} days of operational data for analysis")
+                
+                # Show date range for verification
+                if not df.empty and 'Date_Master' in df.columns:
+                    min_date = df['Date_Master'].min()
+                    max_date = df['Date_Master'].max()
+                    print(f"         📅 Date range: {min_date} to {max_date}")
+            
+            return df
+            
+        except Exception as e:
+            print(f"         ❌ Error collecting operational data: {str(e)}")
+            return pd.DataFrame()
 
     async def collect_explanatory_drivers_for_date_range(self, node_path: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """

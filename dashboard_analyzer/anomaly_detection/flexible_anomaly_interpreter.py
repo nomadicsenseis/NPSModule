@@ -15,12 +15,13 @@ class FlexibleAnomalyInterpreter:
     Handles date range conversion and multi-source data collection
     """
     
-    def __init__(self, data_folder: str, pbi_collector: PBIDataCollector = None, drivers_survey_threshold: int = 100):
+    def __init__(self, data_folder: str, pbi_collector: PBIDataCollector = None, drivers_survey_threshold: int = 100, default_comparison_days: int = 7):
         self.data_folder = data_folder
         self.pbi_collector = pbi_collector
         self.operational_analyzer = OperationalDataAnalyzer()
         self.routes_analyzer = RoutesAnalyzer(pbi_collector) if pbi_collector else None
         self.drivers_survey_threshold = drivers_survey_threshold  # Minimum surveys for explanatory drivers
+        self.default_comparison_days = default_comparison_days  # Default number of days for operational comparison (7, 5, or 15)
         
         # Cache for explanations
         self.explanation_cache: Dict[Tuple[str, int], str] = {}  # (node_path, period) -> explanation
@@ -69,7 +70,7 @@ class FlexibleAnomalyInterpreter:
             
             # 3. Collect operational data for the date range
             operational_explanation = await self._analyze_operational_data(
-                node_path, start_date, end_date, aggregation_days
+                node_path, start_date, end_date, aggregation_days, anomaly_type
             )
             
             # 4. Collect verbatims for the date range
@@ -152,11 +153,18 @@ class FlexibleAnomalyInterpreter:
             print(f"❌ Error getting date range for period {target_period}: {e}")
             return None
     
-    async def _analyze_operational_data(self, node_path: str, start_date: datetime, end_date: datetime, aggregation_days: int) -> str:
+    async def _analyze_operational_data(self, node_path: str, start_date: datetime, end_date: datetime, aggregation_days: int, anomaly_type: str = None) -> str:
         """
         Analyze operational data for the date range with comprehensive metrics
+        For daily periods (aggregation_days=1), uses enhanced OperationalDataAnalyzer
         """
         try:
+            # For daily analysis (1 day aggregation), use the enhanced OperationalDataAnalyzer
+            if aggregation_days == 1:
+                # Use the configured comparison days (5, 7, or 15 days as mentioned by user)
+                return await self._analyze_daily_operational_data(node_path, start_date, end_date, anomaly_type, self.default_comparison_days)
+            
+            # For longer periods, use the existing multi-day analysis logic
             # Load operational data for this node
             data_folder_path = Path(self.data_folder)
             node_folder = data_folder_path / node_path.replace("/", "_")
@@ -245,6 +253,110 @@ class FlexibleAnomalyInterpreter:
                 
         except Exception as e:
             return f"🔧 Operational: Error analyzing data - {str(e)[:100]}"
+    
+    async def _analyze_daily_operational_data(self, node_path: str, start_date: datetime, end_date: datetime, anomaly_type: str = None, comparison_days: int = 7) -> str:
+        """
+        Enhanced daily operational analysis using PBI data collection
+        For single-day periods, provides detailed metric-by-metric analysis
+        """
+        try:
+            if not self.pbi_collector:
+                return "🔧 Operational: PBI collector not available"
+            
+            print(f"         🔍 Collecting operational data with {comparison_days}-day comparison")
+            
+            # For daily analysis, we expect start_date and end_date to be the same day
+            target_date = start_date
+            
+            # Collect operational data directly from PBI with configurable comparison days
+            operational_data = await self.pbi_collector.collect_operative_data_for_date(
+                node_path, target_date, comparison_days
+            )
+            
+            if operational_data.empty:
+                return f"🔧 Operational: No operational data available for this date range"
+            
+            print(f"         ✅ Collected {len(operational_data)} days of operational data")
+            
+            # Convert to format expected by OperationalDataAnalyzer
+            # Save temporarily to a format the analyzer can read
+            import tempfile
+            import os
+            
+            # Directly load the data into the analyzer instead of using temp files
+            # Clean the operational data first - convert empty strings to NaN for numeric columns
+            import pandas as pd
+            
+            # Clean the operational data by replacing empty strings with NaN for numeric columns
+            cleaned_data = operational_data.copy()
+            numeric_columns = ['Load_Factor', 'OTP15_adjusted', 'Misconex', 'Mishandling']
+            for col in numeric_columns:
+                if col in cleaned_data.columns:
+                    # Replace empty strings with NaN, then convert to numeric
+                    cleaned_data[col] = cleaned_data[col].replace('', pd.NA)
+                    cleaned_data[col] = pd.to_numeric(cleaned_data[col], errors='coerce')
+            
+            # Set the cleaned operational data directly
+            self.operational_analyzer.operative_data[node_path] = cleaned_data
+            
+            # For daily analysis, use the target date
+            target_date_str = target_date.strftime('%Y-%m-%d')
+            
+            # Use the provided anomaly type for better analysis context
+            if not anomaly_type:
+                anomaly_type = "unknown"
+            
+            # Get the enhanced specific explanations (OTP and Load Factor)
+            specific_explanations = self.operational_analyzer.get_specific_explanations(
+                node_path, target_date_str, anomaly_type
+            )
+            
+            # Get the comprehensive analysis
+            analysis = self.operational_analyzer.analyze_operative_metrics(node_path, target_date_str)
+            
+            if "error" in analysis:
+                return f"🔧 Operational: {analysis['error']}"
+            
+            # Build enhanced explanation using the sophisticated logic
+            operative_parts = []
+            
+            # Add OTP analysis if available
+            if specific_explanations['otp_explanation'] != "No OTP data available":
+                operative_parts.append(f"OTP {specific_explanations['otp_explanation']}")
+            
+            # Add Load Factor analysis if available
+            if specific_explanations['load_factor_explanation'] != "No Load Factor data available":
+                operative_parts.append(f"LF {specific_explanations['load_factor_explanation']}")
+            
+            # Add other significant metrics
+            metrics = analysis.get("metrics", {})
+            other_metrics = []
+            
+            for metric_name, metric_data in metrics.items():
+                if metric_name not in ['OTP15_adjusted', 'Load_Factor'] and metric_data.get('is_significant', False):
+                    direction = "↑" if metric_data['direction'] == 'higher' else "↓"
+                    other_metrics.append(f"{metric_name}{direction}{abs(metric_data['delta']):.1f}pts")
+            
+            if other_metrics:
+                operative_parts.append(f"Other: {', '.join(other_metrics[:2])}")  # Limit to 2 other metrics
+            
+            if operative_parts:
+                result = f"🔧 Operational: {'; '.join(operative_parts)}"
+                
+                # Add comparison days info
+                result += f" (vs {comparison_days}-day average)"
+                
+                return result
+            else:
+                # Fallback when no significant metrics found
+                available_count = len(metrics)
+                if available_count > 0:
+                    return f"🔧 Operational: No significant changes in {available_count} metrics vs {comparison_days}-day average"
+                else:
+                    return f"🔧 Operational: No operational metrics available for this date range"
+                        
+        except Exception as e:
+            return f"🔧 Operational: Error in daily analysis - {str(e)[:100]}"
     
     async def _analyze_verbatims_data(self, node_path: str, start_date: datetime, end_date: datetime) -> str:
         """
@@ -522,9 +634,11 @@ class FlexibleAnomalyInterpreter:
         
         explanation_parts.append(f"Period {target_period} ({aggregation_days}-day aggregation) explanation for {node_path}:")
         
-        # Operational factors
-        if operational and "No " not in operational and "Error" not in operational:
-            explanation_parts.append(f"Operational: {operational}")
+        # Operational factors - always include if we have content (including "No data" messages)
+        if operational and "Error" not in operational:
+            # Remove the "🔧 Operational: " prefix since we'll add our own "Operational: " prefix
+            clean_operational = operational.replace("🔧 Operational: ", "")
+            explanation_parts.append(f"Operational: {clean_operational}")
         
         # Customer feedback
         if verbatims and "No " not in verbatims and "Error" not in verbatims:

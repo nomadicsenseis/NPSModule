@@ -20,35 +20,76 @@ class OperationalDataAnalyzer:
         print("📊 Loading operative data...")
         
         for node_path in node_paths:
+            # Try multiple path patterns to find the operational data
+            file_found = False
+            
+            # Pattern 1: Original expected structure
             file_path = self.data_base_path / date_folder / node_path / "daily_operative.csv"
+            
+            # Pattern 2: Underscore structure (actual current structure)
+            if not file_path.exists():
+                # Convert slashes to underscores for the actual file structure
+                underscore_path = node_path.replace("/", "_")
+                # Find folders that match the date pattern
+                import glob
+                date_pattern = date_folder.replace("-", "_")  # Convert 2025-01-20 to 2025_01_20
+                search_pattern = str(self.data_base_path / f"*{date_pattern}*" / underscore_path / "daily_operative.csv")
+                matching_files = glob.glob(search_pattern)
+                
+                if matching_files:
+                    file_path = Path(matching_files[0])  # Use the first match
             
             if file_path.exists():
                 try:
-                    df = pd.read_csv(file_path)
-                    # Clean column names (remove brackets but keep the content)
-                    new_columns = []
-                    for col in df.columns:
-                        if '[' in col and ']' in col:
-                            # Extract content inside brackets
-                            start = col.find('[')
-                            end = col.find(']')
-                            clean_name = col[start+1:end]
-                            new_columns.append(clean_name)
-                        else:
-                            new_columns.append(col)
-                    df.columns = new_columns
+                    # Check if header is malformed and fix it
+                    with open(file_path, 'r') as f:
+                        first_line = f.readline().strip()
                     
-                    # Convert date column
-                    if 'Date' in df.columns:
-                        df['Date'] = pd.to_datetime(df['Date']).dt.date
-                        df.rename(columns={'Date': 'Date_Master'}, inplace=True)
+                    if first_line.startswith('Date_Master[') and not first_line.endswith(']'):
+                        # Malformed header - read with custom column names
+                        corrected_columns = ['Date_Master', 'Load_Factor', 'OTP15_adjusted', 'Misconex', 'Mishandling']
+                        df = pd.read_csv(file_path, names=corrected_columns, skiprows=1)
+                    else:
+                        # Normal header
+                        df = pd.read_csv(file_path)
+                        # Clean column names (remove brackets but keep the content)
+                        new_columns = []
+                        for col in df.columns:
+                            if '[' in col and ']' in col:
+                                # Extract content inside brackets
+                                start = col.find('[')
+                                end = col.find(']')
+                                clean_name = col[start+1:end]
+                                new_columns.append(clean_name)
+                            else:
+                                new_columns.append(col)
+                        df.columns = new_columns
+                        
+                        # Convert date column
+                        if 'Date' in df.columns:
+                            df['Date'] = pd.to_datetime(df['Date']).dt.date
+                            df.rename(columns={'Date': 'Date_Master'}, inplace=True)
+                    
+                    # Ensure Date_Master is properly converted
+                    if 'Date_Master' in df.columns:
+                        df['Date_Master'] = pd.to_datetime(df['Date_Master']).dt.date
+                    
+                    # Get date range for informational purposes
+                    if not df.empty and 'Date_Master' in df.columns:
+                        min_date = df['Date_Master'].min()
+                        max_date = df['Date_Master'].max()
+                        date_range_info = f" (dates: {min_date} to {max_date})"
+                    else:
+                        date_range_info = ""
                     
                     self.operative_data[node_path] = df
-                    print(f"✅ Loaded operative data for {node_path}: {len(df)} records")
+                    print(f"✅ Loaded operative data for {node_path}: {len(df)} records{date_range_info}")
+                    file_found = True
                     
                 except Exception as e:
                     print(f"❌ Error loading operative data for {node_path}: {e}")
-            else:
+            
+            if not file_found:
                 print(f"⚠️  No operative data found for {node_path}")
     
     def load_verbatims_data(self, date_folder: str, node_paths: List[str]):
