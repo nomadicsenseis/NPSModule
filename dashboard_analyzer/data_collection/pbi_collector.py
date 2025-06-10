@@ -129,7 +129,7 @@ class PBIDataCollector:
         
         return query
     
-    def _get_flexible_nps_query(self, aggregation_days: int, cabins: List[str], companies: List[str], hauls: List[str]) -> str:
+    def _get_flexible_nps_query(self, aggregation_days: int, cabins: List[str], companies: List[str], hauls: List[str], analysis_date: datetime = None) -> str:
         """Generate DAX query for flexible NPS aggregation using template"""
         template = self._load_query_template("NPS_flex_agg.txt")
         
@@ -152,6 +152,22 @@ class PBIDataCollector:
             f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
         )
         
+        # If analysis_date is provided, replace TODAY() and max date calculations
+        if analysis_date:
+            print(f"  📅 Using analysis date: {analysis_date.strftime('%Y-%m-%d')} instead of TODAY()")
+            # Replace the date filter to end on analysis_date instead of TODAY()
+            old_date_filter = "'Date_Master'[Date] >= DATE(2024,01,01) && 'Date_Master'[Date] <= TODAY()"
+            new_date_filter = f"'Date_Master'[Date] >= DATE(2024,01,01) && 'Date_Master'[Date] <= DATE({analysis_date.year},{analysis_date.month},{analysis_date.day})"
+            query = query.replace(old_date_filter, new_date_filter)
+            print(f"  📝 Date filter: {old_date_filter} → {new_date_filter}")
+            
+            # Replace the period calculation to use analysis_date as reference
+            old_period_calc = "INT(DATEDIFF( 'Date_Master'[Date],max('Date_Master'[Date]), DAY) / {AGGREGATION_DAYS}) + 1)"
+            new_period_calc = f"INT(DATEDIFF( 'Date_Master'[Date],DATE({analysis_date.year},{analysis_date.month},{analysis_date.day}), DAY) / {aggregation_days}) + 1)"
+            query = query.replace(old_period_calc, new_period_calc)
+            print(f"  📝 Period calc: {old_period_calc} → {new_period_calc}")
+        
+        print(f"  📋 Final query preview: {query[:200]}...")
         return query
     
     def _get_verbatims_query(self, cabins: List[str], companies: List[str], hauls: List[str], date: datetime) -> str:
@@ -482,7 +498,7 @@ class PBIDataCollector:
             print(f"Error executing async query: {str(e)}")
             return pd.DataFrame()
 
-    async def collect_flexible_data_for_node(self, node_path: str, aggregation_days: int, target_folder: str) -> Dict[str, bool]:
+    async def collect_flexible_data_for_node(self, node_path: str, aggregation_days: int, target_folder: str, analysis_date: datetime = None) -> Dict[str, bool]:
         """Collect flexible aggregated data for a specific node"""
         results = {}
         
@@ -495,11 +511,13 @@ class PBIDataCollector:
         
         print(f"Collecting flexible data for node: {node_path}")
         print(f"  Aggregation: {aggregation_days} days")
+        if analysis_date:
+            print(f"  Analysis date: {analysis_date.strftime('%Y-%m-%d')}")
         print(f"  Filters - Cabins: {cabins}, Companies: {companies}, Hauls: {hauls}")
         
         # Collect flexible NPS data
         try:
-            query = self._get_flexible_nps_query(aggregation_days, cabins, companies, hauls)
+            query = self._get_flexible_nps_query(aggregation_days, cabins, companies, hauls, analysis_date)
             df = await self._execute_query_async(query)
             if not df.empty:
                 # Clean column names

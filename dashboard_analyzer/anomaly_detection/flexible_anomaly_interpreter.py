@@ -25,7 +25,8 @@ class FlexibleAnomalyInterpreter:
         # Cache for explanations
         self.explanation_cache: Dict[Tuple[str, int], str] = {}  # (node_path, period) -> explanation
         
-    async def explain_anomaly(self, node_path: str, target_period: int, aggregation_days: int, anomaly_state: str = None) -> str:
+    async def explain_anomaly(self, node_path: str, target_period: int, aggregation_days: int, 
+                            anomaly_state: str = None, start_date: datetime = None, end_date: datetime = None) -> str:
         """
         Generate comprehensive explanation for an anomaly in a flexible time period
         
@@ -34,6 +35,8 @@ class FlexibleAnomalyInterpreter:
             target_period: Period number (1 = most recent)
             aggregation_days: Number of days per period (7, 14, 30, etc.)
             anomaly_state: The anomaly state ("+", "-", "N", etc.)
+            start_date: Optional direct start date (bypasses period mapping)
+            end_date: Optional direct end date (bypasses period mapping)
             
         Returns:
             Comprehensive explanation string combining operational data, verbatims, and routes
@@ -44,10 +47,16 @@ class FlexibleAnomalyInterpreter:
             return self.explanation_cache[cache_key]
         
         try:
-            # 1. Get the date range for this period
-            date_range = self._get_period_date_range(target_period, aggregation_days)
-            if not date_range:
-                return "Could not determine date range for this period"
+            # 1. Get the date range - use direct dates if provided, otherwise map period
+            if start_date and end_date:
+                print(f"         📅 Using direct date range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+                date_range = (start_date, end_date)
+            else:
+                print(f"         🔍 Mapping period {target_period} to date range...")
+                date_range = self._get_period_date_range(target_period, aggregation_days)
+                if not date_range:
+                    return "Could not determine date range for this period"
+                print(f"         📅 Mapped to: {date_range[0].strftime('%Y-%m-%d')} to {date_range[1].strftime('%Y-%m-%d')}")
             
             start_date, end_date = date_range
             

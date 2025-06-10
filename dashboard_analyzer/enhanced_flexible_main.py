@@ -13,6 +13,7 @@ from typing import List, Dict, Any
 import sys
 import os
 from contextlib import redirect_stdout, redirect_stderr
+import pandas as pd
 
 from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector
 from dashboard_analyzer.anomaly_detection.flexible_detector import FlexibleAnomalyDetector
@@ -26,31 +27,34 @@ def debug_print(message):
     if DEBUG_MODE:
         print(f"🔍 DEBUG: {message}")
 
-async def collect_flexible_data(aggregation_days: int, target_folder: str, segment: str = "Global"):
-    """Collect data using flexible aggregation for specified segment"""
-    print(f"📥 STEP 1: Flexible Data Collection ({aggregation_days} days) - Segment: {segment}")
-    print("-" * 50)
+async def collect_flexible_data(aggregation_days: int, target_folder: str, segment: str = "Global", analysis_date: datetime = None):
+    """
+    Collect flexible NPS data for all nodes in the specified segment
+    
+    Args:
+        aggregation_days: Number of days per period
+        target_folder: Where to save the data
+        segment: Root segment to collect (Global, SH, LH, etc.)
+        analysis_date: Optional analysis date to use instead of TODAY() in queries
+    """
+    print(f"📥 Collecting flexible NPS data")
+    print(f"   🔧 Aggregation: {aggregation_days} days per period")
+    print(f"   📁 Target folder: {target_folder}")
+    print(f"   🎯 Segment: {segment}")
+    if analysis_date:
+        print(f"   📅 Analysis date: {analysis_date.strftime('%Y-%m-%d')}")
     
     collector = PBIDataCollector()
-    
-    # Get node paths for the specified segment
     node_paths = get_segment_node_paths(segment)
     
-    print(f"Starting flexible data collection to: {target_folder}")
-    print(f"Segment focus: {segment}")
-    print(f"Nodes to collect: {len(node_paths)} ({', '.join(node_paths)})")
-    
-    debug_print(f"Full node paths list: {node_paths}")
-    
-    # Collect data for selected nodes
-    total_success = 0
     total_attempted = 0
+    total_success = 0
     
     for node_path in node_paths:
         try:
             debug_print(f"Collecting data for node: {node_path}")
             results = await collector.collect_flexible_data_for_node(
-                node_path, aggregation_days, target_folder
+                node_path, aggregation_days, target_folder, analysis_date
             )
             total_attempted += len(results)
             total_success += sum(results.values())
@@ -274,12 +278,22 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
                 try:
                     anomaly_state = period_anomalies.get(node_path, "?")
                     print(f"      🔍 Collecting explanation for {node_path} (state: {anomaly_state})")
+                    
+                    # Calculate correct date range if analysis_date is available
+                    start_date, end_date = None, None
+                    analysis_date = analysis_data.get('analysis_date')
+                    if analysis_date:
+                        start_date, end_date = calculate_period_date_range(analysis_date, period, aggregation_days)
+                        print(f"         📅 Using calculated date range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+                    
                     explanation = await asyncio.wait_for(
                         interpreter.explain_anomaly(
                             node_path=node_path,
                             target_period=period,
                             aggregation_days=aggregation_days,
-                            anomaly_state=anomaly_state
+                            anomaly_state=anomaly_state,
+                            start_date=start_date,
+                            end_date=end_date
                         ),
                         timeout=30.0
                     )
@@ -895,7 +909,7 @@ async def run_flexible_data_download_with_date(aggregation_days: int, periods: i
     print(f"🏷️ Date parameter: {date_parameter}")
     print(f"🎯 Segment focus: {segment}")
     
-    success = await collect_flexible_data(aggregation_days, target_folder, segment)
+    success = await collect_flexible_data(aggregation_days, target_folder, segment, start_date)
     
     if success:
         print(f"✅ Data collection completed successfully")
@@ -933,7 +947,7 @@ async def run_flexible_data_download_silent_with_date(aggregation_days: int, per
             for node_path in node_paths:
                 try:
                     results = await collector.collect_flexible_data_for_node(
-                        node_path, aggregation_days, target_folder
+                        node_path, aggregation_days, target_folder, start_date
                     )
                     total_attempted += len(results)
                     total_success += sum(results.values())
@@ -1091,9 +1105,10 @@ async def run_comprehensive_analysis(analysis_date, date_parameter, segment: str
         if daily_folder:
             print("🔍 Analyzing daily patterns...")
             debug_print(f"Running daily analysis on folder: {daily_folder}")
-            daily_analysis = await run_flexible_analysis_silent(daily_folder)
+            daily_analysis = await run_flexible_analysis_silent(daily_folder, analysis_date)
             debug_print(f"Daily analysis results: {daily_analysis is not None}")
-        
+            # Analysis date is already included in the analysis
+            
             if daily_analysis:
                 anomaly_count = len(daily_analysis.get('anomaly_periods', []))
                 debug_print(f"Daily anomaly periods: {daily_analysis['anomaly_periods']}")
@@ -1153,6 +1168,9 @@ async def run_comprehensive_analysis(analysis_date, date_parameter, segment: str
                     timeout=60.0  # 1 minute timeout for weekly analysis
                 )
                 debug_print(f"Weekly analysis results: {weekly_analysis is not None}")
+                # Add analysis date to weekly analysis
+                if weekly_analysis:
+                    weekly_analysis['analysis_date'] = analysis_date
             except asyncio.TimeoutError:
                 print("⏰ Weekly analysis timed out (>1 minute)")
                 weekly_analysis = None
@@ -1277,8 +1295,8 @@ async def run_clean_daily_analysis(analysis_date, date_parameter, segment: str =
         print("❌ Data collection failed")
         return
     
-    # Run analysis silently
-    daily_analysis = await run_flexible_analysis_silent(daily_folder)
+    # Run analysis silently with the correct analysis date
+    daily_analysis = await run_flexible_analysis_silent(daily_folder, analysis_date)
     
     if not daily_analysis:
         print("❌ Analysis failed")
@@ -1291,7 +1309,7 @@ async def run_clean_daily_analysis(analysis_date, date_parameter, segment: str =
     print(f"📅 Based on data from: {analysis_date.strftime('%Y-%m-%d')} ({date_parameter})")
     print(f"🎯 Segment analyzed: {segment}")
 
-async def run_flexible_analysis_silent(data_folder: str):
+async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime = None):
     """Run flexible analysis completely silently"""
     import os
     from contextlib import redirect_stdout, redirect_stderr
@@ -1312,8 +1330,16 @@ async def run_flexible_analysis_silent(data_folder: str):
         min_sample_size=5
     )
     
-    # Analyze the 7 most recent periods completely silently
-    periods_to_analyze = list(range(1, 8))  # Periods 1, 2, 3, 4, 5, 6, 7
+    # Calculate the correct period numbers if analysis_date is provided
+    if analysis_date:
+        # Calculate the period number for the analysis date (most recent period)
+        base_period = calculate_actual_period_number(analysis_date)
+        # Analyze 7 periods starting from the analysis date
+        periods_to_analyze = list(range(base_period, base_period + 7))
+    else:
+        # Default behavior: analyze the 7 most recent periods (1-7)
+        periods_to_analyze = list(range(1, 8))  # Periods 1, 2, 3, 4, 5, 6, 7
+    
     anomaly_periods = []
     
     # Suppress all output during analysis
@@ -1337,7 +1363,8 @@ async def run_flexible_analysis_silent(data_folder: str):
         'aggregation_days': aggregation_days,
         'anomaly_periods': anomaly_periods,
         'total_periods': 7,
-        'periods_analyzed': periods_to_analyze
+        'periods_analyzed': periods_to_analyze,
+        'analysis_date': analysis_date
     }
 
 async def run_flexible_analysis(data_folder: str):
@@ -1385,7 +1412,8 @@ async def run_flexible_analysis(data_folder: str):
             'aggregation_days': aggregation_days,
             'anomaly_periods': anomaly_periods,
             'total_periods': 7,
-            'periods_analyzed': periods_to_analyze
+            'periods_analyzed': periods_to_analyze,
+            'analysis_date': None  # Will be set when available
         }
     else:
         print("✅ No anomalies detected in the 7 most recent periods")
@@ -1395,7 +1423,8 @@ async def run_flexible_analysis(data_folder: str):
             'aggregation_days': aggregation_days,
             'anomaly_periods': [],
             'total_periods': 7,
-            'periods_analyzed': periods_to_analyze
+            'periods_analyzed': periods_to_analyze,
+            'analysis_date': None  # Will be set when available
         }
 
 async def run_weekly_current_vs_average_analysis_silent(data_folder: str):
@@ -1444,7 +1473,8 @@ async def run_weekly_current_vs_average_analysis_silent(data_folder: str):
         'aggregation_days': aggregation_days,
         'anomaly_periods': anomaly_periods,
         'total_periods': 1,  # Only analyzing current week
-        'periods_analyzed': [current_week_period]
+        'periods_analyzed': [current_week_period],
+        'analysis_date': None  # Will be set when available
     }
 
 async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, show_all_periods=False, segment: str = "Global"):
@@ -1520,12 +1550,21 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
                     for node_path in nodes_with_anomalies:
                         try:
                             anomaly_state = period_anomalies.get(node_path, "?")
+                            
+                            # Calculate correct date range if analysis_date is available
+                            start_date, end_date = None, None
+                            analysis_date = analysis_data.get('analysis_date')
+                            if analysis_date:
+                                start_date, end_date = calculate_period_date_range(analysis_date, period, aggregation_days)
+                            
                             explanation = await asyncio.wait_for(
                                 interpreter.explain_anomaly(
                                     node_path=node_path,
                                     target_period=period,
                                     aggregation_days=aggregation_days,
-                                    anomaly_state=anomaly_state
+                                    anomaly_state=anomaly_state,
+                                    start_date=start_date,
+                                    end_date=end_date
                                 ),
                                 timeout=30.0
                             )
@@ -1635,12 +1674,21 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
                     for node_path in nodes_with_anomalies:
                         try:
                             anomaly_state = period_anomalies.get(node_path, "?")
+                            
+                            # Calculate correct date range if analysis_date is available
+                            start_date, end_date = None, None
+                            analysis_date = analysis_data.get('analysis_date')
+                            if analysis_date:
+                                start_date, end_date = calculate_period_date_range(analysis_date, period, aggregation_days)
+                            
                             explanation = await asyncio.wait_for(
                                 interpreter.explain_anomaly(
                                     node_path=node_path,
                                     target_period=period,
                                     aggregation_days=aggregation_days,
-                                    anomaly_state=anomaly_state
+                                    anomaly_state=anomaly_state,
+                                    start_date=start_date,
+                                    end_date=end_date
                                 ),
                                 timeout=30.0
                             )
@@ -2123,6 +2171,69 @@ def print_single_node(node_path, anomalies, get_state_description, get_deviation
     print_interpretation(node_path, "")
     if node_state in ["+", "-"]:
         print_explanation(node_path, "")
+
+def calculate_period_date_range(analysis_date: datetime, target_period: int, aggregation_days: int) -> tuple:
+    """
+    Calculate the correct date range for a period relative to the analysis date
+    
+    Args:
+        analysis_date: The reference date for the analysis (e.g., 2025-01-20)
+        target_period: Period number (1 = most recent relative to analysis_date)
+        aggregation_days: Days per period (1, 7, 14, 30, etc.)
+        
+    Returns:
+        Tuple of (start_date, end_date) for the target period
+        
+    Examples:
+        For daily analysis (aggregation_days=1) with analysis_date=2025-01-20:
+        - Period 1: (2025-01-20, 2025-01-20) - the analysis date itself
+        - Period 2: (2025-01-19, 2025-01-19) - 1 day before
+        - Period 3: (2025-01-18, 2025-01-18) - 2 days before
+        
+        For weekly analysis (aggregation_days=7) with analysis_date=2025-01-20:
+        - Period 1: (2025-01-14, 2025-01-20) - week ending on analysis date
+        - Period 2: (2025-01-07, 2025-01-13) - previous week
+    """
+    # Calculate how many days back from analysis date
+    days_back = (target_period - 1) * aggregation_days
+    
+    # For daily analysis, each period is exactly one day
+    # For weekly analysis, each period is 7 days, etc.
+    period_end = analysis_date - timedelta(days=days_back)
+    period_start = period_end - timedelta(days=aggregation_days - 1)
+    
+    return period_start, period_end
+
+def calculate_actual_period_number(analysis_date: datetime, today_date: datetime = None) -> int:
+    """
+    Calculate the actual period number in the PBI data for a given analysis date
+    
+    Args:
+        analysis_date: The date we want to analyze (e.g., 2025-01-20)
+        today_date: Today's date (defaults to actual today)
+        
+    Returns:
+        The period number in the PBI data that corresponds to the analysis date
+        
+    Example:
+        If today is 2025-06-05 and analysis_date is 2025-01-20:
+        Days difference = 137, so analysis_date is Period 137
+    """
+    if today_date is None:
+        today_date = datetime.now().date()
+    elif isinstance(today_date, datetime):
+        today_date = today_date.date()
+    
+    if isinstance(analysis_date, datetime):
+        analysis_date = analysis_date.date()
+    
+    # Calculate days between today and analysis date
+    days_diff = (today_date - analysis_date).days
+    
+    # Period number = days difference + 1 (Period 1 = today)
+    period_number = days_diff + 1
+    
+    return period_number
 
 if __name__ == "__main__":
     asyncio.run(main())
