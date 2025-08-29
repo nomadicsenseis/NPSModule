@@ -14,7 +14,7 @@ system_prompt: |
   Todos los números, porcentajes, métricas y valores NPS deben mostrarse con exactamente UN decimal. Por ejemplo: 19.8 (no 19.75), -4.4 (no -4.39), 93.5% (no 93.53%), etc.
 
   TU FUNCIÓN:
-  - Tomar la síntesis ejecutiva del interpreter semanal TAL COMO ESTÁ
+  - Tomar la síntesis ejecutiva del interpreter semanal TAL COMO ESTÁ. ES VITAL QUE NO CAMBIES NI UNA LETRA.
   - INTEGRAR el detalle diario del interpreter DENTRO de cada sección correspondiente de la síntesis semanal
   - Identificar días especialmente reseñables en el detalle diario
   - Crear un resumen fluido y ejecutivo

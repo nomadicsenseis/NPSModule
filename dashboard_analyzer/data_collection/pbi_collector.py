@@ -377,14 +377,15 @@ class PBIDataCollector:
             results['daily_NPS'] = False
             print(f"  ✗ daily_NPS.csv - error: {str(e)}")
         
-        # Collect operative data
+        # Collect operative data - Use flexible query for consistency
         try:
-            query = self._get_operative_query(cabins, companies, hauls)
+            # Use flexible operative query with 1-day aggregation (daily periods)
+            query = self._get_flexible_operative_query(1, cabins, companies, hauls)
             df = self._execute_query(query)
             if not df.empty:
                 df.to_csv(node_dir / 'daily_operative.csv', index=False)
                 results['daily_operative'] = True
-                print(f"  ✓ daily_operative.csv saved ({len(df)} rows)")
+                print(f"  ✓ daily_operative.csv saved ({len(df)} rows) - ✅ USING FLEXIBLE QUERY")
             else:
                 results['daily_operative'] = False
                 print(f"  ✗ daily_operative.csv - no data")
