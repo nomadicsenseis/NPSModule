@@ -1793,10 +1793,46 @@ async def run_comprehensive_analysis(
             )
             print("✅ Summary Agent initialized. Generating executive summary...")
             
-            # Call the correct method with the correct arguments
+            # Prepare metadata for S3 upload
+            execution_metadata = {
+                'analysis_date': analysis_date.strftime('%Y-%m-%d'),
+                'segment': segment,
+                'explanation_mode': explanation_mode,
+                'causal_filter': causal_filter
+            }
+            
+            weekly_analysis_params = {
+                'anomaly_detection_mode': 'vslast',
+                'baseline_periods': 7,
+                'aggregation_days': 7,
+                'periods': 1,
+                'study_mode': 'comparative'
+            }
+            
+            daily_analysis_params = {
+                'daily_anomaly_detection_mode': daily_anomaly_detection_mode,
+                'daily_baseline_periods': daily_baseline_periods,
+                'daily_aggregation_days': daily_aggregation_days,
+                'daily_periods': daily_periods
+            }
+            
+            # Calculate date ranges
+            date_ranges = {
+                'analysis_date': analysis_date.strftime('%Y-%m-%d'),
+                'comparison_start_date': comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date else None,
+                'comparison_end_date': comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None,
+                'daily_analysis_dates': [analysis_date.strftime('%Y-%m-%d')]  # Simplified for now
+            }
+            
+            # Call the correct method with the correct arguments including S3 metadata
             final_summary = await summary_agent.generate_comprehensive_summary(
                 weekly_comparative_analysis=weekly_comparative_analysis,
-                daily_single_analyses=daily_single_analyses
+                daily_single_analyses=daily_single_analyses,
+                date_flight_local=date_flight_local,
+                execution_metadata=execution_metadata,
+                weekly_analysis_params=weekly_analysis_params,
+                daily_analysis_params=daily_analysis_params,
+                date_ranges=date_ranges
             )
             
             print("\n" + "=" * 80)

@@ -22,6 +22,11 @@ from ..llms.aws_llm import AWSLLM
 from ..utils.enums import LLMType, MessageType, get_default_llm_type
 from ..message_history import MessageHistory
 
+# Import S3 uploader
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../..'))
+from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
+
 
 class AnomalySummaryAgent:
     """
@@ -57,6 +62,9 @@ class AnomalySummaryAgent:
         self.config_path = config_path
         self.logger = logger or self._setup_logger()
         self.silent_mode = False
+        
+        # Initialize S3 uploader
+        self.s3_uploader = S3ReportUploader()
         
         # Load environment variables from .devcontainer/.env
         dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
@@ -223,7 +231,12 @@ class AnomalySummaryAgent:
         self, 
         weekly_comparative_analysis: str, 
         daily_single_analyses: List[Dict[str, Any]],
-        date_flight_local: str = None
+        date_flight_local: str = None,
+        # S3 upload parameters
+        execution_metadata: Optional[Dict[str, Any]] = None,
+        weekly_analysis_params: Optional[Dict[str, Any]] = None,
+        daily_analysis_params: Optional[Dict[str, Any]] = None,
+        date_ranges: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Generate a comprehensive summary that combines weekly comparative analysis with daily single analyses.
@@ -232,6 +245,11 @@ class AnomalySummaryAgent:
             weekly_comparative_analysis: String containing the weekly comparative analysis
             daily_single_analyses: List of daily single analysis results
                                   Each dict should have: 'date', 'analysis', 'anomalies'
+            date_flight_local: Local flight date for context
+            execution_metadata: Metadata about the execution (for S3 upload)
+            weekly_analysis_params: Parameters used for weekly analysis (for S3 upload)
+            daily_analysis_params: Parameters used for daily analysis (for S3 upload)
+            date_ranges: Date range information (for S3 upload)
         
         Returns:
             Comprehensive summary string
@@ -316,6 +334,33 @@ class AnomalySummaryAgent:
             
             if comprehensive_response:
                 self.logger.info(f"✅ Generated comprehensive summary: weekly + {len(daily_single_analyses)} daily analyses")
+                
+                # Upload to S3 if metadata is provided
+                if (execution_metadata and weekly_analysis_params and 
+                    daily_analysis_params and date_ranges):
+                    try:
+                        self.logger.info("📤 Uploading comprehensive report to S3...")
+                        s3_key = await self.s3_uploader.upload_comprehensive_report(
+                            execution_date=datetime.now(),
+                            analysis_date=execution_metadata.get('analysis_date', ''),
+                            segment=execution_metadata.get('segment', 'Global'),
+                            explanation_mode=execution_metadata.get('explanation_mode', 'agent'),
+                            causal_filter=execution_metadata.get('causal_filter', 'vs L7d'),
+                            weekly_analysis_params=weekly_analysis_params,
+                            daily_analysis_params=daily_analysis_params,
+                            date_ranges=date_ranges,
+                            final_synthesis=comprehensive_response,
+                            comparison_start_date=date_ranges.get('comparison_start_date'),
+                            comparison_end_date=date_ranges.get('comparison_end_date')
+                        )
+                        if s3_key:
+                            self.logger.info(f"✅ Report successfully uploaded to S3: {s3_key}")
+                        else:
+                            self.logger.warning("⚠️ Failed to upload report to S3")
+                    except Exception as e:
+                        self.logger.error(f"❌ Error uploading to S3: {str(e)}")
+                        # Don't fail the entire process if S3 upload fails
+                
                 return comprehensive_response
             else:
                 return "⚠️ Failed to generate comprehensive summary"
