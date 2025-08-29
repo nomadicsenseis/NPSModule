@@ -1,0 +1,5 @@
+include:
+  - project: $IBDATA_CICD_PROJECT_CENTRALIZED_PIPELINES_REPO
+    ref: main
+    file: "gitlabci-pipelines-processing/.gitlab-ci-deploy-etl-image-to-ecr.yml"
+
