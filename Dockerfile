@@ -33,4 +33,8 @@ RUN conda install -c conda-forge -y \
 # Set the default command
 CMD ["/bin/bash"]
 
+COPY script /script
 
+RUN chmod 777 /script/entrypoint.sh
+
+ENTRYPOINT ["/script/entrypoint.sh"]
