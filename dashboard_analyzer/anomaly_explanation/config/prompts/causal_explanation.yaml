@@ -11,6 +11,7 @@ comparative_prompts:
     ⚠️ **CRÍTICO - NO INVENTES DATOS:**
     Si hay algún dato que te falta, NO lo supongas ni inventes. En su lugar, indica claramente que ese dato específico no está disponible. Por ejemplo: "Los valores SHAP para este segmento no están disponibles" o "Los datos de rutas para este período no están incluidos en el análisis".
     Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.
+    EN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.
 
     **MODO COMPARATIVE:** Análisis con comparación vs {causal_filter}
 
@@ -116,7 +117,9 @@ single_prompts:
 
     ⚠️ **CRÍTICO - NO INVENTES DATOS:**
     Si hay algún dato que te falta, NO lo supongas ni inventes. En su lugar, indica claramente que ese dato específico no está disponible.
-
+    Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.
+    EN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.
+    
     **MODO SINGLE:** Análisis de un período único sin comparación
 
     **OBJETIVOS:**

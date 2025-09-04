@@ -15,6 +15,7 @@ comparative_prompts:
     3.  **Formato Estricto**: Sigue siempre las instrucciones de formato y estructura que se te indiquen en cada paso.
     4.  **Lenguaje Ejecutivo**: Utiliza un tono profesional y orientado a la acción.
     5.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.
+    6.  **Valores no especificados**: EN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.
 
   input_templates:
     hierarchical_context_setup: |
@@ -60,7 +61,9 @@ single_prompts:
     2.  **Enfoque en la Causa-Raíz**: No te limites a describir los datos. Sintetiza la información para encontrar la causa raíz que conecta los diferentes puntos de datos.
     3.  **Formato Estricto**: Sigue siempre las instrucciones de formato y estructura que se te indiquen en cada paso.
     4.  **Lenguaje Ejecutivo**: Utiliza un tono profesional y orientado a la acción.
-
+    5.  **Valores no especificados**: EN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.
+    6.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.  
+    
   input_templates:
     hierarchical_context_setup: |
       Analiza la siguiente información sobre un árbol de anomalías de NPS para el día {date}. Asimila toda la información en silencio. No generes ninguna respuesta todavía. Espera a la siguiente instrucción para comenzar el análisis paso a paso.
