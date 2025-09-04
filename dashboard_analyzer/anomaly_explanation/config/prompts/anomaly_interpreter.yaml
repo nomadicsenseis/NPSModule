@@ -100,6 +100,8 @@ hierarchical_diagnostic_helpers:
     🏢 **PASO 1: DIAGNÓSTICO A NIVEL COMPAÑÍA (IB/YW)**
     
     **Objetivo:** Determinar si las causas están localizadas a nivel de compañía en Short Haul o son compartidas por la cabina padre.
+
+    **IMPORTANTE: Primero fijate solo en el estado del nodo +,- o N. Luego ya fijate en cada explicacion de los nodos + y - si procede.**
     
     **ANÁLISIS SISTEMÁTICO REQUERIDO:**
     
@@ -127,6 +129,8 @@ hierarchical_diagnostic_helpers:
     
     **Objetivo:** Determinar si las causas son comunes al radio o específicas de cabina, analizando cada radio por separado.
     
+    **IMPORTANTE: Primero fijate solo en el estado del nodo +,- o N. Luego ya fijate en cada explicacion de los nodos + y - si procede.**
+
     **ANÁLISIS SISTEMÁTICO REQUERIDO:**
     
     **A. Short Haul - Análisis de Cabinas:**
@@ -151,6 +155,8 @@ hierarchical_diagnostic_helpers:
     🌍 **PASO 3: DIAGNÓSTICO A NIVEL RADIO Y GLOBAL**
     
     **Objetivo:** Determinar si las causas tienen alcance específico por radio, son globales o representan causas mixtas.
+    
+    **IMPORTANTE: Primero fijate solo en el estado del nodo +,- o N. Luego ya fijate en cada explicacion de los nodos + y - si procede.**
     
     **ANÁLISIS SISTEMÁTICO REQUERIDO:**
     
@@ -213,6 +219,10 @@ hierarchical_diagnostic_helpers:
     - NO ESCRIBAS los textos entre corchetes [...], sino reemplázalos con contenido real
     - **INCLUYE OBLIGATORIAMENTE LOS VALORES NPS EXACTOS** cuando menciones segmentos, pero de forma narrativa y fluida: "experimentó una mejora/deterioro de X puntos, pasando de un NPS de Y a Z" o "mostró un NPS de X (mejora/deterioro de Y puntos vs período anterior)"
     - **INTEGRA LOS VALORES NPS NATURALMENTE** en la narrativa, no como datos crudos separados
+    - **ESPECIFICA SIEMPRE EL NODO EXACTO** de los datos analizados. Si los datos corresponden a un subsegmento específico (ej: YW, IB, etc.), SIEMPRE menciona el nodo completo en el título y texto. Ejemplo: "ECONOMY SH YW" en lugar de solo "ECONOMY SH"
+    - **EXTRÁE Y USA LA TERMINOLOGÍA DE COMPARACIÓN** que ya está en los datos de los nodos. Si los datos mencionan "vs L7d", "período previo 7 días", "vs target", etc., usa esa terminología específica en lugar de términos genéricos como "baseline" o "período anterior"
+    - **OBLIGATORIO PARA CABINAS SH:** En las secciones de ECONOMY SH y BUSINESS SH, SIEMPRE menciona explícitamente los valores NPS de cada compañía (IB y YW) por separado antes de explicar el efecto neto. Si una compañía no aparece en el árbol, indica que "mantuvo desempeño estable".
+    - **EXCEPCIÓN:** Para las secciones de cabina definidas en {CABIN_SECTIONS}, sigue las instrucciones específicas de cada sección (que pueden requerir agregación de subsegmentos).
     - NO USES NUMERACIÓN NI ESTRUCTURAS DE PASOS
     - Los párrafos deben ser NARRATIVOS y FLUIDOS
     - ENFÓCATE SOLO EN INTERPRETAR LOS DATOS NPS DEL ÁRBOL

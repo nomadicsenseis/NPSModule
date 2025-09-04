@@ -201,16 +201,25 @@ class PBIDataCollector:
         companies_str = '", "'.join(companies)
         hauls_str = '", "'.join(hauls)
         
-        # Replace the template placeholders
+        # Replace the template placeholders - replace ALL occurrences
         query = template.replace(
             '{AGGREGATION_DAYS}', str(aggregation_days)
-        ).replace(
+        )
+        
+        # Replace ALL occurrences of cabin filters
+        query = query.replace(
             'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
             f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
-        ).replace(
+        )
+        
+        # Replace ALL occurrences of company filters
+        query = query.replace(
             'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
             f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
-        ).replace(
+        )
+        
+        # Replace ALL occurrences of haul filters
+        query = query.replace(
             'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
             f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
         )
@@ -247,7 +256,7 @@ class PBIDataCollector:
         companies_str = '", "'.join(companies)
         hauls_str = '", "'.join(hauls)
         
-        # Replace the template placeholders
+        # Replace the template placeholders - replace ALL occurrences
         query = template.replace(
             'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
             f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
@@ -273,7 +282,7 @@ class PBIDataCollector:
         companies_str = '", "'.join(companies)
         hauls_str = '", "'.join(hauls)
         
-        # Replace the template placeholders
+        # Replace the template placeholders - replace ALL occurrences
         query = template.replace(
             'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
             f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'

@@ -890,8 +890,12 @@ class AnomalyInterpreterAgent:
     **ECONOMY SH: [Título]**
     [PÁRRAFO NARRATIVO FLUIDO] La cabina Economy de SH [descripción - para segmentos estables usar: "mantuvo desempeño estable"] durante la semana del [fecha], registrando un NPS de [valor cabina] ([fecha período]) con una [variación de NPS_diff cabina] puntos respecto a la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "La causa principal fue [hipótesis con datos (drivers, operativa, NCS, verbatims) que la respaldan], complementada por [hipótesis secundarias (si las hubiera)]. Esta [mejora/deterioro] se reflejó especialmente en rutas como [top rutas con NPS y diff], mientras que los perfiles más reactivos incluyen [perfiles específicos]."]
     
+    **IMPORTANTE PARA ECONOMY SH:** Si hay subsegmentos IB y YW disponibles, analiza ambos y reporta el comportamiento agregado de la cabina completa. **OBLIGATORIO:** MENCIONA EXPLÍCITAMENTE los valores NPS de cada compañía por separado (si una compañía no aparece en el árbol, indica que "mantuvo desempeño estable") antes de explicar el efecto neto en la cabina. **NO OMITAS ESTA INSTRUCCIÓN.**
+    
     **BUSINESS SH: [Título]**
     [PÁRRAFO NARRATIVO FLUIDO] El segmento Business de SH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha]) con una [variación de diff cabina] puntos vs la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "Esta evolución se explica principalmente por [causas SHAP], siendo especialmente visible en rutas como [rutas top] y entre perfiles [perfiles reactivos]."]
+    
+    **IMPORTANTE PARA BUSINESS SH:** Si hay subsegmentos IB y YW disponibles, analiza ambos y reporta el comportamiento agregado de la cabina completa. **OBLIGATORIO:** MENCIONA EXPLÍCITAMENTE los valores NPS de cada compañía por separado (si una compañía no aparece en el árbol, indica que "mantuvo desempeño estable") antes de explicar el efecto neto en la cabina. **NO OMITAS ESTA INSTRUCCIÓN.**
             """,
             'LH': """
     **ECONOMY LH: [Título]**
@@ -906,10 +910,14 @@ class AnomalyInterpreterAgent:
             'Economy SH': """
     **ECONOMY SH: [Título]**
     [PÁRRAFO NARRATIVO FLUIDO] La cabina Economy de SH [descripción - para segmentos estables usar: "mantuvo desempeño estable"] durante la semana del [fecha], registrando un NPS de [valor cabina] ([fecha período]) con una [variación de NPS_diff cabina] puntos respecto a la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "La causa principal fue [hipótesis con datos (drivers, operativa, NCS, verbatims) que la respaldan], complementada por [hipótesis secundarias (si las hubiera)]. Esta [mejora/deterioro] se reflejó especialmente en rutas como [top rutas con NPS y diff], mientras que los perfiles más reactivos incluyen [perfiles específicos]."]
+    
+    **IMPORTANTE:** Si hay subsegmentos IB y YW disponibles, analiza ambos y reporta el comportamiento agregado de la cabina completa. MENCIONA EXPLÍCITAMENTE los valores NPS de cada compañía por separado (si una compañía no aparece en el árbol, indica que "mantuvo desempeño estable") antes de explicar el efecto neto en la cabina.
             """,
             'Business SH': """
     **BUSINESS SH: [Título]**
     [PÁRRAFO NARRATIVO FLUIDO] El segmento Business de SH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha]) con una [variación de diff cabina] puntos vs la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "Esta evolución se explica principalmente por [causas SHAP], siendo especialmente visible en rutas como [rutas top] y entre perfiles [perfiles reactivos]."]
+    
+    **IMPORTANTE:** Si hay subsegmentos IB y YW disponibles, analiza ambos y reporta el comportamiento agregado de la cabina completa. MENCIONA EXPLÍCITAMENTE los valores NPS de cada compañía por separado (si una compañía no aparece en el árbol, indica que "mantuvo desempeño estable") antes de explicar el efecto neto en la cabina.
             """,
             'Premium SH': """
     **PREMIUM SH: [Título]**
