@@ -23,6 +23,11 @@ from ..llms.aws_llm import AWSLLM
 from ..utils.enums import LLMType, MessageType, AgentName
 from ..message_history import MessageHistory
 
+# Import S3 uploader
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../..'))
+from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
+
 # Helper function to find a file from the project root
 def find_project_root(marker_file=".git"):
     """Find the project root by searching for a marker file."""
@@ -178,6 +183,9 @@ class AnomalyInterpreterAgent:
         self.hierarchical_reflections = []
         self.generation_data = {}
         self.conversation_tracker = HierarchicalConversationTracker()
+        
+        # Initialize S3 uploader with production environment
+        self.s3_uploader = S3ReportUploader(environment="prod")
         
         # desempeño metrics
         self.total_processing_time = 0.0
@@ -690,7 +698,7 @@ class AnomalyInterpreterAgent:
             self.logger.error(f"❌ Failed to export hierarchical conversation: {e}")
             return ""
     
-    def export_conversation(
+    async def export_conversation(
         self, 
         start_date: str, 
         end_date: str, 
@@ -700,7 +708,7 @@ class AnomalyInterpreterAgent:
         study_mode: str = "unknown"
     ) -> str:
         """
-        Export interpreter conversation to JSON file with same format as causal agent
+        Export interpreter conversation to JSON file and upload to S3
         
         Args:
             start_date: Analysis start date
@@ -762,11 +770,22 @@ class AnomalyInterpreterAgent:
                 }
             }
             
-            # Write to JSON file
+            # Save locally
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(export_data, f, indent=2, ensure_ascii=False)
             
             self.logger.info(f"✅ Interpreter conversation exported to: {filepath}")
+            
+            # Upload to S3 in production
+            try:
+                s3_key = await self.s3_uploader.upload_interpreter_conversation(export_data, filename)
+                if s3_key:
+                    self.logger.info(f"📤 Interpreter conversation uploaded to S3: {s3_key}")
+                else:
+                    self.logger.info("🔧 S3 upload skipped (local environment or failed)")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
+            
             return str(filepath)
             
         except Exception as e:

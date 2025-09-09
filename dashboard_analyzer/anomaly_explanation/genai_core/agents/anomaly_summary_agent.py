@@ -63,8 +63,8 @@ class AnomalySummaryAgent:
         self.logger = logger or self._setup_logger()
         self.silent_mode = False
         
-        # Initialize S3 uploader
-        self.s3_uploader = S3ReportUploader()
+        # Initialize S3 uploader with production environment
+        self.s3_uploader = S3ReportUploader(environment="prod")
         
         # Load environment variables from .devcontainer/.env
         dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
@@ -507,8 +507,8 @@ PERÍODO {period} ({date_range}):
         else:
             return 'unknown'
 
-    def export_conversation(self, message_history: 'MessageHistory', dateflight_local: Optional[str] = None) -> str:
-        """Export the conversation log to JSON file"""
+    async def export_conversation(self, message_history: 'MessageHistory', dateflight_local: Optional[str] = None) -> str:
+        """Export the conversation log to JSON file and upload to S3"""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
@@ -541,10 +541,22 @@ PERÍODO {period} ({date_range}):
                 ]
             }
             
+            # Save locally
             with open(full_path, 'w', encoding='utf-8') as f:
                 json.dump(conversation_data, f, indent=2, ensure_ascii=False)
             
             self.logger.info(f"📝 Summary conversation exported to: {full_path}")
+            
+            # Upload to S3 in production
+            try:
+                s3_key = await self.s3_uploader.upload_summary_conversation(conversation_data, filename)
+                if s3_key:
+                    self.logger.info(f"📤 Summary conversation uploaded to S3: {s3_key}")
+                else:
+                    self.logger.info("🔧 S3 upload skipped (local environment or failed)")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
+            
             return str(full_path)
             
         except Exception as e:

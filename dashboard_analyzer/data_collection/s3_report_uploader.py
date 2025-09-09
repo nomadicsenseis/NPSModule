@@ -19,12 +19,13 @@ class S3ReportUploader:
     - Comprehensive logging
     """
     
-    def __init__(self, temp_env_file: str = None):
+    def __init__(self, temp_env_file: str = None, environment: str = "local"):
         """
         Initialize S3 Report Uploader
         
         Args:
-            temp_env_file: Path to temporary credentials file (optional)
+            temp_env_file: Path to temporary credentials file (only used in local environment)
+            environment: Environment type ("local" or "prod")
         """
         self.logger = logging.getLogger(__name__)
         
@@ -32,36 +33,45 @@ class S3ReportUploader:
         self.bucket_name = "ibdata-sbx-ew1-s3-customer"
         self.base_prefix = "customer/catia/reports/raw/"
         
-        # Initialize AWS session
+        # Environment configuration
+        self.environment = environment
         self.temp_env_file = temp_env_file
+        
+        # Initialize AWS session
         self._setup_aws_credentials()
     
     def _setup_aws_credentials(self):
-        """Setup AWS credentials from temporary file or environment"""
+        """Setup AWS credentials based on environment"""
         try:
-            if self.temp_env_file and os.path.exists(self.temp_env_file):
-                # Read credentials from temp file
-                credentials = {}
-                with open(self.temp_env_file, 'r') as f:
-                    for line in f:
-                        if '=' in line and not line.strip().startswith('#'):
-                            key, value = line.strip().split('=', 1)
-                            credentials[key.strip()] = value.strip()
-                
-                # Set up boto3 session with credentials
-                session = boto3.Session(
-                    aws_access_key_id=credentials.get('aws_access_key_id'),
-                    aws_secret_access_key=credentials.get('aws_secret_access_key'),
-                    aws_session_token=credentials.get('aws_session_token'),
-                    region_name='eu-west-1'
-                )
-                self.s3_client = session.client('s3')
-                self.logger.info("✅ Successfully configured AWS credentials from temp file")
-                
-            else:
-                # Fallback to environment variables
+            if self.environment == "prod":
+                # In production, use IAM roles (no hardcoded credentials)
                 self.s3_client = boto3.client('s3', region_name='eu-west-1')
-                self.logger.info("✅ Using AWS credentials from environment")
+                self.logger.info("✅ Production environment: Using IAM role credentials")
+                
+            else:  # local environment
+                if self.temp_env_file and os.path.exists(self.temp_env_file):
+                    # Read credentials from temp file
+                    credentials = {}
+                    with open(self.temp_env_file, 'r') as f:
+                        for line in f:
+                            if '=' in line and not line.strip().startswith('#'):
+                                key, value = line.strip().split('=', 1)
+                                credentials[key.strip()] = value.strip()
+                    
+                    # Set up boto3 session with credentials
+                    session = boto3.Session(
+                        aws_access_key_id=credentials.get('aws_access_key_id'),
+                        aws_secret_access_key=credentials.get('aws_secret_access_key'),
+                        aws_session_token=credentials.get('aws_session_token'),
+                        region_name='eu-west-1'
+                    )
+                    self.s3_client = session.client('s3')
+                    self.logger.info("✅ Local environment: Using AWS credentials from temp file")
+                    
+                else:
+                    # Fallback to environment variables
+                    self.s3_client = boto3.client('s3', region_name='eu-west-1')
+                    self.logger.info("✅ Local environment: Using AWS credentials from environment variables")
                 
         except Exception as e:
             self.logger.error(f"❌ Failed to setup AWS credentials: {str(e)}")
@@ -244,3 +254,83 @@ class S3ReportUploader:
         except Exception as e:
             self.logger.error(f"❌ S3 connection test failed: {str(e)}")
             return False
+    
+    async def upload_agent_conversation(self, 
+                                      conversation_data: Dict[str, Any],
+                                      agent_type: str,
+                                      filename: str) -> Optional[str]:
+        """
+        Upload agent conversation to S3
+        
+        Args:
+            conversation_data: The conversation data dictionary
+            agent_type: Type of agent ("causal_explanation", "anomaly_interpreter", "anomaly_summary")
+            filename: The filename to use for the upload
+            
+        Returns:
+            S3 key of uploaded file if successful, None if failed
+        """
+        try:
+            # Only upload in production environment
+            if self.environment != "prod":
+                self.logger.info(f"🔧 Local environment: Skipping S3 upload for {agent_type} conversation")
+                return None
+            
+            # Validate inputs
+            if not conversation_data or not filename:
+                self.logger.warning("⚠️ Invalid conversation data or filename, skipping S3 upload")
+                return None
+            
+            # Generate S3 key
+            s3_key = f"{self.base_prefix}agent_conversations/{agent_type}/{filename}"
+            
+            # Convert to JSON string
+            json_content = json.dumps(conversation_data, indent=2, ensure_ascii=False)
+            
+            # Upload to S3
+            self.logger.info(f"📤 Uploading {agent_type} conversation to S3: s3://{self.bucket_name}/{s3_key}")
+            
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=json_content.encode('utf-8'),
+                ContentType='application/json',
+                Metadata={
+                    'agent_type': agent_type,
+                    'upload_timestamp': datetime.now().isoformat(),
+                    'conversation_type': 'agent_conversation'
+                }
+            )
+            
+            self.logger.info(f"✅ Successfully uploaded {agent_type} conversation: s3://{self.bucket_name}/{s3_key}")
+            self.logger.info(f"📊 Conversation size: {len(json_content)} characters")
+            
+            return s3_key
+            
+        except NoCredentialsError:
+            self.logger.error("❌ AWS credentials not found. Cannot upload conversation to S3.")
+            return None
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == 'NoSuchBucket':
+                self.logger.error(f"❌ S3 bucket '{self.bucket_name}' does not exist")
+            elif error_code == 'AccessDenied':
+                self.logger.error(f"❌ Access denied to S3 bucket '{self.bucket_name}'")
+            else:
+                self.logger.error(f"❌ S3 client error: {error_code} - {str(e)}")
+            return None
+        except Exception as e:
+            self.logger.error(f"❌ Unexpected error uploading conversation to S3: {str(e)}")
+            return None
+    
+    async def upload_causal_conversation(self, conversation_data: Dict[str, Any], filename: str) -> Optional[str]:
+        """Upload causal explanation agent conversation to S3"""
+        return await self.upload_agent_conversation(conversation_data, "causal_explanation", filename)
+    
+    async def upload_interpreter_conversation(self, conversation_data: Dict[str, Any], filename: str) -> Optional[str]:
+        """Upload anomaly interpreter agent conversation to S3"""
+        return await self.upload_agent_conversation(conversation_data, "interpreter", filename)
+    
+    async def upload_summary_conversation(self, conversation_data: Dict[str, Any], filename: str) -> Optional[str]:
+        """Upload anomaly summary agent conversation to S3"""
+        return await self.upload_agent_conversation(conversation_data, "anomaly_summary", filename)

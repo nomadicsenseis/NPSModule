@@ -13,12 +13,13 @@ from bs4 import BeautifulSoup
 class NCSDataCollector:
     """Collects Net Customer Satisfaction data from AWS S3 bucket"""
     
-    def __init__(self, temp_env_file: str = None):
+    def __init__(self, temp_env_file: str = None, environment: str = "local"):
         """
         Initialize NCS Data Collector
         
         Args:
-            temp_env_file: Path to temporary credentials file
+            temp_env_file: Path to temporary credentials file (only used in local environment)
+            environment: Environment type ("local" or "prod")
         """
         self.logger = logging.getLogger(__name__)
         
@@ -26,39 +27,48 @@ class NCSDataCollector:
         self.bucket_name = "ibdata-prod-ew1-s3-customer"
         self.base_prefix = "customer/catia/ncs/raw/attatchments/"
         
-        # Initialize AWS session
-        self.s3_client = None
+        # Environment configuration
+        self.environment = environment
         self.temp_env_file = temp_env_file
         
-        # Setup AWS credentials
+        # Initialize AWS session
+        self.s3_client = None
+        
+        # Setup AWS credentials based on environment
         self._setup_aws_credentials()
         
     def _setup_aws_credentials(self):
-        """Setup AWS credentials from temporary file or environment"""
+        """Setup AWS credentials based on environment"""
         try:
-            if self.temp_env_file and os.path.exists(self.temp_env_file):
-                # Read credentials from temp file
-                credentials = {}
-                with open(self.temp_env_file, 'r') as f:
-                    for line in f:
-                        if '=' in line and not line.strip().startswith('#'):
-                            key, value = line.strip().split('=', 1)
-                            credentials[key.strip()] = value.strip()
-                
-                # Set up boto3 session with credentials
-                session = boto3.Session(
-                    aws_access_key_id=credentials.get('aws_access_key_id'),
-                    aws_secret_access_key=credentials.get('aws_secret_access_key'),
-                    aws_session_token=credentials.get('aws_session_token'),
-                    region_name='eu-west-1'  # Based on bucket name
-                )
-                self.s3_client = session.client('s3')
-                self.logger.info("✅ Successfully configured AWS credentials from temp file")
-                
-            else:
-                # Fallback to environment variables
+            if self.environment == "prod":
+                # In production, use IAM roles (no hardcoded credentials)
                 self.s3_client = boto3.client('s3', region_name='eu-west-1')
-                self.logger.info("✅ Using AWS credentials from environment")
+                self.logger.info("✅ Production environment: Using IAM role credentials")
+                
+            else:  # local environment
+                if self.temp_env_file and os.path.exists(self.temp_env_file):
+                    # Read credentials from temp file
+                    credentials = {}
+                    with open(self.temp_env_file, 'r') as f:
+                        for line in f:
+                            if '=' in line and not line.strip().startswith('#'):
+                                key, value = line.strip().split('=', 1)
+                                credentials[key.strip()] = value.strip()
+                    
+                    # Set up boto3 session with credentials
+                    session = boto3.Session(
+                        aws_access_key_id=credentials.get('aws_access_key_id'),
+                        aws_secret_access_key=credentials.get('aws_secret_access_key'),
+                        aws_session_token=credentials.get('aws_session_token'),
+                        region_name='eu-west-1'  # Based on bucket name
+                    )
+                    self.s3_client = session.client('s3')
+                    self.logger.info("✅ Local environment: Using AWS credentials from temp file")
+                    
+                else:
+                    # Fallback to environment variables
+                    self.s3_client = boto3.client('s3', region_name='eu-west-1')
+                    self.logger.info("✅ Local environment: Using AWS credentials from environment variables")
                 
         except Exception as e:
             self.logger.error(f"❌ Failed to setup AWS credentials: {str(e)}")
