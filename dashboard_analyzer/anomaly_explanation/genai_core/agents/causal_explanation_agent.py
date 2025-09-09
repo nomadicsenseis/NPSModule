@@ -28,6 +28,11 @@ from pydantic import BaseModel, Field
 # Core imports
 from dashboard_analyzer.anomaly_explanation.genai_core.llms.openai_llm import OpenAiLLM  
 from dashboard_analyzer.anomaly_explanation.genai_core.llms.aws_llm import AWSLLM
+
+# Import S3 uploader
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../..'))
+from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, MessageType, AgentName, get_default_llm_type
 from dashboard_analyzer.anomaly_explanation.genai_core.message_history import MessageHistory
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.agent import Agent
@@ -304,6 +309,9 @@ class CausalExplanationAgent:
         self.chatbot_collector = self._init_chatbot_collector()
         self.ncs_collector = self._init_ncs_collector()
         
+        # Initialize S3 uploader with production environment
+        self.s3_uploader = S3ReportUploader(environment="prod")
+        
         # Create LLM and agent
         self.llm = self._create_llm(llm_type)
         self.agent = Agent(llm=self.llm, logger=self.logger)
@@ -422,16 +430,16 @@ class CausalExplanationAgent:
         return None
     
     def _init_ncs_collector(self):
-        """Initialize NCS collector with AWS credentials from temp file"""
+        """Initialize NCS collector with production environment"""
         try:
             temp_creds_file = "dashboard_analyzer/temp_aws_credentials.env"
-            collector = NCSDataCollector(temp_env_file=temp_creds_file)
-            self.logger.info("✅ NCS collector initialized with temp AWS credentials")
+            collector = NCSDataCollector(temp_env_file=temp_creds_file, environment="prod")
+            self.logger.info("✅ NCS collector initialized with production environment")
             return collector
         except Exception as e:
             self.logger.error(f"Error initializing NCS collector: {e}")
             self.logger.warning("Using fallback NCS collector without temp credentials")
-            return NCSDataCollector()
+            return NCSDataCollector(environment="prod")
     
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
@@ -5133,8 +5141,8 @@ class CausalExplanationAgent:
         """Get the conversation log"""
         return self.tracker.conversation_log
     
-    def export_conversation(self, filename: Optional[str] = None, node_path: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> str:
-        """Export the conversation log to JSON file"""
+    async def export_conversation(self, filename: Optional[str] = None, node_path: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> str:
+        """Export the conversation log to JSON file and upload to S3"""
         try:
             print(f"🔍 DEBUG EXPORT: export_conversation called with start_date='{start_date}', end_date='{end_date}'")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -5193,9 +5201,21 @@ class CausalExplanationAgent:
                         "dax_queries": self.tracker.dax_queries
         }
         
+            # Save locally
             with open(full_path, 'w', encoding='utf-8') as f:
                 json.dump(conversation_data, f, indent=2, ensure_ascii=False)
             self.logger.info(f"📝 Conversation exported to: {full_path}")
+            
+            # Upload to S3 in production
+            try:
+                s3_key = await self.s3_uploader.upload_causal_conversation(conversation_data, filename)
+                if s3_key:
+                    self.logger.info(f"📤 Causal conversation uploaded to S3: {s3_key}")
+                else:
+                    self.logger.info("🔧 S3 upload skipped (local environment or failed)")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
+            
             return str(full_path)
         except Exception as e:
             self.logger.error(f"❌ Failed to export conversation: {e}")
