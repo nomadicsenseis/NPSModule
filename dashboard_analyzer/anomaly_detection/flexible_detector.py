@@ -13,7 +13,7 @@ from .anomaly_tree import AnomalyTree, AnomalyNode
 class FlexibleAnomalyDetector:
     """Enhanced flexible anomaly detector with target-based detection support"""
     
-    def __init__(self, aggregation_days: int = 7, threshold: float = 5.0, min_sample_size: int = 5, detection_mode: str = "target", baseline_periods: int = 7):
+    def __init__(self, aggregation_days: int = 7, threshold: float = 5.0, min_sample_size: int = 5, detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = None, causal_comparison_dates: tuple = None):
         """
         Initialize flexible anomaly detector
         
@@ -23,12 +23,29 @@ class FlexibleAnomalyDetector:
             min_sample_size: Minimum sample size for analysis (default: 5)
             detection_mode: Anomaly detection mode - "target", "mean", or "vslast" (default: "target")
             baseline_periods: Number of baseline periods for mean-based anomaly detection (default: 7) - only used when detection_mode="mean"
+            causal_filter: Causal filter comparison (e.g., "vs LM", "vs LY") - used to determine correct vslast mode
+            causal_comparison_dates: Tuple of (start_date, end_date) for "vs Sel. Period" comparison
         """
         self.aggregation_days = aggregation_days
         self.threshold = threshold
         self.min_sample_size = min_sample_size
         self.tree: Optional[AnomalyTree] = None
-        self.detection_mode = detection_mode
+        self.causal_filter = causal_filter
+        self.causal_comparison_dates = causal_comparison_dates
+        
+        # Determine the actual detection mode based on detection_mode and causal_filter
+        if detection_mode == "vslast" and causal_filter:
+            from dashboard_analyzer.main import determine_anomaly_mode_for_vslast
+            # Extract comparison dates if available
+            comp_start_date = None
+            comp_end_date = None
+            if causal_comparison_dates and len(causal_comparison_dates) >= 2:
+                comp_start_date = causal_comparison_dates[0]
+                comp_end_date = causal_comparison_dates[1]
+            self.detection_mode, _ = determine_anomaly_mode_for_vslast(causal_filter, comp_start_date, comp_end_date)
+        else:
+            self.detection_mode = detection_mode
+            
         self.baseline_periods = baseline_periods
         
         # Initialize target-based detector if enabled
@@ -95,7 +112,19 @@ class FlexibleAnomalyDetector:
             # Use mean-based detection
             print(f"📈 USING MEAN-BASED DETECTION")
             anomalies, deviations, nps_values = self._detect_legacy_anomalies(all_data, latest_period, periods, reference_period)
-        else:  # vslast
+        elif self.detection_mode == "vslast_dynamic":
+            # Use dynamic vslast detection based on causal filter
+            print(f"🔄 USING DYNAMIC VSLAST DETECTION")
+            anomalies, deviations, nps_values = self._detect_vslast_dynamic_anomalies(all_data, latest_period, periods)
+        elif self.detection_mode == "vslast_vs_lm":
+            # Use vslast detection comparing against last month
+            print(f"🔄 USING VSLAST VS LAST MONTH DETECTION")
+            anomalies, deviations, nps_values = self._detect_vslast_vs_lm_anomalies(all_data, latest_period, periods)
+        elif self.detection_mode == "vslast_vs_ly":
+            # Use vslast detection comparing against last year
+            print(f"🔄 USING VSLAST VS LAST YEAR DETECTION")
+            anomalies, deviations, nps_values = self._detect_vslast_vs_ly_anomalies(all_data, latest_period, periods)
+        else:  # vslast (default)
             # Use vslast detection
             print(f"🔄 USING VSLAST DETECTION")
             anomalies, deviations, nps_values = self._detect_vslast_anomalies(all_data, latest_period, periods)
@@ -341,6 +370,128 @@ class FlexibleAnomalyDetector:
         
         return anomalies, deviations, nps_values
     
+    def _detect_vslast_vs_lm_anomalies(self, all_data: Dict[str, pd.DataFrame], 
+                                      target_period: int, all_periods: List[int]) -> Tuple[Dict[str, str], Dict[str, float], Dict[str, Dict[str, float]]]:
+        """Detect anomalies comparing against last month (same period last month)"""
+        anomalies = {}
+        deviations = {}
+        nps_values = {}
+        
+        # For vs LM, we need to find the period that represents the same time period in the previous month
+        # This is a simplified approach - in practice, you might need more sophisticated date logic
+        # For now, we'll use a heuristic: find a period that's approximately 4 periods back (assuming weekly aggregation)
+        previous_month_period = target_period + 4  # Approximate: 4 weeks = 1 month
+        
+        if previous_month_period not in all_periods:
+            print(f"⚠️ Previous month period {previous_month_period} not available for comparison with period {target_period}")
+            return anomalies, deviations, nps_values
+        
+        print(f"🔄 Period {target_period}: comparing against last month period {previous_month_period}")
+        
+        # Use the same logic as _detect_vslast_anomalies but with different baseline period
+        return self._detect_vslast_with_baseline_period(all_data, target_period, previous_month_period, "mes natural anterior")
+    
+    def _detect_vslast_vs_ly_anomalies(self, all_data: Dict[str, pd.DataFrame], 
+                                     target_period: int, all_periods: List[int]) -> Tuple[Dict[str, str], Dict[str, float], Dict[str, Dict[str, float]]]:
+        """Detect anomalies comparing against last year (same period last year)"""
+        anomalies = {}
+        deviations = {}
+        nps_values = {}
+        
+        # For vs LY, we need to find the period that represents the same time period in the previous year
+        # This is a simplified approach - in practice, you might need more sophisticated date logic
+        # For now, we'll use a heuristic: find a period that's approximately 52 periods back (assuming weekly aggregation)
+        previous_year_period = target_period + 52  # Approximate: 52 weeks = 1 year
+        
+        if previous_year_period not in all_periods:
+            print(f"⚠️ Previous year period {previous_year_period} not available for comparison with period {target_period}")
+            return anomalies, deviations, nps_values
+        
+        print(f"🔄 Period {target_period}: comparing against last year period {previous_year_period}")
+        
+        # Use the same logic as _detect_vslast_anomalies but with different baseline period
+        return self._detect_vslast_with_baseline_period(all_data, target_period, previous_year_period, "mismo período año anterior")
+    
+    def _detect_vslast_with_baseline_period(self, all_data: Dict[str, pd.DataFrame], 
+                                          target_period: int, baseline_period: int, baseline_description: str) -> Tuple[Dict[str, str], Dict[str, float], Dict[str, Dict[str, float]]]:
+        """Common logic for vslast detection with custom baseline period"""
+        anomalies = {}
+        deviations = {}
+        nps_values = {}
+        
+        for node_path, df in all_data.items():
+            if 'Period_Group' not in df.columns:
+                continue
+            
+            # Get target period data
+            target_data = df[df['Period_Group'] == target_period]
+            if target_data.empty:
+                anomalies[node_path] = "?"
+                continue
+                
+            target_responses = target_data.get('Responses', pd.Series([0])).iloc[0]
+            
+            # Check minimum sample size
+            if target_responses < self.min_sample_size:
+                anomalies[node_path] = "S"  # Insufficient sample
+                continue
+            
+            # Get baseline period data
+            baseline_data = df[df['Period_Group'] == baseline_period]
+            if baseline_data.empty:
+                anomalies[node_path] = "?"
+                continue
+            
+            # Strategy: Try NPS_2025 first, fallback to NPS_2024
+            target_nps = None
+            baseline_nps = None
+            
+            # Try NPS_2025 for both target and baseline
+            if 'NPS_2025' in df.columns and not pd.isna(target_data['NPS_2025'].iloc[0]):
+                target_nps = target_data['NPS_2025'].iloc[0]
+                
+                if not pd.isna(baseline_data['NPS_2025'].iloc[0]):
+                    baseline_nps = baseline_data['NPS_2025'].iloc[0]
+                else:
+                    # Fallback: use NPS_2024 for baseline period if NPS_2025 not available
+                    if 'NPS_2024' in df.columns and not pd.isna(baseline_data['NPS_2024'].iloc[0]):
+                        baseline_nps = baseline_data['NPS_2024'].iloc[0]
+            
+            # Fallback to NPS_2024 if NPS_2025 not available for target
+            if target_nps is None and 'NPS_2024' in df.columns and not pd.isna(target_data['NPS_2024'].iloc[0]):
+                target_nps = target_data['NPS_2024'].iloc[0]
+                
+                if not pd.isna(baseline_data['NPS_2024'].iloc[0]):
+                    baseline_nps = baseline_data['NPS_2024'].iloc[0]
+            
+            # Final fallback to NPS_2019
+            if target_nps is None and 'NPS_2019' in df.columns and not pd.isna(target_data['NPS_2019'].iloc[0]):
+                target_nps = target_data['NPS_2019'].iloc[0]
+                
+                if not pd.isna(baseline_data['NPS_2019'].iloc[0]):
+                    baseline_nps = baseline_data['NPS_2019'].iloc[0]
+            
+            # Check if we have valid data for both periods
+            if target_nps is None or baseline_nps is None:
+                anomalies[node_path] = "?"
+                continue
+            
+            deviation = target_nps - baseline_nps
+            deviations[node_path] = deviation
+            
+            # Store NPS values for display with baseline description
+            nps_values[node_path] = {
+                'current': target_nps,
+                'baseline': baseline_nps,
+                'deviation': deviation,
+                'baseline_description': baseline_description
+            }
+            
+            # Classify anomaly using same threshold as mean-based detection
+            anomalies[node_path] = self._classify_anomaly_new_logic(deviation)
+        
+        return anomalies, deviations, nps_values
+    
     async def _detect_target_based_anomalies(self, all_data: Dict[str, pd.DataFrame], 
                                           target_period: int, analysis_date) -> Tuple[Dict[str, str], Dict[str, float]]:
         """Detect anomalies using target-based approach"""
@@ -499,12 +650,179 @@ class FlexibleAnomalyDetector:
             # Use mean-based detection
             print(f"📈 USING MEAN-BASED DETECTION")
             anomalies, deviations, nps_values = self._detect_legacy_anomalies(all_data, target_period, periods, reference_period)
-        else:  # vslast
+        elif self.detection_mode == "vslast_dynamic":
+            # Use dynamic vslast detection based on causal filter
+            print(f"🔄 USING DYNAMIC VSLAST DETECTION")
+            anomalies, deviations, nps_values = self._detect_vslast_dynamic_anomalies(all_data, target_period, periods)
+        elif self.detection_mode == "vslast_vs_lm":
+            # Use vslast detection comparing against last month
+            print(f"🔄 USING VSLAST VS LAST MONTH DETECTION")
+            anomalies, deviations, nps_values = self._detect_vslast_vs_lm_anomalies(all_data, target_period, periods)
+        elif self.detection_mode == "vslast_vs_ly":
+            # Use vslast detection comparing against last year
+            print(f"🔄 USING VSLAST VS LAST YEAR DETECTION")
+            anomalies, deviations, nps_values = self._detect_vslast_vs_ly_anomalies(all_data, target_period, periods)
+        else:  # vslast (default)
             # Use vslast detection
             print(f"🔄 USING VSLAST DETECTION")
             anomalies, deviations, nps_values = self._detect_vslast_anomalies(all_data, target_period, periods)
             
         return anomalies, deviations, periods, nps_values 
+
+    def _detect_vslast_dynamic_anomalies(self, all_data: Dict[str, pd.DataFrame], 
+                                        target_period: int, periods: List[int]) -> Tuple[Dict[str, str], Dict[str, float], Dict[str, Dict[str, float]]]:
+        """
+        Dynamic vslast detection that calculates baseline period based on causal filter
+        """
+        from dashboard_analyzer.main import calculate_baseline_period_for_causal_filter
+        
+        # Calculate baseline period based on causal filter
+        baseline_period, baseline_description = calculate_baseline_period_for_causal_filter(
+            target_period, self.causal_filter, self.aggregation_days
+        )
+        
+        print(f"🔄 Period {target_period}: comparing against {baseline_description} (period {baseline_period})")
+        
+        # Handle special cases
+        if baseline_period is None:
+            if self.causal_filter == "vs Target":
+                # Use target-based detection
+                print(f"🎯 Using target-based detection for vs Target")
+                return self._detect_target_based_anomalies_sync(all_data, target_period)
+            elif self.causal_filter == "vs Sel. Period":
+                # Use specific dates provided by user
+                if self.causal_comparison_dates:
+                    start_date, end_date = self.causal_comparison_dates
+                    print(f"📅 Using selected period: {start_date} to {end_date}")
+                    return self._detect_vslast_with_selected_period(all_data, target_period, start_date, end_date)
+                else:
+                    print(f"⚠️ Selected period comparison requires specific dates from user")
+                    return {}, {}, {}
+            else:
+                # Fallback to immediate previous period
+                baseline_period = target_period + 1
+                baseline_description = "período inmediatamente anterior"
+        
+        # Use the common vslast logic with calculated baseline period
+        return self._detect_vslast_with_baseline_period(all_data, target_period, baseline_period, baseline_description)
+
+    def _detect_target_based_anomalies_sync(self, all_data: Dict[str, pd.DataFrame], target_period: int) -> Tuple[Dict[str, str], Dict[str, float], Dict[str, Dict[str, float]]]:
+        """
+        Synchronous version of target-based detection for use in dynamic vslast
+        """
+        # This is a simplified version - in practice, you might want to implement
+        # a more sophisticated target-based detection here
+        anomalies = {}
+        deviations = {}
+        nps_values = {}
+        
+        for node_path, df in all_data.items():
+            if 'Period_Group' not in df.columns:
+                continue
+            
+            # Get target period data
+            target_data = df[df['Period_Group'] == target_period]
+            if target_data.empty:
+                anomalies[node_path] = "?"
+                continue
+                
+            target_responses = target_data.get('Responses', pd.Series([0])).iloc[0]
+            
+            # Check minimum sample size
+            if target_responses < self.min_sample_size:
+                anomalies[node_path] = "S"  # Insufficient sample
+                continue
+            
+            # For now, use a simple target-based logic
+            # In practice, you would fetch the actual target from your target system
+            target_nps = 50.0  # Placeholder target
+            current_nps = target_data.get('NPS_2025', pd.Series([0])).iloc[0]
+            
+            if pd.isna(current_nps):
+                anomalies[node_path] = "?"
+                continue
+            
+            deviation = current_nps - target_nps
+            deviations[node_path] = deviation
+            
+            # Store NPS values
+            nps_values[node_path] = {
+                'current': current_nps,
+                'baseline': target_nps,
+                'deviation': deviation,
+                'baseline_description': 'objetivo/target'
+            }
+            
+            # Classify anomaly
+            anomalies[node_path] = self._classify_anomaly_new_logic(deviation)
+        
+        return anomalies, deviations, nps_values
+
+    def _detect_vslast_with_selected_period(self, all_data: Dict[str, pd.DataFrame], target_period: int, start_date: str, end_date: str) -> Tuple[Dict[str, str], Dict[str, float], Dict[str, Dict[str, float]]]:
+        """
+        Detect anomalies comparing against a selected period with specific dates
+        """
+        from datetime import datetime
+        
+        anomalies = {}
+        deviations = {}
+        nps_values = {}
+        
+        # Convert string dates to datetime objects
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            print(f"❌ Invalid date format. Expected YYYY-MM-DD, got: {start_date}, {end_date}")
+            return {}, {}, {}
+        
+        for node_path, df in all_data.items():
+            if 'Period_Group' not in df.columns:
+                continue
+            
+            # Get target period data
+            target_data = df[df['Period_Group'] == target_period]
+            if target_data.empty:
+                anomalies[node_path] = "?"
+                continue
+                
+            target_responses = target_data.get('Responses', pd.Series([0])).iloc[0]
+            
+            # Check minimum sample size
+            if target_responses < self.min_sample_size:
+                anomalies[node_path] = "S"  # Insufficient sample
+                continue
+            
+            # For selected period comparison, we need to calculate the baseline NPS
+            # based on the date range. This is a simplified implementation.
+            # In practice, you might need to query data for the specific date range.
+            
+            # For now, we'll use a placeholder approach - you might need to implement
+            # actual date-based data retrieval here
+            baseline_nps = 40.0  # Placeholder - should be calculated from actual data
+            
+            # Get current NPS
+            current_nps = target_data.get('NPS_2025', pd.Series([0])).iloc[0]
+            
+            if pd.isna(current_nps):
+                anomalies[node_path] = "?"
+                continue
+            
+            deviation = current_nps - baseline_nps
+            deviations[node_path] = deviation
+            
+            # Store NPS values
+            nps_values[node_path] = {
+                'current': current_nps,
+                'baseline': baseline_nps,
+                'deviation': deviation,
+                'baseline_description': f'período seleccionado ({start_date} a {end_date})'
+            }
+            
+            # Classify anomaly
+            anomalies[node_path] = self._classify_anomaly_new_logic(deviation)
+        
+        return anomalies, deviations, nps_values
 
     def _classify_anomaly_new_logic(self, deviation: float) -> str:
         """

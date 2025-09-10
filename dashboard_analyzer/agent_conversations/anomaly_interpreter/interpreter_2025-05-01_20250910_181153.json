@@ -1,0 +1,77 @@
+{
+  "metadata": {
+    "agent_type": "anomaly_interpreter",
+    "analysis_type": "hierarchical_generation_by_generation",
+    "export_timestamp": "2025-09-10T18:11:53.553940",
+    "analysis_date": "2025-05-01",
+    "llm_type": "O4_MINI",
+    "total_generations": 0,
+    "total_nodes_analyzed": 3,
+    "error": "Error durante la interpretación jerárquica: Error code: 400 - {'error': {'message': \"The response was filtered due to the prompt triggering Azure OpenAI's content management policy. Please modify your prompt and retry. To learn more about our content filtering policies please read our documentation: https://go.microsoft.com/fwlink/?linkid=2198766\", 'type': None, 'param': 'prompt', 'code': 'content_filter', 'status': 400, 'innererror': {'code': 'ResponsibleAIPolicyViolation', 'content_filter_result': {'hate': {'filtered': False, 'severity': 'safe'}, 'jailbreak': {'filtered': True, 'detected': True}, 'self_harm': {'filtered': False, 'severity': 'safe'}, 'sexual': {'filtered': False, 'severity': 'safe'}, 'violence': {'filtered': False, 'severity': 'safe'}}}}}"
+  },
+  "hierarchy_structure": {
+    "Global/SH/Economy": {
+      "type": "node",
+      "level": 3,
+      "path": "Global/SH/Economy",
+      "parent": "Global/SH",
+      "children": [
+        "Global/SH/Economy/IB",
+        "Global/SH/Economy/YW"
+      ],
+      "content": "Informe Causal Consolidado – Segmento Global/SH/Economy (01-05-2025 a 31-05-2025 vs período previo)\n\n1. Resumen de NPS  \n   • NPS actual (01-05-2025 a 31-05-2025): 31.585310563699444  \n   • NPS baseline (promedio de los 7 períodos previos de 31 días): 40.0  \n   • Variación absoluta: –8.414689436300556 puntos\n\n2. Datos recolectados  \n   Durante la investigación no se obtuvieron datos operativos, drivers SHAP, métricas de incidentes, rutas específicas ni perfiles de cliente. \n   – No se recolectaron valores SHAP.  \n   – No se identificaron rutas afectadas ni conteos de incidentes.  \n   – No se analizaron perfiles de cliente reactivos.\n\n3. Causas tangibles  \n   Dado que no se obtuvo ninguna métrica ni driver explicativo, no es posible apuntar a ningún factor operativo o de producto concreto como causa raíz de la caída de NPS.\n\n4. Rutas afectadas  \n   Sin datos de rutas o incidentes asociados al período analizado, no se puede determinar qué itinerarios contribuyeron al empeoramiento del NPS.\n\n5. Reactividad de cliente  \n   Al no contar con segmentación de respuestas ni perfiles de cliente ligados a feedback, no es factible identificar qué tipo de pasajero mostró mayor insatisfacción.\n\n6. Conclusión y recomendaciones  \n   – No hay evidencia cuantitativa que permita diagnosticar la causa raíz de la anomalía de –8.4147 pts.  \n   – Es imprescindible corregir el proceso de extracción de datos operativos y drivers SHAP para futuras iteraciones.  \n   – Sin insumos, cualquier afirmación adicional carecería de sustento.  \n\nSin datos concretos, no es posible avanzar hacia acciones correctivas fundamentadas."
+    },
+    "Global/SH/Economy/IB": {
+      "type": "node",
+      "level": 4,
+      "path": "Global/SH/Economy/IB",
+      "parent": "Global/SH/Economy",
+      "children": [],
+      "content": "Informe Causal Consolidado  \nSegmento analizado: Global / SH / Economy / IB  \nPeríodo actual: 2025-05-01 a 2025-05-31  \nPeríodo de comparación (baseline): 7 períodos anteriores (cada uno de 31 días)  \n\n1. Resumen de la anomalía  \n• NPS en el período actual: 31.08790452145949  \n• NPS baseline: 40.0  \n• Magnitud de la caída: –8.912095478540511 pts  \n\n2. Causa tangible  \n– Los valores SHAP para este segmento no están disponibles (no se ejecutó con éxito explanatory_drivers_tool).  \n– No se dispone de ninguna otra métrica operativa o de producto que permita apuntar a un factor concreto.  \n\n3. Rutas afectadas  \n– No se ejecutó routes_tool; no hay datos de rutas.  \n\n4. Reactividad de cliente  \n– No se ejecutó customer_profile_tool; no hay datos de perfiles ni de reacciones.  \n\n5. Hipótesis y grado de confianza  \n• Hipótesis principal: Sin información operativa (SHAP) ni datos de incidentes, no es posible identificar un factor operativo o de producto.  \n• Grado de confianza: nulo, dado que no se recolectaron datos durante la investigación.  \n\n6. Recomendaciones  \n• Corregir el error de formato de fecha en explanatory_drivers_tool y reejecutar para obtener los drivers SHAP.  \n• Ejecutar routes_tool y customer_profile_tool una vez disponible la salida de SHAP.  \n• Reanudar la investigación al contar con datos operativos y de rutas.  \n\n—Fin del informe—"
+    },
+    "Global/SH/Economy/YW": {
+      "type": "node",
+      "level": 4,
+      "path": "Global/SH/Economy/YW",
+      "parent": "Global/SH/Economy",
+      "children": [],
+      "content": "Informe Causal Consolidado  \nSegmento: Global/SH/Economy/YW  \nPeríodo Analizado: 2025-05-01 a 2025-05-31  \nPeríodo de Comparación: 2025-04-01 a 2025-04-30  \n\n1. Contexto y Datos Cuantitativos  \n• NPS Actual (2025-05): 32.54424778761062  \n• NPS Baseline (Promedio últimos 7 períodos de 31 días): 40.0  \n• Magnitud de la anomalía vs Baseline: –7.455752212389378 puntos  \n• Diferencia vs período previo (31 días): –7.5 puntos  \n\n2. Resultados de Herramientas  \n- explanatory_drivers_tool  \n  • No devolvió valores SHAP (error de parsing de fecha).  \n  • Valores SHAP para este segmento no están disponibles.  \n- operative_data_tool  \n  • No se ejecutó (faltan drivers operativos iniciales).  \n- ncs_tool, verbatims_tool, routes_tool, customer_profile_tool  \n  • No se recolectaron datos durante la investigación.  \n\n3. Hipótesis de Causa Raíz  \nDado que no se obtuvo ningún driver operativo ni valores SHAP, no es posible identificar un factor concreto (operativo o de producto) que explique la caída de –7.455752212389378 puntos de NPS en mayo de 2025.  \n\n4. Rutas Afectadas  \nNo hay rutas específicas identificadas (no se ejecutó routes_tool con resultados).  \n\n5. Reactividad de Clientes  \nNo hay perfiles de cliente con reacciones cuantificadas (no se ejecutó customer_profile_tool).  \n\n6. Conclusión y Recomendaciones  \n• Con la información disponible, no hay datos numéricos que respalden ninguna causa raíz.  \n• Se requieren datos operativos (OTP, mishandling, tiempos de entrega), valores SHAP y feedback de rutas para avanzar en el diagnóstico.  \n• Próximos pasos: corregir el error de parsing de fechas en explanatory_drivers_tool y volver a ejecutar; recolectar datos de incidentes y métricas OTP diarias para el período."
+    }
+  },
+  "hierarchy_summary": {
+    "total_nodes": 3,
+    "generations_analyzed": 0,
+    "nodes_by_level": {
+      "3": [
+        "Global/SH/Economy"
+      ],
+      "4": [
+        "Global/SH/Economy/IB",
+        "Global/SH/Economy/YW"
+      ]
+    },
+    "parent_child_relationships": {
+      "Global/SH/Economy": [
+        "Global/SH/Economy/IB",
+        "Global/SH/Economy/YW"
+      ]
+    }
+  },
+  "conversation_log": [
+    {
+      "generation": 0,
+      "type": "CONTEXT_SETUP",
+      "content": "Analiza la siguiente información que compara dos períodos para el día 2025-05-01. Asimila toda la información en silencio. No generes ninguna respuesta todavía. Espera a la siguiente instrucción para comenzar el análisis paso a paso.\n\n<tree_data>\nMultiple anomalous nodes analyzed:\n\nNODO: Global/SH/Economy\nInforme Causal Consolidado – Segmento Global/SH/Economy (01-05-2025 a 31-05-2025 vs período previo)\n\n1. Resumen de NPS  \n   • NPS actual (01-05-2025 a 31-05-2025): 31.585310563699444  \n   • NPS baseline (promedio de los 7 períodos previos de 31 días): 40.0  \n   • Variación absoluta: –8.414689436300556 puntos\n\n2. Datos recolectados  \n   Durante la investigación no se obtuvieron datos operativos, drivers SHAP, métricas de incidentes, rutas específicas ni perfiles de cliente. \n   – No se recolectaron valores SHAP.  \n   – No se identificaron rutas afectadas ni conteos de incidentes.  \n   – No se analizaron perfiles de cliente reactivos.\n\n3. Causas tangibles  \n   Dado que no se obtuvo ninguna métrica ni driver explicativo, no es posible apuntar a ningún factor operativo o de producto concreto como causa raíz de la caída de NPS.\n\n4. Rutas afectadas  \n   Sin datos de rutas o incidentes asociados al período analizado, no se puede determinar qué itinerarios contribuyeron al empeoramiento del NPS.\n\n5. Reactividad de cliente  \n   Al no contar con segmentación de respuestas ni perfiles de cliente ligados a feedback, no es factible identificar qué tipo de pasajero mostró mayor insatisfacción.\n\n6. Conclusión y recomendaciones  \n   – No hay evidencia cuantitativa que permita diagnosticar la causa raíz de la anomalía de –8.4147 pts.  \n   – Es imprescindible corregir el proceso de extracción de datos operativos y drivers SHAP para futuras iteraciones.  \n   – Sin insumos, cualquier afirmación adicional carecería de sustento.  \n\nSin datos concretos, no es posible avanzar hacia acciones correctivas fundamentadas.\n\nNODO: Global/SH/Economy/IB\nInforme Causal Consolidado  \nSegmento analizado: Global / SH / Economy / IB  \nPeríodo actual: 2025-05-01 a 2025-05-31  \nPeríodo de comparación (baseline): 7 períodos anteriores (cada uno de 31 días)  \n\n1. Resumen de la anomalía  \n• NPS en el período actual: 31.08790452145949  \n• NPS baseline: 40.0  \n• Magnitud de la caída: –8.912095478540511 pts  \n\n2. Causa tangible  \n– Los valores SHAP para este segmento no están disponibles (no se ejecutó con éxito explanatory_drivers_tool).  \n– No se dispone de ninguna otra métrica operativa o de producto que permita apuntar a un factor concreto.  \n\n3. Rutas afectadas  \n– No se ejecutó routes_tool; no hay datos de rutas.  \n\n4. Reactividad de cliente  \n– No se ejecutó customer_profile_tool; no hay datos de perfiles ni de reacciones.  \n\n5. Hipótesis y grado de confianza  \n• Hipótesis principal: Sin información operativa (SHAP) ni datos de incidentes, no es posible identificar un factor operativo o de producto.  \n• Grado de confianza: nulo, dado que no se recolectaron datos durante la investigación.  \n\n6. Recomendaciones  \n• Corregir el error de formato de fecha en explanatory_drivers_tool y reejecutar para obtener los drivers SHAP.  \n• Ejecutar routes_tool y customer_profile_tool una vez disponible la salida de SHAP.  \n• Reanudar la investigación al contar con datos operativos y de rutas.  \n\n—Fin del informe—\n\nNODO: Global/SH/Economy/YW\nInforme Causal Consolidado  \nSegmento: Global/SH/Economy/YW  \nPeríodo Analizado: 2025-05-01 a 2025-05-31  \nPeríodo de Comparación: 2025-04-01 a 2025-04-30  \n\n1. Contexto y Datos Cuantitativos  \n• NPS Actual (2025-05): 32.54424778761062  \n• NPS Baseline (Promedio últimos 7 períodos de 31 días): 40.0  \n• Magnitud de la anomalía vs Baseline: –7.455752212389378 puntos  \n• Diferencia vs período previo (31 días): –7.5 puntos  \n\n2. Resultados de Herramientas  \n- explanatory_drivers_tool  \n  • No devolvió valores SHAP (error de parsing de fecha).  \n  • Valores SHAP para este segmento no están disponibles.  \n- operative_data_tool  \n  • No se ejecutó (faltan drivers operativos iniciales).  \n- ncs_tool, verbatims_tool, routes_tool, customer_profile_tool  \n  • No se recolectaron datos durante la investigación.  \n\n3. Hipótesis de Causa Raíz  \nDado que no se obtuvo ningún driver operativo ni valores SHAP, no es posible identificar un factor concreto (operativo o de producto) que explique la caída de –7.455752212389378 puntos de NPS en mayo de 2025.  \n\n4. Rutas Afectadas  \nNo hay rutas específicas identificadas (no se ejecutó routes_tool con resultados).  \n\n5. Reactividad de Clientes  \nNo hay perfiles de cliente con reacciones cuantificadas (no se ejecutó customer_profile_tool).  \n\n6. Conclusión y Recomendaciones  \n• Con la información disponible, no hay datos numéricos que respalden ninguna causa raíz.  \n• Se requieren datos operativos (OTP, mishandling, tiempos de entrega), valores SHAP y feedback de rutas para avanzar en el diagnóstico.  \n• Próximos pasos: corregir el error de parsing de fechas en explanatory_drivers_tool y volver a ejecutar; recolectar datos de incidentes y métricas OTP diarias para el período.\n\n\n</tree_data>\n",
+      "metadata": {
+        "hierarchy_nodes": 3,
+        "date": "2025-05-01"
+      },
+      "timestamp": "18:11:46"
+    }
+  ],
+  "conversation_summary": {
+    "CONTEXT_SETUP": 1
+  },
+  "generation_reflections": [],
+  "generation_analysis": {}
+}

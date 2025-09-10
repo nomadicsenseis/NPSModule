@@ -1,0 +1,10 @@
+[33m1842551[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32msbx[m[33m, [m[1;31mgitlab/sbx[m[33m)[m Merge develop into sbx - Add production environment support for S3 uploads
+[33mffc9edc[m[33m ([m[1;32mdevelop[m[33m)[m feat: Add production environment support for S3 uploads
+[33m788d964[m[33m ([m[1;31mcatia/develop[m[33m)[m Impreoved prompts
+[33m151d525[m feat: implement dynamic filtering for operative data tool and enhance interpreter prompts
+[33m2e65c00[m[33m ([m[1;31mgitlab/main[m[33m, [m[1;31mgitlab/HEAD[m[33m)[m Merge branch 'develop' into 'main'
+[33m14c0d22[m[33m ([m[1;31mgitlab/develop[m[33m)[m Merge changes from main branch
+[33m4058153[m Added s3 saving
+[33m02136f5[m Merge branch 'build/ci-cd' into 'main'
+[33m041afee[m Merge branch 'feat/entrypoint' into 'main'
+[33mb0ed3a2[m feat: :sparkles: create entrypoint for main.py execution on Docker container

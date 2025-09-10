@@ -192,8 +192,64 @@ class PBIDataCollector:
         print(f"  📋 Final query preview: {query[:200]}...")
         return query
 
-    def _get_flexible_operative_query(self, aggregation_days: int, cabins: List[str], companies: List[str], hauls: List[str], analysis_date: datetime = None) -> str:
-        """Generate DAX query for flexible operative aggregation using template - MATCHES NPS aggregation logic exactly"""
+    def _get_operative_vs_sel_period_query(self, cabins: List[str], companies: List[str], hauls: List[str], 
+                                          current_start_date: datetime, current_end_date: datetime,
+                                          comparison_start_date: datetime, comparison_end_date: datetime) -> str:
+        """Generate simplified DAX query for operative comparison between two specific periods"""
+        template = self._load_query_template("Operativa_vs_sel_period.txt")
+        
+        # Replace cabin filters
+        cabins_str = '", "'.join(cabins)
+        template = template.replace(
+            'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
+            f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
+        )
+        
+        # Replace company filters
+        companies_str = '", "'.join(companies)
+        template = template.replace(
+            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
+            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
+        )
+        
+        # Replace haul filters
+        hauls_str = '", "'.join(hauls)
+        template = template.replace(
+            'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
+            f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
+        )
+        
+        # Replace current period dates
+        query = template.replace('{CURRENT_START_YEAR}', str(current_start_date.year))
+        query = query.replace('{CURRENT_START_MONTH}', str(current_start_date.month))
+        query = query.replace('{CURRENT_START_DAY}', str(current_start_date.day))
+        query = query.replace('{CURRENT_END_YEAR}', str(current_end_date.year))
+        query = query.replace('{CURRENT_END_MONTH}', str(current_end_date.month))
+        query = query.replace('{CURRENT_END_DAY}', str(current_end_date.day))
+        
+        # Replace comparison period dates
+        query = query.replace('{COMPARISON_START_YEAR}', str(comparison_start_date.year))
+        query = query.replace('{COMPARISON_START_MONTH}', str(comparison_start_date.month))
+        query = query.replace('{COMPARISON_START_DAY}', str(comparison_start_date.day))
+        query = query.replace('{COMPARISON_END_YEAR}', str(comparison_end_date.year))
+        query = query.replace('{COMPARISON_END_MONTH}', str(comparison_end_date.month))
+        query = query.replace('{COMPARISON_END_DAY}', str(comparison_end_date.day))
+        
+        print(f"  📊 Using simplified vs Sel. Period operative query")
+        print(f"  📅 Current period: {current_start_date.strftime('%Y-%m-%d')} to {current_end_date.strftime('%Y-%m-%d')}")
+        print(f"  📅 Comparison period: {comparison_start_date.strftime('%Y-%m-%d')} to {comparison_end_date.strftime('%Y-%m-%d')}")
+        
+        return query
+
+    def _get_flexible_operative_query(self, aggregation_days: int, cabins: List[str], companies: List[str], hauls: List[str], analysis_date: datetime = None, comparison_start_date: datetime = None) -> str:
+        """Generate DAX query for flexible operative aggregation using template - MATCHES NPS aggregation logic exactly
+        
+        Args:
+            aggregation_days: Days per aggregation period
+            cabins, companies, hauls: Node filters
+            analysis_date: End date for analysis (default: TODAY())
+            comparison_start_date: Start date to include comparison period data (for "vs Sel. Period")
+        """
         template = self._load_query_template("Operativa_flex_agg.txt")
         
         # Replace placeholders with actual values
@@ -224,12 +280,32 @@ class PBIDataCollector:
             f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
         )
         
-        # If analysis_date is provided, replace TODAY() and max date calculations
-        if analysis_date:
-            print(f"  📅 Using analysis date: {analysis_date.strftime('%Y-%m-%d')} for operative aggregation")
-            # Replace the date filter to end on analysis_date instead of TODAY()
+        # Handle date filtering - extend range if comparison_start_date is provided (for "vs Sel. Period")
+        if analysis_date or comparison_start_date:
+            # Determine the actual start date (earliest of comparison_start_date or default)
+            if comparison_start_date:
+                # Use comparison_start_date as the start to include comparison period data
+                start_date = comparison_start_date
+                print(f"  📅 Including comparison period from: {comparison_start_date.strftime('%Y-%m-%d')}")
+            else:
+                # Use default start date
+                start_date = datetime(2024, 1, 1)
+            
+            # Determine end date
+            if analysis_date:
+                end_date = analysis_date
+                print(f"  📅 Using analysis date: {analysis_date.strftime('%Y-%m-%d')} for operative aggregation")
+            else:
+                # Keep TODAY() if no analysis_date provided
+                new_date_filter = f"'Date_Master'[Date] >= DATE({start_date.year},{start_date.month},{start_date.day}) && 'Date_Master'[Date] <= TODAY()"
+                old_date_filter = "'Date_Master'[Date] >= DATE(2024,01,01) && 'Date_Master'[Date] <= TODAY()"
+                query = query.replace(old_date_filter, new_date_filter)
+                print(f"  📝 Operative date filter: {old_date_filter} → {new_date_filter}")
+                return query
+            
+            # Replace the date filter with specific start and end dates
             old_date_filter = "'Date_Master'[Date] >= DATE(2024,01,01) && 'Date_Master'[Date] <= TODAY()"
-            new_date_filter = f"'Date_Master'[Date] >= DATE(2024,01,01) && 'Date_Master'[Date] <= DATE({analysis_date.year},{analysis_date.month},{analysis_date.day})"
+            new_date_filter = f"'Date_Master'[Date] >= DATE({start_date.year},{start_date.month},{start_date.day}) && 'Date_Master'[Date] <= DATE({end_date.year},{end_date.month},{end_date.day})"
             query = query.replace(old_date_filter, new_date_filter)
             print(f"  📝 Operative date filter: {old_date_filter} → {new_date_filter}")
             
@@ -880,14 +956,17 @@ class PBIDataCollector:
 
             # Handle "vs Sel. Period" dynamic filter block
             if comparison_filter == "vs Sel. Period" and comparison_start_date and comparison_end_date:
+                comp_start_year, comp_start_month, comp_start_day = comparison_start_date.year, comparison_start_date.month, comparison_start_date.day
+                comp_end_year, comp_end_month, comp_end_day = comparison_end_date.year, comparison_end_date.month, comparison_end_date.day
+                
                 # Build the selected period VAR block
                 selected_period_block = (
                     "\n    VAR __DS0FilterTableSelPeriod =\n"
                     "        FILTER(\n"
                     "            KEEPFILTERS(VALUES('Aux_Date_Master_Selected_Period'[Date_aux])),\n"
                     "            AND(\n"
-                    f"                'Aux_Date_Master_Selected_Period'[Date_aux] >= DATE({comparison_start_date.year}, {comparison_start_date.month}, {comparison_start_date.day}),\n"
-                    f"                'Aux_Date_Master_Selected_Period'[Date_aux] < DATE({comparison_end_date.year}, {comparison_end_date.month}, {comparison_end_date.day})\n"
+                    f"                'Aux_Date_Master_Selected_Period'[Date_aux] >= DATE({comp_start_year}, {comp_start_month}, {comp_start_day}),\n"
+                    f"                'Aux_Date_Master_Selected_Period'[Date_aux] < DATE({comp_end_year}, {comp_end_month}, {comp_end_day})\n"
                     "            ))\n"
                 )
                 # Insert before VAR __DS0Core definition
@@ -941,9 +1020,35 @@ class PBIDataCollector:
             '__END_DAY__', str(end_date.day)
         )
         
-        # Handle vs Sel. Period logic like in other queries
-        if comparison_filter != "vs Sel. Period":
-            # Remove the entire VAR __DS0FilterTableSelPeriod block (including the leftover fragments)
+        # Handle "vs Sel. Period" dynamic filter block (using same simple logic as exp_drivers_tool)
+        if comparison_filter == "vs Sel. Period" and comparison_start_date and comparison_end_date:
+            # Convert to datetime if they are strings
+            if isinstance(comparison_start_date, str):
+                comparison_start_date = datetime.strptime(comparison_start_date, '%Y-%m-%d')
+            if isinstance(comparison_end_date, str):
+                comparison_end_date = datetime.strptime(comparison_end_date, '%Y-%m-%d')
+                
+            comp_start_year, comp_start_month, comp_start_day = comparison_start_date.year, comparison_start_date.month, comparison_start_date.day
+            comp_end_year, comp_end_month, comp_end_day = comparison_end_date.year, comparison_end_date.month, comparison_end_date.day
+            
+            # Build the selected period VAR block (same as exp_drivers_tool)
+            selected_period_block = (
+                f"VAR __DS0FilterTableSelPeriod =\n"
+                f"    FILTER(\n"
+                f"        KEEPFILTERS(VALUES('Aux_Date_Master_Selected_Period'[Date_aux])),\n"
+                f"        AND(\n"
+                f"            'Aux_Date_Master_Selected_Period'[Date_aux] >= DATE({comp_start_year}, {comp_start_month}, {comp_start_day}),\n"
+                f"            'Aux_Date_Master_Selected_Period'[Date_aux] < DATE({comp_end_year}, {comp_end_month}, {comp_end_day})\n"
+                f"        ))\n"
+            )
+            
+            # Check if template already has the variable defined
+            if '__DS0FilterTableSelPeriod' not in query:
+                # Template doesn't have the variable, add it after DEFINE
+                query = query.replace("DEFINE", f"DEFINE\n{selected_period_block}")
+        else:
+            # For all other comparison filters, remove any existing __DS0FilterTableSelPeriod references
+            import re
             query = re.sub(
                 r'\s*VAR __DS0FilterTableSelPeriod =.*?(?=\s*VAR|\s*EVALUATE)',
                 '\n\n', query, flags=re.DOTALL
@@ -996,33 +1101,34 @@ class PBIDataCollector:
                 '__END_DAY__', '2'
             )
         
-        # If using "vs Sel. Period" with custom dates, use the proper Power BI approach
+        # Handle "vs Sel. Period" dynamic filter block (exactly like exp_drivers_tool)
         if comparison_filter == "vs Sel. Period" and comparison_start_date and comparison_end_date:
-            # Use the proper Power BI vs Sel. Period logic with Aux_Date_Master_Selected_Period
-            comparison_date_filter = f'''
-    VAR __DS0FilterTableSelPeriod =
-        FILTER(
-            KEEPFILTERS(VALUES('Aux_Date_Master_Selected_Period'[Date_aux])),
-            AND(
-                'Aux_Date_Master_Selected_Period'[Date_aux] >= DATE({comparison_start_date.year}, {comparison_start_date.month}, {comparison_start_date.day}),
-                'Aux_Date_Master_Selected_Period'[Date_aux] < DATE({comparison_end_date.year}, {comparison_end_date.month}, {comparison_end_date.day})
-            ))
-'''
+            # Convert to datetime if they are strings
+            if isinstance(comparison_start_date, str):
+                comparison_start_date = datetime.strptime(comparison_start_date, '%Y-%m-%d')
+            if isinstance(comparison_end_date, str):
+                comparison_end_date = datetime.strptime(comparison_end_date, '%Y-%m-%d')
+                
+            comp_start_year, comp_start_month, comp_start_day = comparison_start_date.year, comparison_start_date.month, comparison_start_date.day
+            comp_end_year, comp_end_month, comp_end_day = comparison_end_date.year, comparison_end_date.month, comparison_end_date.day
             
-            # Insert the comparison date filter after the existing filter definitions
-            query = query.replace(
-                'VAR __DS0FilterTable7 =',
-                comparison_date_filter + '    VAR __DS0FilterTable7 ='
-            )
-            
-            # Add the comparison filter to the CALCULATETABLE call
-            query = query.replace(
-                '__DS0FilterTable7,',
-                '__DS0FilterTable7,\n                    __DS0FilterTableSelPeriod,'
-            )
-            
-            # Keep vs Sel. Period as the filter - this is the correct approach
-            # Don't replace vs Sel. Period with vs L7d - let it use our custom dates
+            # Check if template already has the variable defined
+            if '__DS0FilterTableSelPeriod' not in query:
+                # Template doesn't have the variable, add it (same as exp_drivers_tool)
+                selected_period_block = (
+                    "\n    VAR __DS0FilterTableSelPeriod =\n"
+                    "        FILTER(\n"
+                    "            KEEPFILTERS(VALUES('Aux_Date_Master_Selected_Period'[Date_aux])),\n"
+                    "            AND(\n"
+                    f"                'Aux_Date_Master_Selected_Period'[Date_aux] >= DATE({comp_start_year}, {comp_start_month}, {comp_start_day}),\n"
+                    f"                'Aux_Date_Master_Selected_Period'[Date_aux] < DATE({comp_end_year}, {comp_end_month}, {comp_end_day})\n"
+                    "            ))\n"
+                )
+                # Insert before VAR __DS0Core definition
+                query = query.replace("\n    VAR __DS0Core =", selected_period_block + "\n    VAR __DS0Core =")
+                # Add the filter table in SUMMARIZECOLUMNS argument list right after __DS0FilterTable7,
+                query = query.replace("__DS0FilterTable7,\n", "__DS0FilterTable7,\n            __DS0FilterTableSelPeriod,\n")
+            # If template already has the variable, the dates should already be handled by the placeholders
         
         return query
 
@@ -1037,6 +1143,12 @@ class PBIDataCollector:
         companies_str = '", "'.join(companies)
         hauls_str = '", "'.join(hauls)
         
+        # Convert dates to datetime if they are strings
+        if isinstance(start_date, str):
+            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+        if isinstance(end_date, str):
+            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+        
         # Replace the template placeholders for basic filters
         query = template.replace(
             '__CABINS__', cabins_str
@@ -1048,35 +1160,20 @@ class PBIDataCollector:
             '__DIMENSION_NAME__', profile_dimension
         ).replace(
             '__COMPARISON_FILTER__', comparison_filter or ""
-        ).replace(
-            '__START_YEAR__', str(start_date.year)
-        ).replace(
-            '__START_MONTH__', str(start_date.month)
-        ).replace(
-            '__START_DAY__', str(start_date.day)
-        ).replace(
-            '__END_YEAR__', str(end_date.year)
-        ).replace(
-            '__END_MONTH__', str(end_date.month)
-        ).replace(
-            '__END_DAY__', str(end_date.day)
         )
         
-        # Handle vs Sel. Period logic like in other queries
-        if comparison_filter != "vs Sel. Period":
-            # Remove the entire VAR __DS0FilterTableSelPeriod block
-            query = re.sub(
-                r'\s*VAR __DS0FilterTableSelPeriod =.*?(?=\s*VAR|\s*EVALUATE)',
-                '\n\n', query, flags=re.DOTALL
-            )
-            # Remove references to __DS0FilterTableSelPeriod in SUMMARIZECOLUMNS and CALCULATETABLE
-            query = re.sub(
-                r',\s*__DS0FilterTableSelPeriod',
-                '', query
-            )
+        # Replace analysis period placeholders (same as exp_drivers_tool)
+        query = query.replace('__START_DATE__', start_date.strftime('%Y, %-m, %-d'))
+        query = query.replace('__END_DATE__', end_date.strftime('%Y, %-m, %-d'))
         
-        # Replace comparison date placeholders if they exist
-        if comparison_start_date and comparison_end_date:
+        # Replace comparison date placeholders for the selected period filter
+        if comparison_filter == "vs Sel. Period" and comparison_start_date and comparison_end_date:
+            # Convert to datetime if they are strings
+            if isinstance(comparison_start_date, str):
+                comparison_start_date = datetime.strptime(comparison_start_date, '%Y-%m-%d')
+            if isinstance(comparison_end_date, str):
+                comparison_end_date = datetime.strptime(comparison_end_date, '%Y-%m-%d')
+                
             query = query.replace(
                 '__START_YEAR__', str(comparison_start_date.year)
             ).replace(
@@ -1105,34 +1202,18 @@ class PBIDataCollector:
             ).replace(
                 '__END_DAY__', '2'
             )
-        
-        # If using "vs Sel. Period" with custom dates, use the proper Power BI approach
-        if comparison_filter == "vs Sel. Period" and comparison_start_date and comparison_end_date:
-            # Use the proper Power BI vs Sel. Period logic with Aux_Date_Master_Selected_Period
-            comparison_date_filter = f'''
-    VAR __DS0FilterTableSelPeriod =
-        FILTER(
-            KEEPFILTERS(VALUES('Aux_Date_Master_Selected_Period'[Date_aux])),
-            AND(
-                'Aux_Date_Master_Selected_Period'[Date_aux] >= DATE({comparison_start_date.year}, {comparison_start_date.month}, {comparison_start_date.day}),
-                'Aux_Date_Master_Selected_Period'[Date_aux] < DATE({comparison_end_date.year}, {comparison_end_date.month}, {comparison_end_date.day})
-            ))
-'''
-            
-            # Insert the comparison date filter after the existing filter definitions
-            query = query.replace(
-                'VAR __DS0FilterTable7 =',
-                comparison_date_filter + '    VAR __DS0FilterTable7 ='
+        if comparison_filter != "vs Sel. Period":
+            # For all other comparison filters, remove any existing __DS0FilterTableSelPeriod references
+            import re
+            query = re.sub(
+                r'\s*VAR __DS0FilterTableSelPeriod =.*?(?=\s*VAR|\s*EVALUATE)',
+                '\n\n', query, flags=re.DOTALL
             )
-            
-            # Add the comparison filter to the CALCULATETABLE call
-            query = query.replace(
-                '__DS0FilterTable7,',
-                '__DS0FilterTable7,\n                    __DS0FilterTableSelPeriod,'
+            # Remove references to __DS0FilterTableSelPeriod in SUMMARIZECOLUMNS and CALCULATETABLE
+            query = re.sub(
+                r',\s*__DS0FilterTableSelPeriod',
+                '', query
             )
-            
-            # Keep vs Sel. Period as the filter - this is the correct approach
-            # Don't replace vs Sel. Period with vs L7d - let it use our custom dates
         
         # Add route filter if specified
         if route_filter and len(route_filter) > 0:
@@ -1154,6 +1235,12 @@ class PBIDataCollector:
                 '__DS0FilterTable9,',
                 '__DS0FilterTable9,\n                    __DS0FilterTable_Routes,'
             )
+        
+        # DEBUG: Log the final query
+        self.logger.info(f"🔍 DEBUG CUSTOMER_PROFILE QUERY: Generated query length: {len(query)}")
+        self.logger.info(f"🔍 DEBUG CUSTOMER_PROFILE QUERY PREVIEW: {query[:500]}...")
+        if len(query) > 500:
+            self.logger.info(f"🔍 DEBUG CUSTOMER_PROFILE QUERY END: ...{query[-200:]}")
         
         return query
 
@@ -1225,37 +1312,27 @@ class PBIDataCollector:
             DataFrame with customer profile data
         """
         try:
-            self.logger.info(f"👥 Collecting customer profile data for {node_path}")
-            self.logger.info(f"📅 Period: {start_date.date()} to {end_date.date()}")
-            self.logger.info(f"🔍 Dimension: {profile_dimension}")
-            self.logger.info(f"⚖️ Comparison: {comparison_filter}")
-            
-            # Get filters for this node using existing method
+            # Get filters for this node
             cabins, companies, hauls = self._get_node_filters(node_path)
             
-            # Generate the DAX query
+            # Generate the customer profile query (same pattern as exp_drivers_tool)
+            self.logger.info(f"🔍 DEBUG CUSTOMER_PROFILE: About to call _get_customer_profile_range_query")
             query = self._get_customer_profile_range_query(
-                cabins=cabins,
-                companies=companies,
-                hauls=hauls,
-                start_date=start_date,
-                end_date=end_date,
-                profile_dimension=profile_dimension,
-                route_filter=route_filter,
-                comparison_filter=comparison_filter,
-                comparison_start_date=comparison_start_date,
-                comparison_end_date=comparison_end_date
+                cabins, companies, hauls, start_date, end_date, profile_dimension,
+                route_filter, comparison_filter, comparison_start_date, comparison_end_date
             )
+            self.logger.info(f"🔍 DEBUG CUSTOMER_PROFILE: Query generated, length: {len(query) if query else 0}")
+            
+            # Debug log
+            self.logger.info(f"🔍 DEBUG CUSTOMER_PROFILE: dimension={profile_dimension}, cabins={cabins}, companies={companies}, hauls={hauls}")
+            self.logger.info(f"🔍 DEBUG CUSTOMER_PROFILE: start_date={start_date}, end_date={end_date}, comparison_filter={comparison_filter}")
             
             # Execute the query
-            result = await self._execute_query_async(query)
+            df = await self._execute_query_async(query)
             
-            if result is not None and not result.empty:
-                self.logger.info(f"✅ Collected customer profile data: {len(result)} records")
-                self.logger.debug(f"Columns: {list(result.columns)}")
-                return result
+            if not df.empty:
+                return df
             else:
-                self.logger.warning("❌ Customer profile query returned empty result")
                 return pd.DataFrame()
                 
         except Exception as e:

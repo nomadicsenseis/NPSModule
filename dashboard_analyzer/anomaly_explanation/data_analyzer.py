@@ -1162,18 +1162,101 @@ class OperationalDataAnalyzer:
     Diseñado específicamente para el análisis de métricas operativas en contexto de anomalías NPS
     """
 
-    def __init__(self, comparison_mode: str = "mean"):
+    def __init__(self, comparison_mode: str = "mean", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
         """
         Inicializa el analizador operativo
 
         Args:
-            comparison_mode: Modo de comparación - "mean", "vslast", "target"
+            comparison_mode: Modo de comparación - "mean", "vslast", "vslast_dynamic", "target"
+            comparison_start_date: Fecha de inicio específica para comparación (usado en "vs Sel. Period")
+            comparison_end_date: Fecha de fin específica para comparación (usado en "vs Sel. Period")
         """
         self.comparison_mode = comparison_mode
+        self.comparison_start_date = comparison_start_date
+        self.comparison_end_date = comparison_end_date
         self.operative_data = {}  # Almacena datos operativos por nodo
         self.logger = logging.getLogger(__name__)
         
         self.logger.info(f"OperationalDataAnalyzer initialized with comparison_mode: {comparison_mode}")
+
+    def load_operative_data(self, data_folder: str = None, node_path: str = None, aggregation_days: int = 7) -> bool:
+        """
+        Carga datos operativos desde archivos CSV
+        Soporta tanto formato LEGACY como FLEXIBLE
+        
+        Args:
+            data_folder: Carpeta con datos CSV (si None, busca automáticamente)
+            node_path: Ruta del nodo a cargar (si None, usa "Global/SH/Economy" por defecto)
+            aggregation_days: Días de agregación para buscar archivos flexible
+            
+        Returns:
+            True si se cargaron datos exitosamente
+        """
+        try:
+            # Defaults
+            if data_folder is None:
+                # Buscar carpeta de datos más reciente
+                from pathlib import Path
+                tables_path = Path("/app/tables")
+                if tables_path.exists():
+                    # Buscar carpeta available_* más reciente
+                    available_folders = sorted(tables_path.glob("available_*"))
+                    if available_folders:
+                        data_folder = str(available_folders[-1])
+                        self.logger.info(f"Auto-detected data folder: {data_folder}")
+                    else:
+                        self.logger.error("No available_* folders found in /app/tables")
+                        return False
+                else:
+                    self.logger.error("Tables path /app/tables not found")
+                    return False
+                    
+            if node_path is None:
+                node_path = "Global/SH/Economy"
+                
+            data_folder_path = Path(data_folder)
+            
+            # Intentar formato FLEXIBLE primero
+            operative_files = list(data_folder_path.glob(f"flexible_operative_{aggregation_days}d*.csv"))
+            if operative_files:
+                # Tomar el archivo más reciente
+                operative_file = sorted(operative_files)[-1]
+                self.logger.info(f"Loading FLEXIBLE operative data from: {operative_file}")
+                is_flexible = True
+            else:
+                # Intentar formato LEGACY
+                operative_file = data_folder_path / "operative.csv"
+                if operative_file.exists():
+                    self.logger.info(f"Loading LEGACY operative data from: {operative_file}")
+                    is_flexible = False
+                else:
+                    self.logger.warning(f"No operative data files found in {data_folder}")
+                    return False
+            
+            # Cargar el archivo CSV
+            operative_data = pd.read_csv(operative_file)
+            
+            if operative_data.empty:
+                self.logger.warning(f"Empty operative data loaded from {operative_file}")
+                return False
+            
+            # Filtrar por node_path si es necesario
+            if 'node_path' in operative_data.columns:
+                node_data = operative_data[operative_data['node_path'] == node_path]
+                if node_data.empty:
+                    self.logger.warning(f"No data found for node_path: {node_path}")
+                    return False
+                self.operative_data[node_path] = node_data
+            else:
+                # Asumir que todos los datos son para este nodo
+                self.operative_data[node_path] = operative_data
+            
+            self.logger.info(f"Loaded {len(self.operative_data[node_path])} operative records for {node_path}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error loading operative data: {e}")
+            return False
 
     def _clean_dax_columns(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1209,6 +1292,90 @@ class OperationalDataAnalyzer:
         
         return data
 
+    def _analyze_precalculated_comparison(self, data: pd.DataFrame, node_path: str) -> Dict[str, Any]:
+        """Analyze pre-calculated comparison data from simplified vs Sel. Period query"""
+        try:
+            self.logger.info(f"📊 Processing pre-calculated comparison data for {node_path}")
+            
+            metrics = {}
+            summary_parts = []
+            
+            for _, row in data.iterrows():
+                metric_name = row['Metric']
+                current_val = pd.to_numeric(row['Current_Value'], errors='coerce')
+                comparison_val = pd.to_numeric(row['Comparison_Value'], errors='coerce')
+                difference = pd.to_numeric(row['Difference'], errors='coerce')
+                change_pct = pd.to_numeric(row['Change_Pct'], errors='coerce')
+                
+                if pd.notna(current_val) and pd.notna(comparison_val):
+                    # Determine direction and significance
+                    direction = 'higher' if difference > 0 else 'lower'
+                    is_significant = abs(change_pct) > 5  # Change > 5% is significant
+                    
+                    # Map metric names to standard format
+                    standard_name = metric_name
+                    if metric_name == "OTP15_adjusted":
+                        standard_name = "OTP15_adjusted"
+                    elif metric_name == "Load_Factor":
+                        standard_name = "Load_Factor"
+                    
+                    metrics[standard_name] = {
+                        'current': round(current_val, 2),
+                        'comparison': round(comparison_val, 2),
+                        'difference': round(difference, 2),
+                        'change_pct': round(change_pct, 1),
+                        # Keys expected by causal agent
+                        'current_value': round(current_val, 2),
+                        'previous_value': round(comparison_val, 2),
+                        'day_value': round(current_val, 2),
+                        'delta': round(difference, 2),
+                        'direction': direction,
+                        'is_significant': is_significant
+                    }
+                    
+                    # Add to summary if significant
+                    if is_significant:
+                        direction_text = "aumentó" if difference > 0 else "disminuyó"
+                        metric_display = self._get_metric_display_name(standard_name)
+                        comparison_desc = f"período seleccionado ({self.comparison_start_date.strftime('%Y-%m-%d')} a {self.comparison_end_date.strftime('%Y-%m-%d')})"
+                        summary_parts.append(f"{metric_display} {direction_text} {abs(change_pct):.1f}% vs {comparison_desc}")
+                    
+                    self.logger.info(f"📊 {metric_name}: {current_val:.2f} vs {comparison_val:.2f} (Δ{difference:+.2f}, {change_pct:+.1f}%)")
+                else:
+                    # Handle missing data
+                    metrics[standard_name] = {
+                        'current': current_val if pd.notna(current_val) else None,
+                        'comparison': comparison_val if pd.notna(comparison_val) else None,
+                        'difference': 0,
+                        'change_pct': 0,
+                        'current_value': current_val if pd.notna(current_val) else None,
+                        'previous_value': comparison_val if pd.notna(comparison_val) else None,
+                        'day_value': current_val if pd.notna(current_val) else None,
+                        'delta': 0,
+                        'direction': 'unchanged',
+                        'is_significant': False,
+                        'error': 'Missing data'
+                    }
+            
+            # Create summary
+            if summary_parts:
+                comparison_desc = f"período seleccionado ({self.comparison_start_date.strftime('%Y-%m-%d')} a {self.comparison_end_date.strftime('%Y-%m-%d')})"
+                summary = f"Comparación vs {comparison_desc}: " + "; ".join(summary_parts)
+            else:
+                summary = f"Sin cambios significativos vs período seleccionado"
+            
+            return {
+                'metrics': metrics,
+                'summary': summary,
+                'comparison_info': {
+                    'comparison_period': f"{self.comparison_start_date.strftime('%Y-%m-%d')} to {self.comparison_end_date.strftime('%Y-%m-%d')}",
+                    'comparison_type': 'precalculated_dax'
+                }
+            }
+            
+        except Exception as e:
+            return {"error": f"Error in precalculated comparison analysis: {str(e)}"}
+
     def analyze_operative_metrics(self, node_path: str, target_date: str) -> Dict[str, Any]:
         """
         Analiza métricas operativas para un nodo y fecha específicos
@@ -1237,14 +1404,41 @@ class OperationalDataAnalyzer:
             except:
                 return {"error": f"Invalid target_date format: {target_date}"}
 
-            # Asegurar que la columna de fecha esté en formato datetime
+            # First check if this is pre-calculated vs Sel. Period data (from simplified query)
+            # Handle both with and without brackets in column names
+            metric_col = 'Metric' if 'Metric' in data.columns else '[Metric]' if '[Metric]' in data.columns else None
+            current_col = 'Current_Value' if 'Current_Value' in data.columns else '[Current_Value]' if '[Current_Value]' in data.columns else None
+            comparison_col = 'Comparison_Value' if 'Comparison_Value' in data.columns else '[Comparison_Value]' if '[Comparison_Value]' in data.columns else None
+            diff_col = 'Difference' if 'Difference' in data.columns else '[Difference]' if '[Difference]' in data.columns else None
+            
+            if metric_col and current_col and comparison_col and diff_col:
+                self.logger.info(f"🎯 Detected precalculated vs Sel. Period data format")
+                # Clean column names if they have brackets
+                if metric_col.startswith('['):
+                    data = data.rename(columns={
+                        '[Metric]': 'Metric',
+                        '[Current_Value]': 'Current_Value',
+                        '[Comparison_Value]': 'Comparison_Value', 
+                        '[Difference]': 'Difference',
+                        '[Change_Pct]': 'Change_Pct'
+                    })
+                    self.logger.info(f"✅ Cleaned column names (removed brackets)")
+                return self._analyze_precalculated_comparison(data, node_path)
+
+            # Otherwise, ensure date columns are datetime for regular analysis
+            # Support both legacy format (Date column) and flexible format (Min_Date/Max_Date columns)
             if 'Date' in data.columns:
                 data['Date'] = pd.to_datetime(data['Date'])
+            elif 'Min_Date' in data.columns and 'Max_Date' in data.columns:
+                # Flexible aggregated data - convert date columns
+                data['Min_Date'] = pd.to_datetime(data['Min_Date'])
+                data['Max_Date'] = pd.to_datetime(data['Max_Date'])
+                self.logger.info(f"Using flexible aggregated data format with Period_Group")
             else:
-                return {"error": "No 'Date' column found in operative data"}
-
+                return {"error": "No 'Date' or 'Min_Date'/'Max_Date' columns found in operative data"}
+            
             # Análisis según el modo de comparación
-            if self.comparison_mode == "vslast":
+            if self.comparison_mode in ["vslast", "vslast_dynamic"]:
                 return self._analyze_vslast(data, target_dt, node_path)
             elif self.comparison_mode == "mean":
                 return self._analyze_mean(data, target_dt, node_path)
@@ -1362,6 +1556,12 @@ class OperationalDataAnalyzer:
     def _analyze_vslast(self, data: pd.DataFrame, target_dt: pd.Timestamp, node_path: str) -> Dict[str, Any]:
         """Análisis vs período anterior - Adaptado para datos agregados por período"""
         try:
+            # Check if we have specific comparison dates (for "vs Sel. Period" in vslast_dynamic mode)
+            if (self.comparison_mode == "vslast_dynamic" and 
+                self.comparison_start_date and self.comparison_end_date):
+                self.logger.info(f"🎯 Using specific comparison period: {self.comparison_start_date.strftime('%Y-%m-%d')} to {self.comparison_end_date.strftime('%Y-%m-%d')}")
+                return self._analyze_vslast_with_specific_dates(data, target_dt, node_path)
+            
             # Para datos agregados por período, necesitamos encontrar el período que contiene la fecha objetivo
             if 'Period_Group' in data.columns and 'Min_Date' in data.columns and 'Max_Date' in data.columns:
                 # Convertir Min_Date y Max_Date a datetime para comparación
@@ -1457,6 +1657,148 @@ class OperationalDataAnalyzer:
 
         except Exception as e:
             return {"error": f"Error in vslast analysis: {str(e)}"}
+
+    def _analyze_vslast_with_specific_dates(self, data: pd.DataFrame, target_dt: pd.Timestamp, node_path: str) -> Dict[str, Any]:
+        """Análisis vs período específico seleccionado - Para "vs Sel. Period" mode"""
+        try:
+            # Para datos agregados por período, necesitamos encontrar el período que contiene la fecha objetivo
+            if 'Period_Group' in data.columns and 'Min_Date' in data.columns and 'Max_Date' in data.columns:
+                # Convertir Min_Date y Max_Date a datetime para comparación
+                data['Min_Date'] = pd.to_datetime(data['Min_Date'])
+                data['Max_Date'] = pd.to_datetime(data['Max_Date'])
+                
+                # Encontrar el período que contiene la fecha objetivo (período actual)
+                current_period = data[
+                    (data['Min_Date'] <= target_dt) & 
+                    (data['Max_Date'] >= target_dt)
+                ]
+                
+                if current_period.empty:
+                    # Si no hay período exacto, buscar el más cercano
+                    data['distance'] = abs((data['Min_Date'] + (data['Max_Date'] - data['Min_Date'])/2) - target_dt).dt.days
+                    current_period = data.loc[data['distance'].idxmin():data['distance'].idxmin()]
+                    self.logger.info(f"📅 No exact period found, using closest period for {target_dt.date()}")
+                
+                current_row = current_period.iloc[0]
+                current_period_group = current_row['Period_Group']
+                
+                # Encontrar el período de comparación que contiene las fechas especificadas
+                comparison_start_dt = pd.to_datetime(self.comparison_start_date)
+                comparison_end_dt = pd.to_datetime(self.comparison_end_date)
+                
+                # Buscar período que se solape con el rango de comparación
+                comparison_period = data[
+                    (data['Min_Date'] <= comparison_end_dt) & 
+                    (data['Max_Date'] >= comparison_start_dt)
+                ]
+                
+                if comparison_period.empty:
+                    return {"error": f"No data available for comparison period {self.comparison_start_date} to {self.comparison_end_date}"}
+                
+                # Si hay múltiples períodos que se solapan, usar el que mejor se solapa
+                if len(comparison_period) > 1:
+                    # Calcular el solapamiento para cada período
+                    comparison_period['overlap'] = comparison_period.apply(
+                        lambda row: min(row['Max_Date'], comparison_end_dt) - max(row['Min_Date'], comparison_start_dt), 
+                        axis=1
+                    )
+                    comparison_period = comparison_period[comparison_period['overlap'] == comparison_period['overlap'].max()]
+                
+                comparison_row = comparison_period.iloc[0]
+                
+                self.logger.info(f"📊 Comparing Period {current_period_group} vs Comparison Period {comparison_row['Period_Group']} ({self.comparison_start_date} to {self.comparison_end_date})")
+                
+            else:
+                # Lógica original para datos por fecha exacta
+                current_data = data[data['Date'] == target_dt]
+                
+                if current_data.empty:
+                    return {"error": f"No data for target date {target_dt.date()}"}
+                
+                current_row = current_data.iloc[0]
+                
+                # Para fechas exactas, buscar datos dentro del rango de comparación
+                comparison_start_dt = pd.to_datetime(self.comparison_start_date)
+                comparison_end_dt = pd.to_datetime(self.comparison_end_date)
+                
+                comparison_data = data[
+                    (data['Date'] >= comparison_start_dt) & 
+                    (data['Date'] <= comparison_end_dt)
+                ]
+                
+                if comparison_data.empty:
+                    return {"error": f"No data available for comparison period {self.comparison_start_date} to {self.comparison_end_date}"}
+                
+                # Usar el promedio del período de comparación si hay múltiples fechas
+                comparison_row = comparison_data.mean() if len(comparison_data) > 1 else comparison_data.iloc[0]
+
+            # Calcular diferencias (misma lógica que _analyze_vslast)
+            metrics = {}
+            for col in ['Load_Factor', 'OTP15_adjusted', 'Mishandling', 'Misconex']:
+                if col in data.columns:
+                    current_val = pd.to_numeric(current_row.get(col), errors='coerce')
+                    comparison_val = pd.to_numeric(comparison_row.get(col), errors='coerce')
+
+                    if pd.notna(current_val) and pd.notna(comparison_val):
+                        difference = current_val - comparison_val
+                        change_pct = round((difference / comparison_val) * 100, 1) if comparison_val != 0 else 0
+                        
+                        # Determinar dirección y significancia
+                        direction = 'higher' if difference > 0 else 'lower'
+                        is_significant = abs(change_pct) > 5  # Cambio > 5% es significativo
+                        
+                        metrics[col] = {
+                            'current': round(current_val, 2),
+                            'comparison': round(comparison_val, 2),
+                            'difference': round(difference, 2),
+                            'change_pct': change_pct,
+                            # Claves que espera el causal agent
+                            'current_value': round(current_val, 2),
+                            'previous_value': round(comparison_val, 2),  # Usar comparison_val como "previous"
+                            'day_value': round(current_val, 2),
+                            'delta': round(difference, 2),
+                            'direction': direction,
+                            'is_significant': is_significant
+                        }
+                        
+                        self.logger.info(f"📊 {col}: {current_val:.2f} vs {comparison_val:.2f} (Δ{difference:+.2f}, {change_pct:+.1f}%)")
+                    else:
+                        metrics[col] = {
+                            'current': current_val if pd.notna(current_val) else None,
+                            'comparison': comparison_val if pd.notna(comparison_val) else None,
+                            'difference': 0,
+                            'change_pct': 0,
+                            'current_value': current_val if pd.notna(current_val) else None,
+                            'previous_value': comparison_val if pd.notna(comparison_val) else None,
+                            'day_value': current_val if pd.notna(current_val) else None,
+                            'delta': 0,
+                            'direction': 'unchanged',
+                            'is_significant': False,
+                            'error': 'Missing data'
+                        }
+
+            # Crear resumen
+            summary_parts = []
+            comparison_period_desc = f"período seleccionado ({self.comparison_start_date} a {self.comparison_end_date})"
+            
+            for metric_name, metric_data in metrics.items():
+                if 'error' not in metric_data and metric_data.get('is_significant'):
+                    direction = "aumentó" if metric_data['difference'] > 0 else "disminuyó" 
+                    summary_parts.append(f"{self._get_metric_display_name(metric_name)} {direction} {abs(metric_data['change_pct']):.1f}% vs {comparison_period_desc}")
+            
+            summary = f"Comparación vs {comparison_period_desc}: " + "; ".join(summary_parts) if summary_parts else f"Sin cambios significativos vs {comparison_period_desc}"
+            
+            return {
+                'metrics': metrics,
+                'summary': summary,
+                'comparison_info': {
+                    'comparison_period': f"{self.comparison_start_date} to {self.comparison_end_date}",
+                    'comparison_type': 'specific_dates'
+                }
+            }
+            
+        except Exception as e:
+            return {"error": f"Error in vslast analysis with specific dates: {str(e)}"}
 
     def _analyze_mean(self, data: pd.DataFrame, target_dt: pd.Timestamp, node_path: str) -> Dict[str, Any]:
         """Análisis vs media de período - Adaptado para datos agregados por período"""

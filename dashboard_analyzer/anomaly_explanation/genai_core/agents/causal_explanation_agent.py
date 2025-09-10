@@ -22,6 +22,7 @@ import json
 import time
 import re
 import traceback
+from dotenv import load_dotenv
 
 from pydantic import BaseModel, Field
 
@@ -309,8 +310,8 @@ class CausalExplanationAgent:
         self.chatbot_collector = self._init_chatbot_collector()
         self.ncs_collector = self._init_ncs_collector()
         
-        # Initialize S3 uploader with production environment
-        self.s3_uploader = S3ReportUploader(environment="prod")
+        # Initialize S3 uploader with local environment
+        self.s3_uploader = S3ReportUploader(environment="local")
         
         # Create LLM and agent
         self.llm = self._create_llm(llm_type)
@@ -430,16 +431,16 @@ class CausalExplanationAgent:
         return None
     
     def _init_ncs_collector(self):
-        """Initialize NCS collector with production environment"""
+        """Initialize NCS collector with local environment"""
         try:
             temp_creds_file = "dashboard_analyzer/temp_aws_credentials.env"
-            collector = NCSDataCollector(temp_env_file=temp_creds_file, environment="prod")
-            self.logger.info("✅ NCS collector initialized with production environment")
+            collector = NCSDataCollector(temp_env_file=temp_creds_file, environment="local")
+            self.logger.info("✅ NCS collector initialized with local environment")
             return collector
         except Exception as e:
             self.logger.error(f"Error initializing NCS collector: {e}")
             self.logger.warning("Using fallback NCS collector without temp credentials")
-            return NCSDataCollector(environment="prod")
+            return NCSDataCollector(environment="local")
     
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
@@ -470,7 +471,12 @@ class CausalExplanationAgent:
     
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
         """Create AWS Bedrock LLM instance."""
-        region_name = os.getenv("AWS_REGION", "us-east-1")
+        # Load environment variables from .devcontainer/.env
+        dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
+        if dotenv_path.exists():
+            load_dotenv(dotenv_path)
+        
+        region_name = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
         aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
         aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
         profile_name = os.getenv("AWS_PROFILE")
@@ -491,9 +497,16 @@ class CausalExplanationAgent:
             if not self.silent_mode:
                 self.logger.info(f"Collecting explanatory drivers for {node_path} from {start_date} to {end_date}")
             
-            # Convert string dates to datetime
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            # Convert dates to datetime (handle both string and datetime inputs)
+            if isinstance(start_date, str):
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            else:
+                start_dt = start_date
+                
+            if isinstance(end_date, str):
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            else:
+                end_dt = end_date
             
             # Use the existing explanatory drivers collection method with comparison filter
             print(f"         🔍 DEBUG: Causal agent using causal_filter: '{self.causal_filter}'")
@@ -780,9 +793,23 @@ class CausalExplanationAgent:
             
             # Generate the appropriate operative query
             if use_flexible:
-                aggregation_days = comparison_days if comparison_days > 1 else 1
-                query = self.pbi_collector._get_flexible_operative_query(aggregation_days, cabins, companies, hauls, target_date)
-                query_type = "flexible_operative"
+                # Check if we have specific comparison dates for "vs Sel. Period"
+                if (hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date') and 
+                    self.comparison_start_date and self.comparison_end_date):
+                    # Use simplified vs Sel. Period query that calculates differences directly in DAX
+                    start_dt = target_date - timedelta(days=comparison_days - 1)  # Calculate current period start
+                    query = self.pbi_collector._get_operative_vs_sel_period_query(
+                        cabins, companies, hauls,
+                        start_dt, target_date,  # Current period
+                        self.comparison_start_date, self.comparison_end_date  # Comparison period
+                    )
+                    query_type = "vs_sel_period_operative"
+                    self.logger.info(f"🎯 Using simplified vs Sel. Period operative query")
+                else:
+                    # Use regular flexible query
+                    aggregation_days = comparison_days if comparison_days > 1 else 1
+                    query = self.pbi_collector._get_flexible_operative_query(aggregation_days, cabins, companies, hauls, target_date)
+                    query_type = "flexible_operative"
             else:
                 query = self.pbi_collector._get_operative_query(cabins, companies, hauls, target_date, comparison_days)
                 query_type = "legacy_operative"
@@ -864,21 +891,21 @@ class CausalExplanationAgent:
             # Get filters for this node
             cabins, companies, hauls = self.pbi_collector._get_node_filters(node_path)
             
-            # Generate the customer profile query
+            # Generate the customer profile query (fix parameter order)
             query = self.pbi_collector._get_customer_profile_range_query(
                 cabins, companies, hauls, start_date, end_date, dimension, 
-                comparison_filter, comparison_start_date, comparison_end_date, route_filter
+                route_filter, comparison_filter, comparison_start_date, comparison_end_date
             )
             
             # Track the DAX query
             parameters = {
                 "node_path": node_path,
-                "start_date": start_date.strftime('%Y-%m-%d'),
-                "end_date": end_date.strftime('%Y-%m-%d'),
+                "start_date": start_date.strftime('%Y-%m-%d') if isinstance(start_date, datetime) else str(start_date),
+                "end_date": end_date.strftime('%Y-%m-%d') if isinstance(end_date, datetime) else str(end_date),
                 "dimension": dimension,
                 "comparison_filter": comparison_filter,
-                "comparison_start_date": comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date else None,
-                "comparison_end_date": comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None,
+                "comparison_start_date": (comparison_start_date.strftime('%Y-%m-%d') if isinstance(comparison_start_date, datetime) else str(comparison_start_date)) if comparison_start_date else None,
+                "comparison_end_date": (comparison_end_date.strftime('%Y-%m-%d') if isinstance(comparison_end_date, datetime) else str(comparison_end_date)) if comparison_end_date else None,
                 "route_filter": route_filter,
                 "cabins": cabins,
                 "companies": companies,
@@ -886,7 +913,7 @@ class CausalExplanationAgent:
             }
             self.tracker.add_dax_query("customer_profile_tool", query, parameters)
             
-            # Execute the query and return results using the original method
+            # Execute the query and return results using datetime objects (as expected by pbi_collector)
             return await self.pbi_collector.collect_customer_profile_for_date_range(
                 node_path, start_date, end_date, dimension, 
                 comparison_filter, comparison_start_date, comparison_end_date, route_filter
@@ -1098,9 +1125,16 @@ class CausalExplanationAgent:
         try:
             self.logger.info(f"Collecting NCS data for {node_path} from {start_date} to {end_date} (single period)")
             
-            # Convert string dates to datetime
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            # Convert dates to datetime (handle both string and datetime inputs)
+            if isinstance(start_date, str):
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            else:
+                start_dt = start_date
+                
+            if isinstance(end_date, str):
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            else:
+                end_dt = end_date
             
             # Get NCS data for the specific period only (without await - it's synchronous)
             ncs_data = self.ncs_collector.collect_ncs_data_for_date_range(
@@ -1180,9 +1214,16 @@ class CausalExplanationAgent:
         try:
             self.logger.info(f"Collecting routes data for {node_path} from {start_date} to {end_date} (single period)")
             
-            # Convert string dates to datetime
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            # Convert dates to datetime (handle both string and datetime inputs)
+            if isinstance(start_date, str):
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            else:
+                start_dt = start_date
+                
+            if isinstance(end_date, str):
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            else:
+                end_dt = end_date
             
             result_parts = []
             result_parts.append(f"📊 **RUTAS - PERIODO ÚNICO**")
@@ -1398,23 +1439,47 @@ class CausalExplanationAgent:
         """
         print(f"🔍 DEBUG CAUSAL AGENT: investigate_anomaly called with start_date='{start_date}', end_date='{end_date}'")
         
+        # Convert dates to datetime objects (handle both string and datetime inputs)
+        from datetime import datetime
+        try:
+            if isinstance(start_date, str):
+                start_date_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            else:
+                start_date_dt = start_date
+                
+            if isinstance(end_date, str):
+                end_date_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            else:
+                end_date_dt = end_date
+                
+            print(f"🔍 DEBUG CAUSAL AGENT: Converted dates - start_date_dt={start_date_dt}, end_date_dt={end_date_dt}")
+        except (ValueError, TypeError) as e:
+            self.logger.error(f"❌ Error converting dates to datetime: {e}")
+            return f"Error: Invalid date format. Expected YYYY-MM-DD or datetime object, got start_date='{start_date}', end_date='{end_date}'"
+        
         # Update instance variables with the passed parameters
         if causal_filter:
             self.causal_filter = causal_filter
         if comparison_start_date:
-            self.comparison_start_date = comparison_start_date
+            if isinstance(comparison_start_date, str):
+                self.comparison_start_date = datetime.strptime(comparison_start_date, '%Y-%m-%d')
+            else:
+                self.comparison_start_date = comparison_start_date
         if comparison_end_date:
-            self.comparison_end_date = comparison_end_date
+            if isinstance(comparison_end_date, str):
+                self.comparison_end_date = datetime.strptime(comparison_end_date, '%Y-%m-%d')
+            else:
+                self.comparison_end_date = comparison_end_date
         
         # Route to appropriate investigation method based on study_mode
         if self.study_mode == "single":
             return await self._investigate_anomaly_single_period(
-                node_path, start_date, end_date, anomaly_type, anomaly_magnitude, nps_context,
+                node_path, start_date_dt, end_date_dt, anomaly_type, anomaly_magnitude, nps_context,
                 anomaly_detection_mode, aggregation_days, comparison_context, baseline_periods
             )
         else:
             return await self._investigate_anomaly_with_comparison(
-                node_path, start_date, end_date, anomaly_type, anomaly_magnitude, nps_context,
+                node_path, start_date_dt, end_date_dt, anomaly_type, anomaly_magnitude, nps_context,
                 causal_filter, comparison_start_date, comparison_end_date,
                 anomaly_detection_mode, aggregation_days, comparison_context, baseline_periods
             )
@@ -1422,8 +1487,8 @@ class CausalExplanationAgent:
     async def _investigate_anomaly_single_period(
         self,
         node_path: str,
-        start_date: str,
-        end_date: str,
+        start_date: datetime,
+        end_date: datetime,
         anomaly_type: str,
         anomaly_magnitude: float,
         nps_context: str = "",
@@ -1714,8 +1779,8 @@ class CausalExplanationAgent:
     async def _investigate_anomaly_with_comparison(
         self,
         node_path: str,
-        start_date: str,
-        end_date: str,
+        start_date: datetime,
+        end_date: datetime,
         anomaly_type: str,
         anomaly_magnitude: float,
         nps_context: str = "",
@@ -1794,6 +1859,24 @@ class CausalExplanationAgent:
             
             self.logger.info(f"🔍 DEBUG COMPARATIVE: Final values for template - current_nps: {current_nps}, baseline_nps: {baseline_nps}, nps_difference: {nps_difference}")
             
+            # Get baseline description for display and store it for final synthesis
+            from dashboard_analyzer.main import determine_anomaly_mode_for_vslast
+            
+            # Pass comparison dates if available for "vs Sel. Period"
+            comparison_start_str = None
+            comparison_end_str = None
+            if hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date'):
+                if self.comparison_start_date:
+                    comparison_start_str = self.comparison_start_date.strftime('%Y-%m-%d') if hasattr(self.comparison_start_date, 'strftime') else str(self.comparison_start_date)
+                if self.comparison_end_date:
+                    comparison_end_str = self.comparison_end_date.strftime('%Y-%m-%d') if hasattr(self.comparison_end_date, 'strftime') else str(self.comparison_end_date)
+            
+            _, baseline_description = determine_anomaly_mode_for_vslast(causal_filter, comparison_start_str, comparison_end_str)
+            
+            # Store baseline information for final synthesis
+            self.baseline_description = baseline_description
+            self.causal_filter = causal_filter
+            
             user_input = self._get_input_template(mode="comparative").format(
                 node_path=node_path,
                 start_date=start_date,
@@ -1801,6 +1884,7 @@ class CausalExplanationAgent:
                 anomaly_type=anomaly_type,
                 anomaly_magnitude=anomaly_magnitude,
                 causal_filter=causal_filter,
+                baseline_description=baseline_description,
                 current_nps=current_nps,
                 baseline_nps=baseline_nps,
                 nps_difference=nps_difference,
@@ -2228,6 +2312,7 @@ class CausalExplanationAgent:
         
         This uses the enhanced OperationalDataAnalyzer with configurable comparison modes:
         - 'vslast': Compare against the previous period 
+        - 'vslast_dynamic': Compare against dynamically calculated baseline period
         - 'mean': Compare against 7-day rolling average (default/legacy)
         - 'target': Compare against target values (future implementation)
         
@@ -2236,7 +2321,7 @@ class CausalExplanationAgent:
             start_date: Start date for analysis period (str or datetime)
             end_date: End date for analysis period/target_date (str or datetime)
             comparison_days: Number of days for data collection (default: 7)
-            comparison_mode: Comparison mode - "vslast", "mean", or "target" (default: "mean")
+            comparison_mode: Comparison mode - "vslast", "vslast_dynamic", "mean", or "target" (default: "mean")
         """
         try:
             self.logger.info(f"Collecting operational data for {node_path} on {end_date} with {comparison_days}-day window, comparison_mode={comparison_mode}")
@@ -2256,15 +2341,42 @@ class CausalExplanationAgent:
             from ....anomaly_explanation.data_analyzer import OperationalDataAnalyzer
             
             # Initialize the operational analyzer with specified comparison mode
-            operational_analyzer = OperationalDataAnalyzer(comparison_mode=comparison_mode)
+            # Pass specific comparison dates if available (for "vs Sel. Period")
+            comparison_start_date_for_analyzer = None
+            comparison_end_date_for_analyzer = None
+            if (comparison_mode == "vslast_dynamic" and 
+                hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date') and 
+                self.comparison_start_date and self.comparison_end_date):
+                comparison_start_date_for_analyzer = self.comparison_start_date
+                comparison_end_date_for_analyzer = self.comparison_end_date
+                self.logger.info(f"🎯 Passing specific comparison dates to OperationalDataAnalyzer: {comparison_start_date_for_analyzer.strftime('%Y-%m-%d')} to {comparison_end_date_for_analyzer.strftime('%Y-%m-%d')}")
             
-            # For vslast mode, we need data for BOTH current and previous periods
+            operational_analyzer = OperationalDataAnalyzer(
+                comparison_mode=comparison_mode,
+                comparison_start_date=comparison_start_date_for_analyzer,
+                comparison_end_date=comparison_end_date_for_analyzer
+            )
+            
+            # For vslast modes, we need data for BOTH current and previous periods
             # So we need to collect more days to ensure we have both periods
-            if comparison_mode == "vslast":
-                # For vslast we need current period + previous period data
-                # If we're doing 7-day analysis, we need 14 days total (7 + 7)
-                extended_days = comparison_days * 2
-                self.logger.info(f"VSLAST mode: collecting {extended_days} days to cover both periods")
+            if comparison_mode in ["vslast", "vslast_dynamic"]:
+                # Check if we have specific comparison dates (for "vs Sel. Period")
+                if (comparison_mode == "vslast_dynamic" and 
+                    hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date') and 
+                    self.comparison_start_date and self.comparison_end_date):
+                    # For "vs Sel. Period", calculate days needed to cover both periods
+                    from datetime import timedelta
+                    current_period_days = (target_dt - start_dt).days + 1
+                    comparison_period_days = (self.comparison_end_date - self.comparison_start_date).days + 1
+                    # Calculate the earliest date we need
+                    earliest_date = min(start_dt, self.comparison_start_date)
+                    extended_days = (target_dt - earliest_date).days + 1
+                    self.logger.info(f"VSLAST_DYNAMIC with specific dates: collecting {extended_days} days to cover both current period ({current_period_days} days) and selected period ({comparison_period_days} days)")
+                else:
+                    # For regular vslast we need current period + previous period data
+                    # If we're doing 7-day analysis, we need 14 days total (7 + 7)
+                    extended_days = comparison_days * 2
+                    self.logger.info(f"VSLAST mode: collecting {extended_days} days to cover both periods")
             else:
                 # For mean mode, keep the original logic
                 extended_days = comparison_days
@@ -2324,7 +2436,7 @@ class CausalExplanationAgent:
             if comparison_context:
                 # Use the provided comparison context directly
                 comparison_info += f" {comparison_context}"
-            elif comparison_mode == "vslast":
+            elif comparison_mode in ["vslast", "vslast_dynamic"]:
                 comparison_date = analysis.get("comparison_date", "unknown")
                 comparison_info += f" vs {comparison_date}"
             elif comparison_mode == "mean":
@@ -2350,7 +2462,7 @@ class CausalExplanationAgent:
                         
                     direction = "↗️" if data['direction'] == 'higher' else "↘️"
                     
-                    if comparison_mode == "vslast":
+                    if comparison_mode in ["vslast", "vslast_dynamic"]:
                         delta = data.get('delta', data.get('difference', 0))
                         change_pct = data.get('change_pct', 0)
                         
@@ -2518,9 +2630,16 @@ class CausalExplanationAgent:
             # Final fallback to PBI collector
             self.logger.info(f"📊 Using PBI verbatims collection as final fallback...")
             
-            # Convert string dates to datetime for PBI
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            # Convert dates to datetime for PBI (handle both string and datetime inputs)
+            if isinstance(start_date, str):
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            else:
+                start_dt = start_date
+                
+            if isinstance(end_date, str):
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            else:
+                end_dt = end_date
             
             # collect_verbatims_for_date_range is NOT async
             df = self._collect_verbatims_with_query_tracking(node_path, start_dt, end_dt)
@@ -3082,9 +3201,16 @@ class CausalExplanationAgent:
             print(f"🔧 DEBUG: Temporal comparison: {'ENABLED' if temporal_comparison else 'DISABLED'}")
             self.logger.info(f"Collecting NCS operational incidents for {node_path} from {start_date} to {end_date}")
             
-            # Convert string dates to datetime
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            # Convert dates to datetime (handle both string and datetime inputs)
+            if isinstance(start_date, str):
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            else:
+                start_dt = start_date
+                
+            if isinstance(end_date, str):
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            else:
+                end_dt = end_date
             
             # Calculate number of days in the range
             total_days = (end_dt - start_dt).days + 1
@@ -3103,15 +3229,31 @@ class CausalExplanationAgent:
             comparison_end_dt = None
             
             if temporal_comparison:
-                # Calculate previous period of same length
-                comparison_end_dt = start_dt - timedelta(days=1)  # Day before current period
-                comparison_start_dt = comparison_end_dt - timedelta(days=total_days - 1)  # Same length backwards
-                
-                comparison_start_date = comparison_start_dt.strftime('%Y-%m-%d')
-                comparison_end_date = comparison_end_dt.strftime('%Y-%m-%d')
-                
-                print(f"📅 DEBUG: Comparison period: {comparison_start_date} to {comparison_end_date}")
-                self.logger.info(f"Temporal comparison enabled - comparing with period {comparison_start_date} to {comparison_end_date}")
+                # Use specific comparison dates if available (for "vs Sel. Period"), otherwise calculate previous period
+                if hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date') and self.comparison_start_date and self.comparison_end_date:
+                    # Use the specified comparison period dates
+                    if isinstance(self.comparison_start_date, datetime):
+                        comparison_start_dt = self.comparison_start_date
+                        comparison_end_dt = self.comparison_end_date
+                    else:
+                        comparison_start_dt = datetime.strptime(self.comparison_start_date, '%Y-%m-%d')
+                        comparison_end_dt = datetime.strptime(self.comparison_end_date, '%Y-%m-%d')
+                    
+                    comparison_start_date = comparison_start_dt.strftime('%Y-%m-%d')
+                    comparison_end_date = comparison_end_dt.strftime('%Y-%m-%d')
+                    
+                    print(f"📅 DEBUG: Using specified comparison period: {comparison_start_date} to {comparison_end_date}")
+                    self.logger.info(f"Temporal comparison enabled - comparing with specified period {comparison_start_date} to {comparison_end_date}")
+                else:
+                    # Calculate previous period of same length (default behavior)
+                    comparison_end_dt = start_dt - timedelta(days=1)  # Day before current period
+                    comparison_start_dt = comparison_end_dt - timedelta(days=total_days - 1)  # Same length backwards
+                    
+                    comparison_start_date = comparison_start_dt.strftime('%Y-%m-%d')
+                    comparison_end_date = comparison_end_dt.strftime('%Y-%m-%d')
+                    
+                    print(f"📅 DEBUG: Calculated comparison period: {comparison_start_date} to {comparison_end_date}")
+                    self.logger.info(f"Temporal comparison enabled - comparing with calculated period {comparison_start_date} to {comparison_end_date}")
             
             # Collect NCS data for the current period (processes each day individually)
             print(f"🔍 DEBUG: Starting day-by-day NCS data collection for CURRENT period...")
@@ -3466,9 +3608,16 @@ class CausalExplanationAgent:
             self.logger.info(f"🛫 ROUTES_TOOL CALLED - Enhanced comprehensive routes analysis")
             self.logger.debug(f"📋 Parameters: node_path={node_path}, start_date={start_date}, end_date={end_date}, anomaly_type={anomaly_type}")
             
-            # Convert string dates to datetime
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            # Convert dates to datetime (handle both string and datetime inputs)
+            if isinstance(start_date, str):
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            else:
+                start_dt = start_date
+                
+            if isinstance(end_date, str):
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            else:
+                end_dt = end_date
             
             # Collect routes from all three sources
             all_routes_analysis = await self._consolidate_routes_from_all_sources(
@@ -3678,13 +3827,18 @@ class CausalExplanationAgent:
                 # Sort routes by this touchpoint's CSAT difference (not absolute CSAT)
                 # For negative SHAP values (negative impact): sort by worst CSAT diff first (biggest drops)
                 # For positive SHAP values (positive impact): sort by best CSAT diff first (biggest improvements)
+                
+                # Handle None values before sorting to avoid comparison errors
+                df_sorted = df.copy()
+                df_sorted[col] = df_sorted[col].fillna(0)  # Replace None with 0 for sorting
+                
                 if shap_value < 0:
                     # Negative SHAP: sort by worst CSAT diff first (biggest drops)
-                    sorted_df = df.sort_values(by=col, ascending=True)
+                    sorted_df = df_sorted.sort_values(by=col, ascending=True)
                     sort_desc = f"worst {touchpoint} CSAT change first (negative SHAP: {shap_value:.3f})"
                 else:
                     # Positive SHAP: sort by best CSAT diff first (biggest improvements)
-                    sorted_df = df.sort_values(by=col, ascending=False)
+                    sorted_df = df_sorted.sort_values(by=col, ascending=False)
                     sort_desc = f"best {touchpoint} CSAT change first (positive SHAP: {shap_value:.3f})"
             
                 # Get top 5 routes for this driver
@@ -3713,7 +3867,7 @@ class CausalExplanationAgent:
                     # Add to analysis summary
                     driver_score_str = f"{route_info['driver_score']}" if route_info['driver_score'] is not None else "N/A"
                     nps_str = f", NPS {route_info['nps']}" if route_info['nps'] is not None else ""
-                    nps_diff_str = f", vs L7d: {route_info['nps_diff']:+.1f}" if route_info['nps_diff'] is not None else ""
+                    nps_diff_str = f", vs {self.baseline_description or 'período previo'}: {route_info['nps_diff']:+.1f}" if route_info['nps_diff'] is not None else ""
                     analysis_summary += f"     • {route_info['route']}: {touchpoint} {driver_score_str}{nps_str}{nps_diff_str}, Pax {route_info['pax']}\n"
             
             return {
@@ -3850,7 +4004,7 @@ class CausalExplanationAgent:
                 analysis_summary += f"   📈 Route details:\n"
                 for route_info in routes_analysis:
                     nps_str = f"NPS {route_info['nps']}" if route_info['nps'] is not None else "NPS N/A"
-                    nps_diff_str = f", vs L7d: {route_info['nps_diff']:+.1f}" if route_info['nps_diff'] is not None else ""
+                    nps_diff_str = f", vs {self.baseline_description or 'período previo'}: {route_info['nps_diff']:+.1f}" if route_info['nps_diff'] is not None else ""
                     analysis_summary += f"     • {route_info['route']}: {nps_str}{nps_diff_str}, Pax {route_info['pax']}\n"
             
             return {
@@ -3934,7 +4088,7 @@ class CausalExplanationAgent:
                 analysis_summary += f"   📈 Route details:\n"
                 for route_info in routes_analysis:
                     nps_str = f"NPS {route_info['nps']}" if route_info['nps'] is not None else "NPS N/A"
-                    nps_diff_str = f", vs L7d: {route_info['nps_diff']:+.1f}" if route_info['nps_diff'] is not None else ""
+                    nps_diff_str = f", vs {self.baseline_description or 'período previo'}: {route_info['nps_diff']:+.1f}" if route_info['nps_diff'] is not None else ""
                     analysis_summary += f"     • {route_info['route']}: {nps_str}{nps_diff_str}, Pax {route_info['pax']}\n"
             
             return {
@@ -4156,9 +4310,16 @@ class CausalExplanationAgent:
             self.logger.info(f"👥 CUSTOMER_PROFILE_TOOL CALLED - Mode: {mode}")
             self.logger.debug(f"📋 Parameters: node_path={node_path}, start_date={start_date}, end_date={end_date}, mode={mode}")
             
-            # Convert string dates to datetime
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            # Convert dates to datetime (handle both string and datetime inputs)
+            if isinstance(start_date, str):
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            else:
+                start_dt = start_date
+                
+            if isinstance(end_date, str):
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            else:
+                end_dt = end_date
             
             # Define key dimensions for NPS impact analysis
             # Available dimensions: Tier, Bound, Travel hour, Group age, Residence Region, 
@@ -4178,6 +4339,7 @@ class CausalExplanationAgent:
                     
                     # collect_customer_profile_for_date_range IS async
                     if mode == "comparative":
+                        # Pass comparison dates as datetime objects (the method expects datetime, not strings)
                         df = await self._collect_customer_profile_with_query_tracking(
                             node_path, start_dt, end_dt, dimension,
                             comparison_filter=self.causal_filter,
@@ -4983,7 +5145,7 @@ class CausalExplanationAgent:
                     tools=[],
                     structured_output=None  # Remove structured output to get narrative content
                 ),
-                timeout=1800.0  # 30 minute timeout for very complex final synthesis
+                timeout=300.0  # 5 minute timeout for final synthesis
             )
             
             self.logger.info("✅ LLM response received")
@@ -5029,6 +5191,16 @@ class CausalExplanationAgent:
     def _build_collected_data_summary(self) -> str:
         """Build a comprehensive summary of all collected data with specific details"""
         summary_parts = []
+        
+        # Add baseline information at the beginning
+        if hasattr(self, 'baseline_description') and hasattr(self, 'causal_filter'):
+            self.logger.info(f"🔍 DEBUG DATA_SUMMARY: Adding baseline info - causal_filter: {self.causal_filter}, baseline_description: {self.baseline_description}")
+            summary_parts.append(f"📊 **INFORMACIÓN DE BASELINE:**")
+            summary_parts.append(f"   • Filtro de comparación: {self.causal_filter}")
+            summary_parts.append(f"   • Descripción del baseline: {self.baseline_description}")
+            summary_parts.append("")  # Empty line for separation
+        else:
+            self.logger.warning(f"🔍 DEBUG DATA_SUMMARY: Baseline info NOT added - hasattr baseline_description: {hasattr(self, 'baseline_description')}, hasattr causal_filter: {hasattr(self, 'causal_filter')}")
         
         # Explanatory Drivers Data
         if 'explanatory_drivers' in self.collected_data:
@@ -5629,6 +5801,18 @@ class CausalExplanationAgent:
             companies_str = '", "'.join(companies)
             hauls_str = '", "'.join(hauls)
             
+            # Convert datetime to date components
+            if hasattr(start_date, 'year'):
+                start_year, start_month, start_day = start_date.year, start_date.month, start_date.day
+                end_year, end_month, end_day = end_date.year, end_date.month, end_date.day
+            else:
+                # Fallback for string dates
+                from datetime import datetime
+                start_dt = datetime.strptime(str(start_date)[:10], '%Y-%m-%d')
+                end_dt = datetime.strptime(str(end_date)[:10], '%Y-%m-%d')
+                start_year, start_month, start_day = start_dt.year, start_dt.month, start_dt.day
+                end_year, end_month, end_day = end_dt.year, end_dt.month, end_dt.day
+            
             # Replace the template placeholders
             query = template.replace(
                 'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
@@ -5641,7 +5825,7 @@ class CausalExplanationAgent:
                 f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
             ).replace(
                 '\'Date_Master\'[Date] =date(2025,05,12)',
-                f'\'Date_Master\'[Date] >= date({start_date.year},{start_date.month},{start_date.day}) && \'Date_Master\'[Date] <= date({end_date.year},{end_date.month},{end_date.day})'
+                f'\'Date_Master\'[Date] >= date({start_year},{start_month},{start_day}) && \'Date_Master\'[Date] <= date({end_year},{end_month},{end_day})'
             )
             
             return query
@@ -6627,7 +6811,7 @@ async def investigate_anomaly_causally(
     end_date: str,
     anomaly_type: str,
     anomaly_magnitude: float,
-    llm_type: LLMType = LLMType.CLAUDE_SONNET_4,
+    llm_type: LLMType = LLMType.O4_MINI,
     custom_helper_prompts: Optional[Dict[str, Any]] = None
 ) -> str:
     """

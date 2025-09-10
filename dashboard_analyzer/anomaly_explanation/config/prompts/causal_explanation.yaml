@@ -71,7 +71,7 @@ comparative_prompts:
     • **Período de Análisis**: {start_date} a {end_date}
     • **Tipo de Anomalía**: {anomaly_type}
     • **Magnitud**: {anomaly_magnitude} pts
-    • **Comparación**: {causal_filter}
+    • **Comparación**: {causal_filter} ({baseline_description})
     • **NPS Actual**: {current_nps}
     • **NPS Baseline**: {baseline_nps}
     • **Modo de Detección**: {anomaly_detection_mode}
@@ -98,7 +98,7 @@ comparative_prompts:
     3. **Decide** si continuar con la siguiente herramienta o terminar la investigación
     4. **Justifica** tu decisión basándote en la evidencia obtenida
 
-    **RESPONDE EN ESTE FORMATO:**
+    **RESPONDE EXACTAMENTE EN ESTE FORMATO MARKDOWN:**
 
     ```reflection
     [Tu reflexión sobre los resultados y evaluación de la iteración]
@@ -107,6 +107,8 @@ comparative_prompts:
     ```next_tool
     [Nombre de la siguiente herramienta a ejecutar, o "TERMINAR" si la investigación está completa]
     ```
+
+    ⚠️ **CRÍTICO**: Debes usar EXACTAMENTE las comillas triples (```) antes y después de "reflection" y "next_tool". Sin las comillas triples, el sistema no puede procesar tu respuesta.
 
 # =============================================================================
 # SINGLE MODE PROMPTS
@@ -175,7 +177,7 @@ single_prompts:
     3. **Decide** si continuar con la siguiente herramienta o terminar la investigación
     4. **Justifica** tu decisión basándote en la evidencia obtenida
 
-    **RESPONDE EN ESTE FORMATO:**
+    **RESPONDE EXACTAMENTE EN ESTE FORMATO MARKDOWN:**
 
     ```reflection
     [Tu reflexión sobre los resultados y evaluación de la iteración]
@@ -184,6 +186,8 @@ single_prompts:
     ```next_tool
     [Nombre de la siguiente herramienta a ejecutar, o "TERMINAR" si la investigación está completa]
     ```
+
+    ⚠️ **CRÍTICO**: Debes usar EXACTAMENTE las comillas triples (```) antes y después de "reflection" y "next_tool". Sin las comillas triples, el sistema no puede procesar tu respuesta.
 
 # =============================================================================
 # TOOL-SPECIFIC PROMPTS
@@ -421,3 +425,20 @@ initial_decision_prompts:
     **DECISIÓN**: ¿Qué herramienta ejecutar PRIMERO?
 
     **RESPONDE SOLO CON EL NOMBRE DE LA HERRAMIENTA** (ej: operative_data_tool)
+
+# =============================================================================
+# SYNTHESIS PROMPTS
+# =============================================================================
+final_synthesis_prompt: |
+  **GENERA UN INFORME CAUSAL CONSOLIDADO** basado en los datos recolectados durante la investigación.
+
+  ⚠️ **INSTRUCCIONES CRÍTICAS PARA EL BASELINE:**
+  - En la sección "INFORMACIÓN DE BASELINE" encontrarás la descripción exacta del baseline
+  - COPIA LITERALMENTE esa descripción en el informe final
+  - FORMATO OBLIGATORIO: "NPS Baseline ({descripción_exacta_del_baseline}): {valor}"
+
+  📋 **ESTRUCTURA DEL INFORME:**
+  1. **Resumen de la anomalía** - Incluye NPS actual, baseline y variación
+  2. **Causa/s encontradas y herramientas que la validan** - Explicacion de las causas encontradas y las herramientas que la validan
+  3. **Rutas afectadas** - Rutas con mayor impacto
+  4. **Reactividad de cliente** - Perfiles más afectados

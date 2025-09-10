@@ -30,14 +30,15 @@ def debug_print(message):
     if DEBUG_MODE:
         print(f"🔍 DEBUG: {message}")
 
-def generate_comparison_context(anomaly_detection_mode: str, aggregation_days: int, baseline_periods: int = 7) -> str:
+def generate_comparison_context(anomaly_detection_mode: str, aggregation_days: int, baseline_periods: int = 7, baseline_description: str = None) -> str:
     """
     Generate comparison context explanation based on anomaly detection mode, aggregation days and baseline periods
     
     Args:
-        anomaly_detection_mode: 'vslast', 'mean', or 'target'
+        anomaly_detection_mode: 'vslast', 'vslast_dynamic', 'mean', or 'target'
         aggregation_days: Number of days per period (1, 7, 14, 30, etc.)
         baseline_periods: Number of periods to use as baseline (default: 7)
+        baseline_description: Dynamic baseline description (for vslast_dynamic)
     
     Returns:
         String explaining the comparison context
@@ -48,6 +49,13 @@ def generate_comparison_context(anomaly_detection_mode: str, aggregation_days: i
         elif aggregation_days == 1:
             return "• **Comparación**: vs día anterior (período previo de 1 día)"
         else:
+            return f"• **Comparación**: vs período previo ({aggregation_days} días)"
+    elif anomaly_detection_mode == 'vslast_dynamic':
+        # Use dynamic baseline description
+        if baseline_description:
+            return f"• **Comparación**: vs {baseline_description}"
+        else:
+            # Fallback to traditional vslast behavior
             return f"• **Comparación**: vs período previo ({aggregation_days} días)"
     elif anomaly_detection_mode == 'mean':
         if aggregation_days == 1:
@@ -588,10 +596,12 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
                             nps_context = f"Current NPS: {current_nps}, Baseline NPS: {baseline_nps}"
                             
                             # Generate comparison context
+                            baseline_description = nps_data.get('baseline_description', None)
                             comparison_context = generate_comparison_context(
                                 analysis_data.get('anomaly_detection_mode', 'target'), 
                                 analysis_data.get('aggregation_days', 7),
-                                analysis_data.get('baseline_periods', 7)
+                                analysis_data.get('baseline_periods', 7),
+                                baseline_description
                             )
                         else:
                             nps_context = f"NPS: {nps_data}"
@@ -1531,6 +1541,83 @@ async def run_flexible_data_download_silent_with_date(aggregation_days: int, per
     else:
         return None
 
+def calculate_baseline_period_for_causal_filter(current_period: int, causal_filter: str, aggregation_days: int = 7) -> tuple[int, str]:
+    """
+    Calculate the baseline period number and description based on the current period and causal filter.
+    
+    Args:
+        current_period: The period being analyzed (e.g., 1, 2, 3...)
+        causal_filter: The causal filter comparison (e.g., "vs L7d", "vs LM", "vs LY", "vs Target")
+        aggregation_days: Number of days per period (default: 7 for weekly)
+        
+    Returns:
+        tuple: (baseline_period_number, baseline_description)
+    """
+    if causal_filter == "vs L7d":
+        # Compare with last 7 days (1 period back for weekly aggregation)
+        baseline_period = current_period + 1
+        return baseline_period, "últimos 7 días"
+    
+    elif causal_filter == "vs L14d":
+        # Compare with last 14 days (2 periods back for weekly aggregation)
+        baseline_period = current_period + 2
+        return baseline_period, "últimos 14 días"
+    
+    elif causal_filter == "vs LM":
+        # Compare with last month (approximately 4 periods back for weekly aggregation)
+        baseline_period = current_period + 4
+        return baseline_period, "mes natural anterior"
+    
+    elif causal_filter == "vs LY":
+        # Compare with last year (approximately 52 periods back for weekly aggregation)
+        baseline_period = current_period + 52
+        return baseline_period, "mismo período año anterior"
+    
+    elif causal_filter == "vs Target":
+        # Target comparison - this will be handled differently in the detector
+        return None, "objetivo/target"
+    
+    elif causal_filter == "vs Sel. Period":
+        # Selected period comparison - requires specific dates from user
+        return None, "período seleccionado"
+    
+    else:
+        # Default fallback
+        baseline_period = current_period + 1
+        return baseline_period, "período inmediatamente anterior"
+
+
+def determine_anomaly_mode_for_vslast(causal_filter: str, comparison_start_date: str = None, comparison_end_date: str = None) -> tuple[str, str]:
+    """
+    Determine the anomaly detection mode and baseline description for vslast mode
+    based on the causal filter comparison.
+    
+    Args:
+        causal_filter: The causal filter comparison (e.g., "vs L7d", "vs LM", "vs LY", "vs Target")
+        comparison_start_date: Start date for comparison period (YYYY-MM-DD) when using "vs Sel. Period"
+        comparison_end_date: End date for comparison period (YYYY-MM-DD) when using "vs Sel. Period"
+        
+    Returns:
+        tuple: (anomaly_mode, baseline_description)
+    """
+    if causal_filter == "vs L7d":
+        return "vslast_dynamic", "últimos 7 días"
+    elif causal_filter == "vs L14d":
+        return "vslast_dynamic", "últimos 14 días"
+    elif causal_filter == "vs LM":
+        return "vslast_dynamic", "mes natural anterior"
+    elif causal_filter == "vs LY":
+        return "vslast_dynamic", "mismo período año anterior"
+    elif causal_filter == "vs Target":
+        return "vslast_dynamic", "objetivo/target"
+    elif causal_filter == "vs Sel. Period":
+        if comparison_start_date and comparison_end_date:
+            return "vslast_dynamic", f"período seleccionado ({comparison_start_date} a {comparison_end_date})"
+        else:
+            return "vslast_dynamic", "período seleccionado"
+    else:
+        return "vslast_dynamic", "período inmediatamente anterior"
+
 def get_segment_node_paths(segment: str) -> list:
     """
     Generate the list of node paths based on the selected segment.
@@ -1673,13 +1760,20 @@ async def run_comprehensive_analysis(
     print("\n" + "=" * 40)
     print("📊 STEP 1: Running Weekly Comparative Analysis")
     print("=" * 40)
+    
+    # Determine anomaly detection mode based on causal filter
+    comp_start_str = comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date and hasattr(comparison_start_date, 'strftime') else str(comparison_start_date) if comparison_start_date else None
+    comp_end_str = comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date and hasattr(comparison_end_date, 'strftime') else str(comparison_end_date) if comparison_end_date else None
+    anomaly_mode, baseline_desc = determine_anomaly_mode_for_vslast(causal_filter, comp_start_str, comp_end_str)
+    print(f"🎯 Anomaly Detection Mode: {anomaly_mode} (baseline: {baseline_desc})")
+    
     try:
         weekly_report_path = await execute_analysis_flow(
             analysis_date=analysis_date,
             date_parameter=date_parameter,
             segment=segment,
             explanation_mode=explanation_mode,
-            anomaly_detection_mode='vslast',
+            anomaly_detection_mode=anomaly_mode,
             baseline_periods=7,
             aggregation_days=7,
             periods=1,
@@ -2068,7 +2162,7 @@ async def analyze_single_day(target_date: datetime, segment: str, explanation_mo
         print(f"❌ Error analyzing single day {target_date.strftime('%Y-%m-%d')}: {str(e)}")
         return f"Error analyzing day {target_date.strftime('%Y-%m-%d')}: {str(e)}"
 
-async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime = None, date_parameter: str = None, anomaly_detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = "vs L7d", periods: int = 7):
+async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime = None, date_parameter: str = None, anomaly_detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = "vs L7d", periods: int = 7, causal_comparison_dates: tuple = None):
     """Run flexible analysis completely silently"""
     import os
     from contextlib import redirect_stdout, redirect_stderr
@@ -2089,7 +2183,9 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
         threshold=5.0,
         min_sample_size=5,
         detection_mode=anomaly_detection_mode,
-        baseline_periods=baseline_periods
+        baseline_periods=baseline_periods,
+        causal_filter=causal_filter,
+        causal_comparison_dates=causal_comparison_dates
     )
     
     # Calculate the correct period numbers based on date parameter type and periods parameter
@@ -2470,10 +2566,12 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
                                     nps_context = f"Current NPS: {current_nps}, Baseline NPS: {baseline_nps}"
                                     
                                     # Generate comparison context
+                                    baseline_description = nps_data.get('baseline_description', None)
                                     comparison_context = generate_comparison_context(
                                         analysis_data.get('anomaly_detection_mode', 'target'), 
                                         analysis_data.get('aggregation_days', 7),
-                                        analysis_data.get('baseline_periods', 7)
+                                        analysis_data.get('baseline_periods', 7),
+                                        baseline_description
                                     )
                                     
                                     # Calculate anomaly magnitude from NPS values
@@ -3224,8 +3322,11 @@ async def main():
                         type=str,
                         default="vs L7d",
                         help='Causal filter for comparative analysis (e.g., "vs L7d", "vs LM", "vs LY", "vs Target", "vs Sel. Period")')
-    parser.add_argument('--causal-comparison-dates', nargs=2, metavar=('START_DATE', 'END_DATE'),
-                        help='Comparison period dates (YYYY-MM-DD YYYY-MM-DD) when using --causal-filter-comparison "vs Sel. Period"')
+    # Comparison dates for selected period analysis
+    parser.add_argument('--comparison-start-date', type=str,
+                        help='Start date for comparison period (YYYY-MM-DD) when using --causal-filter-comparison "vs Sel. Period"')
+    parser.add_argument('--comparison-end-date', type=str,
+                        help='End date for comparison period (YYYY-MM-DD) when using --causal-filter-comparison "vs Sel. Period"')
     
     # Debug mode parameter
     parser.add_argument('--debug', action='store_true',
@@ -3297,6 +3398,18 @@ async def main():
         print(f"   • Note: Simulating {pbi_lag_days}-day lag from {args.insert_date_ci}")
     elif args.date_flight_local:
         print(f"   • Note: Using date directly from dashboard without lag simulation")
+    
+    # Process comparison dates if provided
+    comparison_start_date = None
+    comparison_end_date = None
+    if args.comparison_start_date and args.comparison_end_date:
+        try:
+            comparison_start_date = datetime.strptime(args.comparison_start_date, '%Y-%m-%d')
+            comparison_end_date = datetime.strptime(args.comparison_end_date, '%Y-%m-%d')
+            print(f"   • Comparison period: {comparison_start_date.strftime('%Y-%m-%d')} to {comparison_end_date.strftime('%Y-%m-%d')}")
+        except ValueError:
+            print("❌ Error: Comparison dates must be in YYYY-MM-DD format")
+            return
     
     # --- Date & Lag Configuration ---
     # ... (existing date logic) ...
@@ -3832,12 +3945,26 @@ async def execute_analysis_flow(
     if study_mode == "single":
         causal_filter = None
     
+    # Get baseline description for display
+    if study_mode == "single":
+        # For single mode, baseline is mean of last N periods
+        if aggregation_days == 1:
+            baseline_desc = f"media de los últimos {baseline_periods} días"
+        else:
+            baseline_desc = f"media de los últimos {baseline_periods} períodos de {aggregation_days} días"
+    else:
+        # For comparative mode, use causal filter
+        comp_start_str = comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date and hasattr(comparison_start_date, 'strftime') else str(comparison_start_date) if comparison_start_date else None
+        comp_end_str = comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date and hasattr(comparison_end_date, 'strftime') else str(comparison_end_date) if comparison_end_date else None
+        _, baseline_desc = determine_anomaly_mode_for_vslast(causal_filter or "vs L7d", comp_start_str, comp_end_str)
+    
     print(f"\n{'='*60}")
     print(f"🚀 EXECUTING ANALYSIS FLOW")
     print(f"   - Study Mode: {study_mode.upper() if study_mode else 'AUTO-DETECTED'}")
     print(f"   - Aggregation: {aggregation_days} days")
     print(f"   - Periods: {periods}")
     print(f"   - Causal Filter: {causal_filter}")
+    print(f"   - Baseline: {baseline_desc}")
     print(f"{'='*60}")
 
     # 1. Data Download
@@ -3861,7 +3988,8 @@ async def execute_analysis_flow(
         anomaly_detection_mode,
         baseline_periods,
         causal_filter,
-        periods=periods
+        periods=periods,
+        causal_comparison_dates=(str(comparison_start_date), str(comparison_end_date)) if comparison_start_date and comparison_end_date else None
     )
 
     if not analysis_data or not analysis_data.get('anomaly_periods'):

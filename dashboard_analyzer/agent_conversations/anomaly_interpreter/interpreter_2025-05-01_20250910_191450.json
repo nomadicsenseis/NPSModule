@@ -1,0 +1,129 @@
+{
+  "metadata": {
+    "agent_type": "anomaly_interpreter",
+    "analysis_type": "hierarchical_generation_by_generation",
+    "export_timestamp": "2025-09-10T19:14:50.167462",
+    "analysis_date": "2025-05-01",
+    "llm_type": "O4_MINI",
+    "total_generations": 0,
+    "total_nodes_analyzed": 3,
+    "error": null
+  },
+  "hierarchy_structure": {
+    "Global/SH/Economy": {
+      "type": "node",
+      "level": 3,
+      "path": "Global/SH/Economy",
+      "parent": "Global/SH",
+      "children": [
+        "Global/SH/Economy/IB",
+        "Global/SH/Economy/YW"
+      ],
+      "content": "Informe Causal Consolidado – Segmento Global/SH/Economy (2025-05-01 a 2025-05-31)\n\n1. Resumen de la anomalía  \n   • NPS Período Analizado: 31.585310563699444  \n   • NPS Período de Comparación (Baseline): 40.0  \n   • Magnitud de la Caída: –8.414689436300556 puntos  \n   • Muestra encuestas analizadas: 20 (resultados pueden tener variabilidad aumentada)  \n\n2. Causa tangible  \n   Según el análisis de explanatory_drivers (20 encuestas):  \n   • Drivers operacionales con aparición significativa:  \n     – Punctuality  \n   • Drivers de producto/servicio con aparición significativa:  \n     – Arrivals experience  \n     – Boarding  \n     – Lounge  \n     – Journey preparation support  \n     – In flight food and beverage  \n     – Cabin Crew  \n     – Aircraft interior  \n   • Valores SHAP exactos para cada driver: no están disponibles  \n   • Causa más plausible: combinación de demoras (Punctuality) y deficiencias en múltiples aspectos de servicio a bordo y en tierra (boarding, lounge, food & beverage, cabin crew, etc.).  \n\n3. Rutas afectadas  \n   • Datos específicos de rutas no están disponibles (no se ejecutó routes_tool)  \n   • Recomendación: ejecutar routes_tool con filtro Global/SH/Economy para identificar las rutas con mayor incidencia de los drivers arriba mencionados.  \n\n4. Reactividad de cliente  \n   • Perfiles con mayor impacto no están disponibles (no se ejecutó customer_profile_tool)  \n   • Recomendación: correr customer_profile_tool para determinar si, por ejemplo, viajeros de negocios vs. ocio o clientes alta frecuencia reaccionaron con mayor intensidad.  \n\n5. Siguientes pasos sugeridos  \n   1. Ejecutar operative_data_tool para validar métricas de puntualidad e incidentes diarios vs. baseline.  \n   2. Correr ncs_tool para ver evolución temporal diaria de quejas/incidentes asociados a cada driver.  \n   3. Analizar verbatims de clientes para anclar las razones cualitativas de insatisfacción en boarding, lounge y food & beverage.  \n   4. Identificar rutas críticas y perfiles de cliente para priorizar planes de acción.  \n\nNota: Sin valores SHAP ni datos operativos, las conclusiones son preliminares. Se recomienda seguir con las herramientas faltantes para robustecer la causa raíz."
+    },
+    "Global/SH/Economy/IB": {
+      "type": "node",
+      "level": 4,
+      "path": "Global/SH/Economy/IB",
+      "parent": "Global/SH/Economy",
+      "children": [],
+      "content": "Informe Causal Consolidado  \nSegmento: Global / SH / Economy / IB  \nPeriodo: 2025-05-01 a 2025-05-31  \nComparación vs periodo previo de 31 días  \n\n1. Resumen de la anomalía  \n   • NPS actual: 31.08790452145949  \n   • NPS baseline (media de 7 periodos): 40.0  \n   • Variación absoluta: –8.912095478540511 puntos  \n   • Tamaño de muestra para drivers: 20 encuestas → resultados sujetos a alta variabilidad estadística  \n\n2. Causa tangible  \n   A partir de los drivers significativos detectados por el modelo explicativo:  \n   - Drivers operacionales destacados  \n     · Punctuality (puntualidad)  \n     · Load factor (factor de ocupación)  \n     • Valores SHAP exactos no están disponibles en los datos suministrados, por lo que no puede asignarse con precisión la magnitud de cada uno.  \n   - Drivers de producto/servicio destacados  \n     · Arrivals experience  \n     · Boarding  \n     · Journey preparation support  \n     · In flight food and beverage  \n     · Cabin Crew  \n     · Lounge  \n     • Los valores SHAP exactos tampoco están disponibles para estos drivers.  \n\n   Conclusión parcial:  \n   • Hay evidencia de impacto tanto operacional (puntualidad) como de producto/servicio (experiencia a bordo y atención al cliente) en la caída del NPS, pero sin los valores SHAP no es posible priorizar un único factor raíz.  \n\n3. Rutas afectadas  \n   • Los datos de rutas para este período no están incluidos en los datos recolectados.  \n\n4. Reactividad de cliente  \n   • No se dispone de información de perfiles de cliente ni segmentación de reactividad (herramienta customer_profile_tool).  \n\n5. Hallazgos adicionales y próximos pasos  \n   • Para validar la correlación entre los drivers operativos y la tendencia de incidentes se requiere ejecutar operative_data_tool y ncs_tool.  \n   • Para asociar feedback cualitativo a los drivers listados conviene obtener resultados de verbatims_tool.  \n   • Para identificar rutas específicas afectadas por estos drivers es necesario ejecutar routes_tool.  \n\nEn este momento, el análisis basado solo en explanatory_drivers indica múltiples posibles causas (operativa y de producto/servicio) pero carece de datos cuantitativos adicionales (SHAP numéricos, rutas, incidentes, perfiles) para emitir una causa raíz definitiva."
+    },
+    "Global/SH/Economy/YW": {
+      "type": "node",
+      "level": 4,
+      "path": "Global/SH/Economy/YW",
+      "parent": "Global/SH/Economy",
+      "children": [],
+      "content": "Informe Causal Consolidado – Segmento Global/SH/Economy/YW (2025-05)\n\n1. Contexto de la Anomalía  \n   • NPS Período Analizado: 32.54424778761062  \n   • NPS Baseline (7 períodos previos): 40.0  \n   • Variación Absoluta: –7.455752212389378 puntos  \n\n2. Causa Tangible Principal  \n   A partir de la correlación entre drivers SHAP, tendencias NCS y feedback de clientes, la raíz de la caída de NPS es operativa: degradación de la puntualidad.  \n   • SHAP Punctuality: –4.485 (significativo)  \n   • Sat_diff (diferencia de satisfacción asociada): –6.004  \n   • Incidentes de retraso:  \n     – Período previo: 402  \n     – Período actual: 439  \n     – Variación: +37  \n   • Incidentes de cancelación:  \n     – Período previo: 373  \n     – Período actual: 315  \n     – Variación: –58  \n   • Tamaño de muestra NCS: 1.122 incidentes (confiable)  \n\n3. Drivers de Producto/Servicio Contributivos  \n   (Encuestas analizadas: 20, resultados con variabilidad aumentada)  \n   • Arrivals experience  \n   • IB Plus loyalty program  \n   • Boarding  \n   • Aircraft interior  \n   • Cabin Crew  \n   • In flight food and beverage  \n   • Journey preparation support  \n\n4. Feedback Cualitativo (Verbatims)  \n   • Total comentarios: 5.686  \n   • Temas recurrentes:  \n     – Alta frustración por retrasos frecuentes  \n     – Falta de información a bordo sobre estado del vuelo  \n     – Desvíos de última hora sin explicación previa  \n\n5. Rutas Afectadas (NCS – Cancellations)  \n   La herramienta NCS identifica cancelaciones en un conjunto amplio de rutas, pero no hay solapamiento suficiente con drivers explicativos ni con comentarios de cliente para aislar rutas concretas como causa única. Relación de rutas (no validadas cruzadamente):  \n   MAD-BJZ, MAD-MLN, GRX-MLN, VLC-MAD, GVA-MAD, SCQ-MAD, MAD-MVD, BOG-MAD, MAD-GVA, MAD-GRU, MAD-LEU, MAD-TLV, MAD-IAD, MAD-PMI, ILD-LEU, MIA-MAD, MAD-BOS, BOS-MAD, SCL-MAD, BCN-MAD, NTE-MAD, MAD-PNA, MAD-BOG, EZE-MAD, ACE-MAD, MAD-MRS, MRS-NCE, BCN-MIA, MAD-MIA, XRY-MAD, OPO-MAD, MAD-OPO, AGP-MLN, MAD-EZE, MAD-BIO, MAD-GYE, MAD-SCL, MAD-CMN, MAD-ALG, MAD-SIN, MAD-DEL\n\n6. Conclusión  \n   La caída de –7.4557 puntos de NPS se explica principalmente por un empeoramiento de la puntualidad (SHAP –4.485) reflejado en un aumento de 37 retrasos, amplificado por problemas de comunicación e información a bordo. Los drivers de producto/servicio listados contribuyen en menor medida, pero no presentan el mismo nivel de evidencia cuantitativa.\n\n7. Recomendaciones Iniciales  \n   • Focalizar acciones en reducción de retrasos (mejor coordinación operacional).  \n   • Refuerzo de comunicación proactiva a bordo (sistemas de información y tripulación).  \n   • Plan de recuperación de satisfacción en rutas con mayor concentración de incidentes (monitorizar KPIs diarios de puntualidad).  \n\n(Al no existir solapamiento consistente de rutas en todas las fuentes, no se identificaron rutas específicas para intervención prioritaria)."
+    }
+  },
+  "hierarchy_summary": {
+    "total_nodes": 3,
+    "generations_analyzed": 0,
+    "nodes_by_level": {
+      "3": [
+        "Global/SH/Economy"
+      ],
+      "4": [
+        "Global/SH/Economy/IB",
+        "Global/SH/Economy/YW"
+      ]
+    },
+    "parent_child_relationships": {
+      "Global/SH/Economy": [
+        "Global/SH/Economy/IB",
+        "Global/SH/Economy/YW"
+      ]
+    }
+  },
+  "conversation_log": [
+    {
+      "generation": 0,
+      "type": "CONTEXT_SETUP",
+      "content": "Analiza la siguiente información que compara dos períodos para el día 2025-05-01. Asimila toda la información en silencio. No generes ninguna respuesta todavía. Espera a la siguiente instrucción para comenzar el análisis paso a paso.\n\n<tree_data>\nMultiple anomalous nodes analyzed:\n\nNODO: Global/SH/Economy\nInforme Causal Consolidado – Segmento Global/SH/Economy (2025-05-01 a 2025-05-31)\n\n1. Resumen de la anomalía  \n   • NPS Período Analizado: 31.585310563699444  \n   • NPS Período de Comparación (Baseline): 40.0  \n   • Magnitud de la Caída: –8.414689436300556 puntos  \n   • Muestra encuestas analizadas: 20 (resultados pueden tener variabilidad aumentada)  \n\n2. Causa tangible  \n   Según el análisis de explanatory_drivers (20 encuestas):  \n   • Drivers operacionales con aparición significativa:  \n     – Punctuality  \n   • Drivers de producto/servicio con aparición significativa:  \n     – Arrivals experience  \n     – Boarding  \n     – Lounge  \n     – Journey preparation support  \n     – In flight food and beverage  \n     – Cabin Crew  \n     – Aircraft interior  \n   • Valores SHAP exactos para cada driver: no están disponibles  \n   • Causa más plausible: combinación de demoras (Punctuality) y deficiencias en múltiples aspectos de servicio a bordo y en tierra (boarding, lounge, food & beverage, cabin crew, etc.).  \n\n3. Rutas afectadas  \n   • Datos específicos de rutas no están disponibles (no se ejecutó routes_tool)  \n   • Recomendación: ejecutar routes_tool con filtro Global/SH/Economy para identificar las rutas con mayor incidencia de los drivers arriba mencionados.  \n\n4. Reactividad de cliente  \n   • Perfiles con mayor impacto no están disponibles (no se ejecutó customer_profile_tool)  \n   • Recomendación: correr customer_profile_tool para determinar si, por ejemplo, viajeros de negocios vs. ocio o clientes alta frecuencia reaccionaron con mayor intensidad.  \n\n5. Siguientes pasos sugeridos  \n   1. Ejecutar operative_data_tool para validar métricas de puntualidad e incidentes diarios vs. baseline.  \n   2. Correr ncs_tool para ver evolución temporal diaria de quejas/incidentes asociados a cada driver.  \n   3. Analizar verbatims de clientes para anclar las razones cualitativas de insatisfacción en boarding, lounge y food & beverage.  \n   4. Identificar rutas críticas y perfiles de cliente para priorizar planes de acción.  \n\nNota: Sin valores SHAP ni datos operativos, las conclusiones son preliminares. Se recomienda seguir con las herramientas faltantes para robustecer la causa raíz.\n\nNODO: Global/SH/Economy/IB\nInforme Causal Consolidado  \nSegmento: Global / SH / Economy / IB  \nPeriodo: 2025-05-01 a 2025-05-31  \nComparación vs periodo previo de 31 días  \n\n1. Resumen de la anomalía  \n   • NPS actual: 31.08790452145949  \n   • NPS baseline (media de 7 periodos): 40.0  \n   • Variación absoluta: –8.912095478540511 puntos  \n   • Tamaño de muestra para drivers: 20 encuestas → resultados sujetos a alta variabilidad estadística  \n\n2. Causa tangible  \n   A partir de los drivers significativos detectados por el modelo explicativo:  \n   - Drivers operacionales destacados  \n     · Punctuality (puntualidad)  \n     · Load factor (factor de ocupación)  \n     • Valores SHAP exactos no están disponibles en los datos suministrados, por lo que no puede asignarse con precisión la magnitud de cada uno.  \n   - Drivers de producto/servicio destacados  \n     · Arrivals experience  \n     · Boarding  \n     · Journey preparation support  \n     · In flight food and beverage  \n     · Cabin Crew  \n     · Lounge  \n     • Los valores SHAP exactos tampoco están disponibles para estos drivers.  \n\n   Conclusión parcial:  \n   • Hay evidencia de impacto tanto operacional (puntualidad) como de producto/servicio (experiencia a bordo y atención al cliente) en la caída del NPS, pero sin los valores SHAP no es posible priorizar un único factor raíz.  \n\n3. Rutas afectadas  \n   • Los datos de rutas para este período no están incluidos en los datos recolectados.  \n\n4. Reactividad de cliente  \n   • No se dispone de información de perfiles de cliente ni segmentación de reactividad (herramienta customer_profile_tool).  \n\n5. Hallazgos adicionales y próximos pasos  \n   • Para validar la correlación entre los drivers operativos y la tendencia de incidentes se requiere ejecutar operative_data_tool y ncs_tool.  \n   • Para asociar feedback cualitativo a los drivers listados conviene obtener resultados de verbatims_tool.  \n   • Para identificar rutas específicas afectadas por estos drivers es necesario ejecutar routes_tool.  \n\nEn este momento, el análisis basado solo en explanatory_drivers indica múltiples posibles causas (operativa y de producto/servicio) pero carece de datos cuantitativos adicionales (SHAP numéricos, rutas, incidentes, perfiles) para emitir una causa raíz definitiva.\n\nNODO: Global/SH/Economy/YW\nInforme Causal Consolidado – Segmento Global/SH/Economy/YW (2025-05)\n\n1. Contexto de la Anomalía  \n   • NPS Período Analizado: 32.54424778761062  \n   • NPS Baseline (7 períodos previos): 40.0  \n   • Variación Absoluta: –7.455752212389378 puntos  \n\n2. Causa Tangible Principal  \n   A partir de la correlación entre drivers SHAP, tendencias NCS y feedback de clientes, la raíz de la caída de NPS es operativa: degradación de la puntualidad.  \n   • SHAP Punctuality: –4.485 (significativo)  \n   • Sat_diff (diferencia de satisfacción asociada): –6.004  \n   • Incidentes de retraso:  \n     – Período previo: 402  \n     – Período actual: 439  \n     – Variación: +37  \n   • Incidentes de cancelación:  \n     – Período previo: 373  \n     – Período actual: 315  \n     – Variación: –58  \n   • Tamaño de muestra NCS: 1.122 incidentes (confiable)  \n\n3. Drivers de Producto/Servicio Contributivos  \n   (Encuestas analizadas: 20, resultados con variabilidad aumentada)  \n   • Arrivals experience  \n   • IB Plus loyalty program  \n   • Boarding  \n   • Aircraft interior  \n   • Cabin Crew  \n   • In flight food and beverage  \n   • Journey preparation support  \n\n4. Feedback Cualitativo (Verbatims)  \n   • Total comentarios: 5.686  \n   • Temas recurrentes:  \n     – Alta frustración por retrasos frecuentes  \n     – Falta de información a bordo sobre estado del vuelo  \n     – Desvíos de última hora sin explicación previa  \n\n5. Rutas Afectadas (NCS – Cancellations)  \n   La herramienta NCS identifica cancelaciones en un conjunto amplio de rutas, pero no hay solapamiento suficiente con drivers explicativos ni con comentarios de cliente para aislar rutas concretas como causa única. Relación de rutas (no validadas cruzadamente):  \n   MAD-BJZ, MAD-MLN, GRX-MLN, VLC-MAD, GVA-MAD, SCQ-MAD, MAD-MVD, BOG-MAD, MAD-GVA, MAD-GRU, MAD-LEU, MAD-TLV, MAD-IAD, MAD-PMI, ILD-LEU, MIA-MAD, MAD-BOS, BOS-MAD, SCL-MAD, BCN-MAD, NTE-MAD, MAD-PNA, MAD-BOG, EZE-MAD, ACE-MAD, MAD-MRS, MRS-NCE, BCN-MIA, MAD-MIA, XRY-MAD, OPO-MAD, MAD-OPO, AGP-MLN, MAD-EZE, MAD-BIO, MAD-GYE, MAD-SCL, MAD-CMN, MAD-ALG, MAD-SIN, MAD-DEL\n\n6. Conclusión  \n   La caída de –7.4557 puntos de NPS se explica principalmente por un empeoramiento de la puntualidad (SHAP –4.485) reflejado en un aumento de 37 retrasos, amplificado por problemas de comunicación e información a bordo. Los drivers de producto/servicio listados contribuyen en menor medida, pero no presentan el mismo nivel de evidencia cuantitativa.\n\n7. Recomendaciones Iniciales  \n   • Focalizar acciones en reducción de retrasos (mejor coordinación operacional).  \n   • Refuerzo de comunicación proactiva a bordo (sistemas de información y tripulación).  \n   • Plan de recuperación de satisfacción en rutas con mayor concentración de incidentes (monitorizar KPIs diarios de puntualidad).  \n\n(Al no existir solapamiento consistente de rutas en todas las fuentes, no se identificaron rutas específicas para intervención prioritaria).\n\n\n</tree_data>\n",
+      "metadata": {
+        "hierarchy_nodes": 3,
+        "date": "2025-05-01"
+      },
+      "timestamp": "19:13:37"
+    },
+    {
+      "generation": 0,
+      "type": "CONTEXT_ACKNOWLEDGED",
+      "content": "Entendido, quedo a la espera de la siguiente instrucción.",
+      "metadata": {
+        "response_length": 57
+      },
+      "timestamp": "19:13:42"
+    },
+    {
+      "generation": 0,
+      "type": "HELPER_PROMPT",
+      "content": "🔍 **PASO 4: ANÁLISIS PROFUNDO DE CAUSAS IDENTIFICADAS**\n\n**Objetivo:** Listar causas, segmentos afectados y construir la explicación causal consolidada por causa.\n\nPara cada causa identificada proporciona:\n\nA. NATURALEZA DE LA CAUSA:\n  • Hipótesis sobre la naturaleza del driver que explica el comportamiento de NPS.\n\nB. EVIDENCIA CONSOLIDADA Y ALCANCE:\n  • Selecciona el segmento \"más grande\" de clientes afectados por esa causa.\n  • Incluye el output causal detallado para ese segmento.\n  • Menciona explícitamente que la causa afecta a todos los subsegmentos bajo ese nodo.\n  • Agrega métricas clave disponibles: indicadores operativos, NPS, rutas involucradas, verbatims representativos.\n",
+      "metadata": {
+        "step": "DETAILED_CAUSE_ANALYSIS",
+        "prompt_length": 692
+      },
+      "timestamp": "19:13:42"
+    },
+    {
+      "generation": 0,
+      "type": "STEP_RESPONSE",
+      "content": "",
+      "metadata": {
+        "step": "DETAILED_CAUSE_ANALYSIS",
+        "response_length": 0
+      },
+      "timestamp": "19:14:22"
+    },
+    {
+      "generation": 0,
+      "type": "HELPER_PROMPT",
+      "content": "🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**\n\n**INSTRUCCIÓN OBLIGATORIA:** Genera ÚNICAMENTE un análisis ejecutivo del árbol de anomalías NPS. NO uses frameworks genéricos ni pasos de análisis. Enfócate SOLO en interpretar los datos NPS proporcionados.\n\n**FORMATO REQUERIDO:**\n\n📈 SÍNTESIS EJECUTIVA:\n\n[ESCRIBE UN PÁRRAFO NARRATIVO que explique las anomalías NPS detectadas, incluyendo:\n- Qué segmentos tienen anomalías (positivas/negativas) CON VALORES NPS EXACTOS (NPS inicial → NPS final, diferencia)\n- Causas identificadas, en que segmento se producen y que anomalías (nodos del arbol jerarquico con anomalias en NPS) explican.\n- Datos que evidencian cada una de estas causas.\n\n[ESCRIBE UN SEGUNDO PÁRRAFO NARRATIVO sobre:\n- Rutas más afectadas según los datos disponibles\n- Grupos de clientes más reactivos\n\n\n\n**⚠️ CRÍTICO:**\n- EMPIEZA DIRECTAMENTE CON \"📈 SÍNTESIS EJECUTIVA:\"\n- NO ESCRIBAS los textos entre corchetes [...], sino reemplázalos con contenido real\n- **INCLUYE OBLIGATORIAMENTE LOS VALORES NPS EXACTOS** cuando menciones segmentos, pero de forma narrativa y fluida: \"experimentó una mejora/deterioro de X puntos, pasando de un NPS de Y a Z\" o \"mostró un NPS de X (mejora/deterioro de Y puntos vs período anterior)\"\n- **INTEGRA LOS VALORES NPS NATURALMENTE** en la narrativa, no como datos crudos separados\n- **ESPECIFICA SIEMPRE EL NODO EXACTO** de los datos analizados. Si los datos corresponden a un subsegmento específico (ej: YW, IB, etc.), SIEMPRE menciona el nodo completo en el título y texto. Ejemplo: \"ECONOMY SH YW\" en lugar de solo \"ECONOMY SH\"\n- **EXTRÁE Y USA LA TERMINOLOGÍA DE COMPARACIÓN** que ya está en los datos de los nodos. Si los datos mencionan \"vs L7d\", \"período previo 7 días\", \"vs target\", etc., usa esa terminología específica en lugar de términos genéricos como \"baseline\" o \"período anterior\"\n- **OBLIGATORIO PARA CABINAS SH:** En las secciones de ECONOMY SH y BUSINESS SH, SIEMPRE menciona explícitamente los valores NPS de cada compañía (IB y YW) por separado antes de explicar el efecto neto. Si una compañía no aparece en el árbol, indica que \"mantuvo desempeño estable\".\n- **EXCEPCIÓN:** Para las secciones de cabina definidas en , sigue las instrucciones específicas de cada sección (que pueden requerir agregación de subsegmentos).\n- NO USES NUMERACIÓN NI ESTRUCTURAS DE PASOS\n- Los párrafos deben ser NARRATIVOS y FLUIDOS\n- ENFÓCATE SOLO EN INTERPRETAR LOS DATOS NPS DEL ÁRBOL\n- HABLAR DE SUBIDAS Y BAJADAS DE NPS, NO DE ANOMALÍAS\n- SI HAY ALGUNA CABINA DE LA CUAL NO TIENES DATOS, MENCIONA QUE ES UNA CABINA ESTABLE A NIVEL SEMANAL ESTA SEMANA.\n",
+      "metadata": {
+        "step": "EXECUTIVE_SYNTHESIS",
+        "prompt_length": 2601
+      },
+      "timestamp": "19:14:22"
+    },
+    {
+      "generation": 0,
+      "type": "STEP_RESPONSE",
+      "content": "📈 SÍNTESIS EJECUTIVA:  \nEconomy SH IB experimentó un deterioro de 8.912095478540511 puntos de NPS, pasando de 40.0 vs periodo previo de 7 días a 31.08790452145949, mientras que Economy SH YW registró una caída de 7.455752212389378 puntos, de 40.0 vs periodo previo de 7 días a 32.54424778761062. Como resultado, el nodo Global/SH/Economy muestra un NPS combinado de 31.585310563699444, 8.414689436300556 puntos por debajo de su nivel de referencia. Business SH mantuvo desempeño estable esta semana sin variaciones significativas en su NPS. La contracción en ambos carriers se atribuye al empeoramiento de la puntualidad y múltiples deficiencias en la experiencia de servicio, especialmente en boarding, lounge, food & beverage y atención de cabina.\n\nA nivel de rutas, no se han podido aislar corredores críticos con suficiente robustez en el análisis actual, pues faltan datos de rutas para Economy SH e IB, y en YW solo existe un listado amplio de cancelaciones sin correlación directa con el impacto en NPS. Tampoco está disponible segmentación de perfiles de cliente para identificar los grupos más sensibles, por lo que se recomienda ejecutar herramientas adicionales (routes_tool y customer_profile_tool) para priorizar intervenciones.",
+      "metadata": {
+        "step": "EXECUTIVE_SYNTHESIS",
+        "response_length": 1241
+      },
+      "timestamp": "19:14:50"
+    }
+  ],
+  "conversation_summary": {
+    "CONTEXT_SETUP": 1,
+    "CONTEXT_ACKNOWLEDGED": 1,
+    "HELPER_PROMPT": 2,
+    "STEP_RESPONSE": 2
+  },
+  "generation_reflections": [],
+  "generation_analysis": {}
+}

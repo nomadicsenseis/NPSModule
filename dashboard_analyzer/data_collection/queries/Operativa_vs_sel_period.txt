@@ -1,0 +1,148 @@
+DEFINE
+    VAR __DS0FilterTable =
+        TREATAS({"Business", "Economy", "Premium EC"}, 'Cabin_Master'[Cabin_Show])
+    VAR __DS0FilterTable2 =
+        TREATAS({"IB","YW"}, 'Company_Master'[Company])
+    VAR __DS0FilterTable3 =
+        TREATAS({"SH","LH"}, 'Haul_Master'[Haul_Aggr])
+    VAR __DS0FilterTable4 = 
+        TREATAS({"RF0"}, 'Target_file_version_rank'[Version])
+
+    -- Current Period Filter
+    VAR __CurrentPeriodFilter =
+        FILTER(
+            KEEPFILTERS(VALUES('Date_Master'[Date])),
+            'Date_Master'[Date] >= DATE({CURRENT_START_YEAR},{CURRENT_START_MONTH},{CURRENT_START_DAY}) && 
+            'Date_Master'[Date] <= DATE({CURRENT_END_YEAR},{CURRENT_END_MONTH},{CURRENT_END_DAY})
+        )
+    
+    -- Comparison Period Filter  
+    VAR __ComparisonPeriodFilter =
+        FILTER(
+            KEEPFILTERS(VALUES('Date_Master'[Date])),
+            'Date_Master'[Date] >= DATE({COMPARISON_START_YEAR},{COMPARISON_START_MONTH},{COMPARISON_START_DAY}) && 
+            'Date_Master'[Date] <= DATE({COMPARISON_END_YEAR},{COMPARISON_END_MONTH},{COMPARISON_END_DAY})
+        )
+
+    -- Load Factor Measures
+    MEASURE 'Measure'[Load_Factor_Current] =
+        CALCULATE(
+            DIVIDE(
+                SUMX(Operation_data, Operation_data[pax_business] + Operation_data[pax_economy] + Operation_data[pax_premium_ec]),
+                SUMX(Operation_data, Operation_data[capacity_business] + Operation_data[capacity_economy] + Operation_data[capacity_premium_ec])
+            ) * 100,
+            __CurrentPeriodFilter,
+            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+        )
+
+    MEASURE 'Measure'[Load_Factor_Comparison] =
+        CALCULATE(
+            DIVIDE(
+                SUMX(Operation_data, Operation_data[pax_business] + Operation_data[pax_economy] + Operation_data[pax_premium_ec]),
+                SUMX(Operation_data, Operation_data[capacity_business] + Operation_data[capacity_economy] + Operation_data[capacity_premium_ec])
+            ) * 100,
+            __ComparisonPeriodFilter,
+            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+        )
+
+    MEASURE 'Measure'[Load_Factor_Diff] = [Load_Factor_Current] - [Load_Factor_Comparison]
+    MEASURE 'Measure'[Load_Factor_Change_Pct] = DIVIDE([Load_Factor_Diff], [Load_Factor_Comparison]) * 100
+
+    -- OTP Measures
+    MEASURE 'Measure'[OTP_Current] =
+        CALCULATE(
+            'Measure'[OTP15_adjusted],
+            __CurrentPeriodFilter,
+            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+        )
+
+    MEASURE 'Measure'[OTP_Comparison] =
+        CALCULATE(
+            'Measure'[OTP15_adjusted],
+            __ComparisonPeriodFilter,
+            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+        )
+
+    MEASURE 'Measure'[OTP_Diff] = [OTP_Current] - [OTP_Comparison]
+    MEASURE 'Measure'[OTP_Change_Pct] = DIVIDE([OTP_Diff], [OTP_Comparison]) * 100
+
+    -- Mishandling Measures
+    MEASURE 'Measure'[Mishandling_Current] =
+        CALCULATE(
+            DIVIDE(SUM(f_mishandling[bags]), SUM(f_checkin[num_pax_flown])) * 1000,
+            __CurrentPeriodFilter,
+            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+        )
+
+    MEASURE 'Measure'[Mishandling_Comparison] =
+        CALCULATE(
+            DIVIDE(SUM(f_mishandling[bags]), SUM(f_checkin[num_pax_flown])) * 1000,
+            __ComparisonPeriodFilter,
+            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+        )
+
+    MEASURE 'Measure'[Mishandling_Diff] = [Mishandling_Current] - [Mishandling_Comparison]
+    MEASURE 'Measure'[Mishandling_Change_Pct] = DIVIDE([Mishandling_Diff], [Mishandling_Comparison]) * 100
+
+    -- Misconex Measures  
+    MEASURE 'Measure'[Misconex_Current] =
+        CALCULATE(
+            DIVIDE(SUM(customer_connections[total_pax_misc]), SUM(customer_connections[total_pax_conex])) * 100,
+            __CurrentPeriodFilter,
+            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+        )
+
+    MEASURE 'Measure'[Misconex_Comparison] =
+        CALCULATE(
+            DIVIDE(SUM(customer_connections[total_pax_misc]), SUM(customer_connections[total_pax_conex])) * 100,
+            __ComparisonPeriodFilter,
+            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+        )
+
+    MEASURE 'Measure'[Misconex_Diff] = [Misconex_Current] - [Misconex_Comparison]
+    MEASURE 'Measure'[Misconex_Change_Pct] = DIVIDE([Misconex_Diff], [Misconex_Comparison]) * 100
+
+    -- Create a simple result table with all metrics
+    VAR __DS0Core = 
+        DATATABLE(
+            "Metric", STRING,
+            {
+                {"Load_Factor"},
+                {"OTP15_adjusted"}, 
+                {"Mishandling"},
+                {"Misconex"}
+            }
+        )
+
+EVALUATE
+    ADDCOLUMNS(
+        __DS0Core,
+        "Current_Value", 
+            SWITCH([Metric],
+                "Load_Factor", [Load_Factor_Current],
+                "OTP15_adjusted", [OTP_Current],
+                "Mishandling", [Mishandling_Current],
+                "Misconex", [Misconex_Current]
+            ),
+        "Comparison_Value",
+            SWITCH([Metric],
+                "Load_Factor", [Load_Factor_Comparison],
+                "OTP15_adjusted", [OTP_Comparison], 
+                "Mishandling", [Mishandling_Comparison],
+                "Misconex", [Misconex_Comparison]
+            ),
+        "Difference",
+            SWITCH([Metric],
+                "Load_Factor", [Load_Factor_Diff],
+                "OTP15_adjusted", [OTP_Diff],
+                "Mishandling", [Mishandling_Diff], 
+                "Misconex", [Misconex_Diff]
+            ),
+        "Change_Pct",
+            SWITCH([Metric],
+                "Load_Factor", [Load_Factor_Change_Pct],
+                "OTP15_adjusted", [OTP_Change_Pct],
+                "Mishandling", [Mishandling_Change_Pct],
+                "Misconex", [Misconex_Change_Pct]
+            )
+    )

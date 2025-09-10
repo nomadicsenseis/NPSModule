@@ -1,7 +1,7 @@
 from enum import Enum
 
 # Global model configuration - change this to switch all agents at once
-DEFAULT_LLM_TYPE = "CLAUDE_SONNET_4"  # Options: O4_MINI, CLAUDE_SONNET_4, O3, etc.
+DEFAULT_LLM_TYPE = "O4_MINI"  # Options: O4_MINI, CLAUDE_SONNET_4, O3, etc.
 
 class MessageType(Enum):
     """
