@@ -1,0 +1,49 @@
+{
+  "metadata": {
+    "agent_type": "anomaly_interpreter",
+    "analysis_type": "hierarchical_generation_by_generation",
+    "export_timestamp": "2025-09-11T10:00:19.788983",
+    "analysis_date": "2025-06-01",
+    "llm_type": "O4_MINI",
+    "total_generations": 0,
+    "total_nodes_analyzed": 1,
+    "error": "Error durante la interpretación jerárquica: Error code: 400 - {'error': {'message': \"The response was filtered due to the prompt triggering Azure OpenAI's content management policy. Please modify your prompt and retry. To learn more about our content filtering policies please read our documentation: https://go.microsoft.com/fwlink/?linkid=2198766\", 'type': None, 'param': 'prompt', 'code': 'content_filter', 'status': 400, 'innererror': {'code': 'ResponsibleAIPolicyViolation', 'content_filter_result': {'hate': {'filtered': False, 'severity': 'safe'}, 'jailbreak': {'filtered': True, 'detected': True}, 'self_harm': {'filtered': False, 'severity': 'safe'}, 'sexual': {'filtered': False, 'severity': 'safe'}, 'violence': {'filtered': False, 'severity': 'safe'}}}}}"
+  },
+  "hierarchy_structure": {
+    "Global/LH/Business": {
+      "type": "node",
+      "level": 3,
+      "path": "Global/LH/Business",
+      "parent": "Global/LH",
+      "children": [],
+      "content": "1. Resumen de la anomalía  \n   - NPS actual (2025-06): 32.77216610549944  \n   - NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n   - Variación: –7.227833894500563 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \n   Causa principal: Incidentes operativos (cancelaciones y retrasos, más mal manejo de equipaje)  \n   - explanatory_drivers_tool  \n     • Punctuality SHAP = –0.961 (< –0.1, significativo)  \n   - operative_data_tool  \n     • Mishandling aumentó en 0.7 vs período previo  \n   - ncs_tool  \n     • Aumento en todas las categorías de incidentes: cancelaciones, retrasos, limitación de aeronave, otras incidencias y desvíos  \n     • Causas identificadas: ['Flight cancellations']  \n   - verbatims_tool  \n     • 1.442 comentarios de clientes que mencionan retrasos sin comunicación, cancelaciones, mal manejo de equipaje y falta de alternativas  \n\n3. Rutas afectadas  \n   Total rutas únicas analizadas: 16  \n   Principales rutas con mayor impacto (con fuentes y métricas):  \n   - DOH-MAD: NPS –20.0, Pax 5 (explanatory_drivers, ncs)  \n   - MAD-SDQ: NPS 18.8, Pax 16 (explanatory_drivers, ncs)  \n   - HAV-MAD: NPS 0.0, Pax 9 (explanatory_drivers)  \n   - IAD-MAD: NPS 44.4, Pax 9 (explanatory_drivers)  \n   - EZE-MAD: NPS 56.9, Pax 131 (explanatory_drivers)  \n\n4. Reactividad de cliente  \n   Dimensiones analizadas y su variabilidad de NPS_diff vs vs Sel. Period:  \n   - Residence Region: spread 167.9 pts (rango –75.0 a +92.9)  \n   - Fleet: spread 83.1 pts  \n   - CodeShare: spread 66.8 pts  \n   - Business/Leisure: 2 segmentos analizados (datos de variabilidad no disponibles)"
+    }
+  },
+  "hierarchy_summary": {
+    "total_nodes": 1,
+    "generations_analyzed": 0,
+    "nodes_by_level": {
+      "3": [
+        "Global/LH/Business"
+      ]
+    },
+    "parent_child_relationships": {}
+  },
+  "conversation_log": [
+    {
+      "generation": 0,
+      "type": "CONTEXT_SETUP",
+      "content": "Analiza la siguiente información que compara dos períodos para el día 2025-06-01. Asimila toda la información en silencio. No generes ninguna respuesta todavía. Espera a la siguiente instrucción para comenzar el análisis paso a paso.\n\n<tree_data>\nNODO: Global/LH/Business\n1. Resumen de la anomalía  \n   - NPS actual (2025-06): 32.77216610549944  \n   - NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n   - Variación: –7.227833894500563 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \n   Causa principal: Incidentes operativos (cancelaciones y retrasos, más mal manejo de equipaje)  \n   - explanatory_drivers_tool  \n     • Punctuality SHAP = –0.961 (< –0.1, significativo)  \n   - operative_data_tool  \n     • Mishandling aumentó en 0.7 vs período previo  \n   - ncs_tool  \n     • Aumento en todas las categorías de incidentes: cancelaciones, retrasos, limitación de aeronave, otras incidencias y desvíos  \n     • Causas identificadas: ['Flight cancellations']  \n   - verbatims_tool  \n     • 1.442 comentarios de clientes que mencionan retrasos sin comunicación, cancelaciones, mal manejo de equipaje y falta de alternativas  \n\n3. Rutas afectadas  \n   Total rutas únicas analizadas: 16  \n   Principales rutas con mayor impacto (con fuentes y métricas):  \n   - DOH-MAD: NPS –20.0, Pax 5 (explanatory_drivers, ncs)  \n   - MAD-SDQ: NPS 18.8, Pax 16 (explanatory_drivers, ncs)  \n   - HAV-MAD: NPS 0.0, Pax 9 (explanatory_drivers)  \n   - IAD-MAD: NPS 44.4, Pax 9 (explanatory_drivers)  \n   - EZE-MAD: NPS 56.9, Pax 131 (explanatory_drivers)  \n\n4. Reactividad de cliente  \n   Dimensiones analizadas y su variabilidad de NPS_diff vs vs Sel. Period:  \n   - Residence Region: spread 167.9 pts (rango –75.0 a +92.9)  \n   - Fleet: spread 83.1 pts  \n   - CodeShare: spread 66.8 pts  \n   - Business/Leisure: 2 segmentos analizados (datos de variabilidad no disponibles)\n</tree_data>\n",
+      "metadata": {
+        "hierarchy_nodes": 1,
+        "date": "2025-06-01"
+      },
+      "timestamp": "10:00:16"
+    }
+  ],
+  "conversation_summary": {
+    "CONTEXT_SETUP": 1
+  },
+  "generation_reflections": [],
+  "generation_analysis": {}
+}

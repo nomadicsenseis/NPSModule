@@ -512,39 +512,43 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
         explanations = {}
         nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
 
-        # ENHANCEMENT: Always include Global segment in causal analysis if it has valid data
+        # ENHANCEMENT: Always include root segment in causal analysis if it has valid data
         if nodes_with_anomalies:
-            # Check if Global has valid data (not "?" or missing)
-            global_state = period_anomalies.get("Global", "?")
-            print(f"🔍 DEBUG GLOBAL STATE: global_state='{global_state}', period_anomalies keys: {list(period_anomalies.keys())}")
+            # Get the root segment for the analysis
+            root_segment = normalize_segment_to_root(segment)
+            print(f"🔍 DEBUG ROOT SEGMENT: segment='{segment}' -> root_segment='{root_segment}'")
             
-            # Always recalculate Global's anomaly state based on deviation (override detector's decision)
-            global_deviation = period_deviations.get("Global", 0.0)
-            print(f"🔍 DEBUG GLOBAL CALCULATION: global_deviation={global_deviation}")
-            if global_deviation > 0:
-                global_state = "+"  # Positive anomaly
-            elif global_deviation < 0:
-                global_state = "-"  # Negative anomaly
+            # Check if root segment has valid data (not "?" or missing)
+            root_state = period_anomalies.get(root_segment, "?")
+            print(f"🔍 DEBUG ROOT STATE: root_state='{root_state}', period_anomalies keys: {list(period_anomalies.keys())}")
+            
+            # Always recalculate root segment's anomaly state based on deviation (override detector's decision)
+            root_deviation = period_deviations.get(root_segment, 0.0)
+            print(f"🔍 DEBUG ROOT CALCULATION: root_deviation={root_deviation}")
+            if root_deviation > 0:
+                root_state = "+"  # Positive anomaly
+            elif root_deviation < 0:
+                root_state = "-"  # Negative anomaly
             else:
-                global_state = "N"  # Neutral (only when deviation is exactly 0)
-            # Always update Global in period_anomalies with calculated state
-            period_anomalies["Global"] = global_state
-            print(f"      🔍 DEBUG GLOBAL: Override Global state='{global_state}' based on deviation={global_deviation}")
+                root_state = "N"  # Neutral (only when deviation is exactly 0)
+            # Always update root segment in period_anomalies with calculated state
+            period_anomalies[root_segment] = root_state
+            print(f"      🔍 DEBUG ROOT: Override {root_segment} state='{root_state}' based on deviation={root_deviation}")
             
-            if "Global" not in nodes_with_anomalies:
-                # Always add Global to the analysis (it's always analyzed)
-                nodes_with_anomalies.append("Global")
-                print(f"      🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added Global with state '{global_state}' + {len([n for n in nodes_with_anomalies if n != 'Global'])} anomalous nodes)")
-            elif "Global" in nodes_with_anomalies:
-                print(f"      📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including Global)")
+            if root_segment not in nodes_with_anomalies:
+                # Always add root segment to the analysis (it's always analyzed)
+                nodes_with_anomalies.append(root_segment)
+                print(f"      🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added {root_segment} with state '{root_state}' + {len([n for n in nodes_with_anomalies if n != root_segment])} anomalous nodes)")
+            elif root_segment in nodes_with_anomalies:
+                print(f"      📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including {root_segment})")
             else:
-                print(f"      📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (Global has no valid data)")
+                print(f"      📊 Analyzing {len(nodes_with_anomalies)} anomalous segments ({root_segment} has no valid data)")
             
-            # PRIORITY: Move Global to the front to ensure it's always processed first
-            if "Global" in nodes_with_anomalies:
-                nodes_with_anomalies.remove("Global")
-                nodes_with_anomalies.insert(0, "Global")
-                print(f"      🎯 PRIORITY: Global moved to front of processing queue")
+            # PRIORITY: Move root segment to the front to ensure it's always processed first
+            if root_segment in nodes_with_anomalies:
+                nodes_with_anomalies.remove(root_segment)
+                nodes_with_anomalies.insert(0, root_segment)
+                print(f"      🎯 PRIORITY: {root_segment} moved to front of processing queue")
 
         if nodes_with_anomalies:
             # Collect explanations for anomalous nodes
@@ -660,53 +664,17 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             print("-" * 40)
             
             try:
-                # Check if we have causal agent explanations that should go directly to interpreter
-                causal_explanations = {}
-                for node_path, explanation in explanations.items():
-                    if explanation and ("🤖 **AGENT CAUSAL ANALYSIS**" in explanation or "AI Causal Investigation:" in explanation):
-                        # This is a full causal agent explanation - pass it directly
-                        if "🤖 **AGENT CAUSAL ANALYSIS**" in explanation:
-                            clean_explanation = explanation.replace("🤖 **AGENT CAUSAL ANALYSIS**\n", "").strip()
-                        else:
-                            clean_explanation = explanation.replace("• AI Causal Investigation:", "").strip()
-                        causal_explanations[node_path] = clean_explanation
+                # Always use the complete tree format with integrated causal explanations
+                ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
+                                                 parent_interpretations, explanations, date_range, segment, period_nps_values)
                 
-                if causal_explanations:
-                    # Use direct causal agent explanation instead of tree format
-                    print("🔍 Using direct causal agent explanation for tree interpretation")
-                    
-                    # For single node with causal explanation, pass it directly
-                    if len(causal_explanations) == 1:
-                        node_path, causal_explanation = next(iter(causal_explanations.items()))
-                        
-                        ai_interpretation = await asyncio.wait_for(
-                            ai_agent.interpret_anomaly_tree(causal_explanation, 
-                                                           start_date.strftime('%Y-%m-%d') if date_range else None, segment),
-                            timeout=600.0
-                        )
-                    else:
-                        # Multiple causal explanations - combine them
-                        combined_explanation = f"Multiple anomalous nodes analyzed:\n\n"
-                        for node_path, explanation in causal_explanations.items():
-                            combined_explanation += f"NODO: {node_path}\n{explanation}\n\n"
-                        
-                        ai_interpretation = await asyncio.wait_for(
-                            ai_agent.interpret_anomaly_tree(combined_explanation, 
-                                                           start_date.strftime('%Y-%m-%d') if date_range else None, segment),
-                            timeout=600.0
-                        )
-                else:
-                    # Fallback to tree format for non-causal explanations
-                    ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                                     parent_interpretations, explanations, date_range, segment, period_nps_values)
-                    
-                    print(f"🔍 Using tree format: {len(ai_input)} characters")
-                    
-                    ai_interpretation = await asyncio.wait_for(
-                        ai_agent.interpret_anomaly_tree(ai_input, 
-                                                       start_date.strftime('%Y-%m-%d') if date_range else None, segment),
-                        timeout=600.0
-                    )
+                print(f"🔍 Using complete tree format with integrated explanations: {len(ai_input)} characters")
+                
+                ai_interpretation = await asyncio.wait_for(
+                    ai_agent.interpret_anomaly_tree(ai_input, 
+                                                   start_date.strftime('%Y-%m-%d') if date_range else None, segment),
+                    timeout=600.0
+                )
                 
                 print(ai_interpretation)
                 
@@ -1304,6 +1272,16 @@ async def print_enhanced_tree_with_explanations_and_interpretations(
         normalized_segment = 'Global/SH/Economy'
     elif segment_filter == 'Business' and '/' not in segment_filter:
         normalized_segment = 'Global/SH/Business'
+    elif segment_filter == 'Business/LH':
+        normalized_segment = 'Global/LH/Business'
+    elif segment_filter == 'Economy/LH':
+        normalized_segment = 'Global/LH/Economy'
+    elif segment_filter == 'Premium/LH':
+        normalized_segment = 'Global/LH/Premium'
+    elif segment_filter == 'Business/SH':
+        normalized_segment = 'Global/SH/Business'
+    elif segment_filter == 'Economy/SH':
+        normalized_segment = 'Global/SH/Economy'
     
     # DEBUG: Show what's in the filtered data
     debug_print(f"Filtered anomalies for segment {segment_filter} (normalized: {normalized_segment}):")
@@ -1618,6 +1596,44 @@ def determine_anomaly_mode_for_vslast(causal_filter: str, comparison_start_date:
     else:
         return "vslast_dynamic", "período inmediatamente anterior"
 
+def normalize_segment_to_root(segment: str) -> str:
+    """
+    Normalize segment parameter to its root node path.
+    
+    Args:
+        segment: Segment parameter (e.g., 'Economy/SH', 'Business/LH', 'Global')
+        
+    Returns:
+        Root node path (e.g., 'Global/SH/Economy', 'Global/LH/Business', 'Global')
+    """
+    # Handle shortcuts and normalize to full paths
+    if segment == 'SH':
+        return 'Global/SH'
+    elif segment == 'LH':
+        return 'Global/LH'
+    elif segment == 'Economy/LH':
+        return 'Global/LH/Economy'
+    elif segment == 'Business/LH':
+        return 'Global/LH/Business'
+    elif segment == 'Premium/LH':
+        return 'Global/LH/Premium'
+    elif segment == 'Economy/SH':
+        return 'Global/SH/Economy'
+    elif segment == 'Business/SH':
+        return 'Global/SH/Business'
+    elif segment == 'Economy' and '/' not in segment:
+        # Ambiguous - default to SH/Economy
+        return 'Global/SH/Economy'
+    elif segment == 'Business' and '/' not in segment:
+        # Ambiguous - default to SH/Business  
+        return 'Global/SH/Business'
+    elif segment == 'Global' or segment.startswith('Global/'):
+        # Already normalized or is Global
+        return segment
+    else:
+        # Default to Global for unknown segments
+        return 'Global'
+
 def get_segment_node_paths(segment: str) -> list:
     """
     Generate the list of node paths based on the selected segment.
@@ -1879,6 +1895,7 @@ async def run_comprehensive_analysis(
             daily_single_analyses = formatted_daily_analyses
             print(f"✅ Formatted daily analyses: {len(daily_single_analyses)} periods")
 
+        # Always use Summary Agent in comprehensive mode
         try:
             print("\n🤖 Initializing Summary Agent...")
             summary_agent = AnomalySummaryAgent(
@@ -2041,39 +2058,43 @@ async def analyze_single_day(target_date: datetime, segment: str, explanation_mo
         explanations = {}
         nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
 
-        # ENHANCEMENT: Always include Global segment in causal analysis if it has valid data
+        # ENHANCEMENT: Always include root segment in causal analysis if it has valid data
         if nodes_with_anomalies:
-            # Check if Global has valid data (not "?" or missing)
-            global_state = period_anomalies.get("Global", "?")
-            print(f"🔍 DEBUG GLOBAL STATE: global_state='{global_state}', period_anomalies keys: {list(period_anomalies.keys())}")
+            # Get the root segment for the analysis
+            root_segment = normalize_segment_to_root(segment)
+            print(f"🔍 DEBUG ROOT SEGMENT: segment='{segment}' -> root_segment='{root_segment}'")
             
-            # Always recalculate Global's anomaly state based on deviation (override detector's decision)
-            global_deviation = period_deviations.get("Global", 0.0)
-            print(f"🔍 DEBUG GLOBAL CALCULATION: global_deviation={global_deviation}")
-            if global_deviation > 0:
-                global_state = "+"  # Positive anomaly
-            elif global_deviation < 0:
-                global_state = "-"  # Negative anomaly
+            # Check if root segment has valid data (not "?" or missing)
+            root_state = period_anomalies.get(root_segment, "?")
+            print(f"🔍 DEBUG ROOT STATE: root_state='{root_state}', period_anomalies keys: {list(period_anomalies.keys())}")
+            
+            # Always recalculate root segment's anomaly state based on deviation (override detector's decision)
+            root_deviation = period_deviations.get(root_segment, 0.0)
+            print(f"🔍 DEBUG ROOT CALCULATION: root_deviation={root_deviation}")
+            if root_deviation > 0:
+                root_state = "+"  # Positive anomaly
+            elif root_deviation < 0:
+                root_state = "-"  # Negative anomaly
             else:
-                global_state = "N"  # Neutral (only when deviation is exactly 0)
-            # Always update Global in period_anomalies with calculated state
-            period_anomalies["Global"] = global_state
-            print(f"      🔍 DEBUG GLOBAL: Override Global state='{global_state}' based on deviation={global_deviation}")
+                root_state = "N"  # Neutral (only when deviation is exactly 0)
+            # Always update root segment in period_anomalies with calculated state
+            period_anomalies[root_segment] = root_state
+            print(f"      🔍 DEBUG ROOT: Override {root_segment} state='{root_state}' based on deviation={root_deviation}")
             
-            if "Global" not in nodes_with_anomalies and global_state != "?":
-                # Add Global to the analysis even if it doesn't have anomalies but has valid data
-                nodes_with_anomalies.append("Global")
-                print(f"🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added Global with state '{global_state}' + {len([n for n in nodes_with_anomalies if n != 'Global'])} anomalous nodes)")
-            elif "Global" in nodes_with_anomalies:
-                print(f"🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including Global)")
+            if root_segment not in nodes_with_anomalies and root_state != "?":
+                # Add root segment to the analysis even if it doesn't have anomalies but has valid data
+                nodes_with_anomalies.append(root_segment)
+                print(f"🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added {root_segment} with state '{root_state}' + {len([n for n in nodes_with_anomalies if n != root_segment])} anomalous nodes)")
+            elif root_segment in nodes_with_anomalies:
+                print(f"🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including {root_segment})")
             else:
-                print(f"🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (Global has no valid data)")
+                print(f"🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments ({root_segment} has no valid data)")
             
-            # PRIORITY: Move Global to the front to ensure it's always processed first
-            if "Global" in nodes_with_anomalies:
-                nodes_with_anomalies.remove("Global")
-                nodes_with_anomalies.insert(0, "Global")
-                print(f"🎯 PRIORITY: Global moved to front of processing queue")
+            # PRIORITY: Move root segment to the front to ensure it's always processed first
+            if root_segment in nodes_with_anomalies:
+                nodes_with_anomalies.remove(root_segment)
+                nodes_with_anomalies.insert(0, root_segment)
+                print(f"🎯 PRIORITY: {root_segment} moved to front of processing queue")
 
         if nodes_with_anomalies:
             print(f"🔍 Collecting explanations for {len(nodes_with_anomalies)} anomalous nodes: {nodes_with_anomalies}")
@@ -2489,39 +2510,43 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
         explanations = {}
         nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
 
-        # ENHANCEMENT: Always include Global segment in causal analysis if it has valid data
+        # ENHANCEMENT: Always include root segment in causal analysis if it has valid data
         if nodes_with_anomalies:
-            # Check if Global has valid data (not "?" or missing)
-            global_state = period_anomalies.get("Global", "?")
-            print(f"🔍 DEBUG GLOBAL STATE: global_state='{global_state}', period_anomalies keys: {list(period_anomalies.keys())}")
+            # Get the root segment for the analysis
+            root_segment = normalize_segment_to_root(segment)
+            print(f"🔍 DEBUG ROOT SEGMENT: segment='{segment}' -> root_segment='{root_segment}'")
             
-            # Always recalculate Global's anomaly state based on deviation (override detector's decision)
-            global_deviation = period_deviations.get("Global", 0.0)
-            print(f"🔍 DEBUG GLOBAL CALCULATION: global_deviation={global_deviation}")
-            if global_deviation > 0:
-                global_state = "+"  # Positive anomaly
-            elif global_deviation < 0:
-                global_state = "-"  # Negative anomaly
+            # Check if root segment has valid data (not "?" or missing)
+            root_state = period_anomalies.get(root_segment, "?")
+            print(f"🔍 DEBUG ROOT STATE: root_state='{root_state}', period_anomalies keys: {list(period_anomalies.keys())}")
+            
+            # Always recalculate root segment's anomaly state based on deviation (override detector's decision)
+            root_deviation = period_deviations.get(root_segment, 0.0)
+            print(f"🔍 DEBUG ROOT CALCULATION: root_deviation={root_deviation}")
+            if root_deviation > 0:
+                root_state = "+"  # Positive anomaly
+            elif root_deviation < 0:
+                root_state = "-"  # Negative anomaly
             else:
-                global_state = "N"  # Neutral (only when deviation is exactly 0)
-            # Always update Global in period_anomalies with calculated state
-            period_anomalies["Global"] = global_state
-            print(f"      🔍 DEBUG GLOBAL: Override Global state='{global_state}' based on deviation={global_deviation}")
+                root_state = "N"  # Neutral (only when deviation is exactly 0)
+            # Always update root segment in period_anomalies with calculated state
+            period_anomalies[root_segment] = root_state
+            print(f"      🔍 DEBUG ROOT: Override {root_segment} state='{root_state}' based on deviation={root_deviation}")
             
-            if "Global" not in nodes_with_anomalies and global_state != "?":
-                # Add Global to the analysis even if it doesn't have anomalies but has valid data
-                nodes_with_anomalies.append("Global")
-                print(f"🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added Global with state '{global_state}' + {len([n for n in nodes_with_anomalies if n != 'Global'])} anomalous nodes)", file=sys.stderr)
-            elif "Global" in nodes_with_anomalies:
-                print(f"🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including Global)", file=sys.stderr)
+            if root_segment not in nodes_with_anomalies and root_state != "?":
+                # Add root segment to the analysis even if it doesn't have anomalies but has valid data
+                nodes_with_anomalies.append(root_segment)
+                print(f"🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added {root_segment} with state '{root_state}' + {len([n for n in nodes_with_anomalies if n != root_segment])} anomalous nodes)", file=sys.stderr)
+            elif root_segment in nodes_with_anomalies:
+                print(f"🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including {root_segment})", file=sys.stderr)
             else:
-                print(f"🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (Global has no valid data)", file=sys.stderr)
+                print(f"🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments ({root_segment} has no valid data)", file=sys.stderr)
             
-            # PRIORITY: Move Global to the front to ensure it's always processed first
-            if "Global" in nodes_with_anomalies:
-                nodes_with_anomalies.remove("Global")
-                nodes_with_anomalies.insert(0, "Global")
-                print(f"🎯 PRIORITY: Global moved to front of processing queue", file=sys.stderr)
+            # PRIORITY: Move root segment to the front to ensure it's always processed first
+            if root_segment in nodes_with_anomalies:
+                nodes_with_anomalies.remove(root_segment)
+                nodes_with_anomalies.insert(0, root_segment)
+                print(f"🎯 PRIORITY: {root_segment} moved to front of processing queue", file=sys.stderr)
 
         if nodes_with_anomalies:
             # DEBUG: Temporarily NOT suppressing output to see what explanations are being collected
@@ -2624,60 +2649,25 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
             print("-" * 40)
             
             try:
-                # Check if we have causal agent explanations that should go directly to interpreter
-                causal_explanations = {}
-                for node_path, explanation in explanations.items():
-                    if explanation and ("🤖 **AGENT CAUSAL ANALYSIS**" in explanation or "AI Causal Investigation:" in explanation):
-                        # This is a full causal agent explanation - pass it directly
-                        if "🤖 **AGENT CAUSAL ANALYSIS**" in explanation:
-                            clean_explanation = explanation.replace("🤖 **AGENT CAUSAL ANALYSIS**\n", "").strip()
-                        else:
-                            clean_explanation = explanation.replace("• AI Causal Investigation:", "").strip()
-                        causal_explanations[node_path] = clean_explanation
+                # Always use the complete tree format with integrated causal explanations
+                ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
+                                                 parent_interpretations, explanations, date_range, segment, period_nps_values)
                 
-                if causal_explanations:
-                    # Use direct causal agent explanation instead of tree format
-                    print("🔍 Using direct causal agent explanation for tree interpretation")
-                    
-                    # For single node with causal explanation, pass it directly
-                    if len(causal_explanations) == 1:
-                        node_path, causal_explanation = next(iter(causal_explanations.items()))
-                        
-                        ai_interpretation = await asyncio.wait_for(
-                            ai_agent.interpret_anomaly_tree(causal_explanation, 
-                                                           start_date.strftime('%Y-%m-%d') if date_range else None, segment),
-                            timeout=600.0
-                        )
-                    else:
-                        # Multiple causal explanations - combine them
-                        combined_explanation = f"Multiple anomalous nodes analyzed:\n\n"
-                        for node_path, explanation in causal_explanations.items():
-                            combined_explanation += f"NODO: {node_path}\n{explanation}\n\n"
-                        
-                        ai_interpretation = await asyncio.wait_for(
-                            ai_agent.interpret_anomaly_tree(combined_explanation, 
-                                                           start_date.strftime('%Y-%m-%d') if date_range else None, segment),
-                            timeout=600.0
-                        )
-                else:
-                    # Fallback to tree format for non-causal explanations
-                    ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                                     parent_interpretations, explanations, date_range, segment, period_nps_values)
-                    
-                    debug_print(f"AI input string length: {len(ai_input)} characters")
-                    debug_print(f"AI input preview: {ai_input[:500]}...")
-                    
-                    # Fix: Extract start_date from date_range if available
-                    date_param = None
-                    if date_range and len(date_range) >= 2:
-                        range_start_date, _ = date_range
-                        if range_start_date:
-                            date_param = range_start_date.strftime('%Y-%m-%d')
-                    
-                    ai_interpretation = await asyncio.wait_for(
-                        ai_agent.interpret_anomaly_tree(ai_input, date_param, segment),
-                        timeout=600.0
-                    )
+                debug_print(f"AI input string length: {len(ai_input)} characters")
+                debug_print(f"AI input preview: {ai_input[:500]}...")
+                print(f"🔍 Using complete tree format with integrated explanations: {len(ai_input)} characters")
+                
+                # Fix: Extract start_date from date_range if available
+                date_param = None
+                if date_range and len(date_range) >= 2:
+                    range_start_date, _ = date_range
+                    if range_start_date:
+                        date_param = range_start_date.strftime('%Y-%m-%d')
+                
+                ai_interpretation = await asyncio.wait_for(
+                    ai_agent.interpret_anomaly_tree(ai_input, date_param, segment),
+                    timeout=600.0
+                )
                 
                 print(ai_interpretation)
                 
@@ -2695,7 +2685,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
     
     return all_periods_data
 
-async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d"):
+async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
     """Show clean, focused analysis: tree + agent workflow + summary"""
     from contextlib import redirect_stdout, redirect_stderr
     import os
@@ -2737,7 +2727,37 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
         
         # Get anomalies for this period
         analysis_date = analysis_data.get('analysis_date')
-        period_anomalies, period_deviations, _, _ = await detector.analyze_period(data_folder, period, analysis_date)
+        
+        # Ensure detector has the comparison parameters for vslast_dynamic mode
+        if hasattr(detector, 'causal_comparison_dates') and detector.causal_comparison_dates:
+            # Detector already has comparison dates configured
+            print(f"🔍 DEBUG: Using existing comparison dates: {detector.causal_comparison_dates}")
+            period_anomalies, period_deviations, _, _ = await detector.analyze_period(data_folder, period, analysis_date)
+        elif comparison_start_date and comparison_end_date:
+            # Configure detector with comparison dates before calling analyze_period
+            # Convert datetime objects to strings if needed
+            if hasattr(comparison_start_date, 'strftime'):
+                start_str = comparison_start_date.strftime('%Y-%m-%d')
+                end_str = comparison_end_date.strftime('%Y-%m-%d')
+            else:
+                start_str = str(comparison_start_date)
+                end_str = str(comparison_end_date)
+            
+            detector.causal_comparison_dates = (start_str, end_str)
+            print(f"🔍 DEBUG: Configured comparison dates: {detector.causal_comparison_dates}")
+            period_anomalies, period_deviations, _, _ = await detector.analyze_period(data_folder, period, analysis_date)
+        else:
+            # Fallback to original call
+            print(f"🔍 DEBUG: Using fallback call (no comparison dates)")
+            period_anomalies, period_deviations, _, _ = await detector.analyze_period(data_folder, period, analysis_date)
+        
+        # DEBUG: Log what the detector returned
+        print(f"🔍 DEBUG DETECTOR RESULT: period_anomalies type={type(period_anomalies)}, keys={list(period_anomalies.keys()) if isinstance(period_anomalies, dict) else 'Not a dict'}")
+        print(f"🔍 DEBUG DETECTOR RESULT: period_deviations type={type(period_deviations)}, keys={list(period_deviations.keys()) if isinstance(period_deviations, dict) else 'Not a dict'}")
+        if isinstance(period_anomalies, dict) and period_anomalies:
+            print(f"🔍 DEBUG DETECTOR RESULT: period_anomalies content={period_anomalies}")
+        if isinstance(period_deviations, dict) and period_deviations:
+            print(f"🔍 DEBUG DETECTOR RESULT: period_deviations content={period_deviations}")
         
         # Calculate date range
         date_parameter = analysis_data.get('date_parameter')
@@ -2767,39 +2787,43 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
         workflow_decisions = {}
         nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
 
-        # ENHANCEMENT: Always include Global segment in causal analysis if it has valid data
+        # ENHANCEMENT: Always include root segment in causal analysis if it has valid data
         if nodes_with_anomalies:
-            # Check if Global has valid data (not "?" or missing)
-            global_state = period_anomalies.get("Global", "?")
-            print(f"🔍 DEBUG GLOBAL STATE: global_state='{global_state}', period_anomalies keys: {list(period_anomalies.keys())}")
+            # Get the root segment for the analysis
+            root_segment = normalize_segment_to_root(segment)
+            print(f"🔍 DEBUG ROOT SEGMENT: segment='{segment}' -> root_segment='{root_segment}'")
             
-            # Always recalculate Global's anomaly state based on deviation (override detector's decision)
-            global_deviation = period_deviations.get("Global", 0.0)
-            print(f"🔍 DEBUG GLOBAL CALCULATION: global_deviation={global_deviation}")
-            if global_deviation > 0:
-                global_state = "+"  # Positive anomaly
-            elif global_deviation < 0:
-                global_state = "-"  # Negative anomaly
+            # Check if root segment has valid data (not "?" or missing)
+            root_state = period_anomalies.get(root_segment, "?")
+            print(f"🔍 DEBUG ROOT STATE: root_state='{root_state}', period_anomalies keys: {list(period_anomalies.keys())}")
+            
+            # Always recalculate root segment's anomaly state based on deviation (override detector's decision)
+            root_deviation = period_deviations.get(root_segment, 0.0)
+            print(f"🔍 DEBUG ROOT CALCULATION: root_deviation={root_deviation}")
+            if root_deviation > 0:
+                root_state = "+"  # Positive anomaly
+            elif root_deviation < 0:
+                root_state = "-"  # Negative anomaly
             else:
-                global_state = "N"  # Neutral (only when deviation is exactly 0)
-            # Always update Global in period_anomalies with calculated state
-            period_anomalies["Global"] = global_state
-            print(f"      🔍 DEBUG GLOBAL: Override Global state='{global_state}' based on deviation={global_deviation}")
+                root_state = "N"  # Neutral (only when deviation is exactly 0)
+            # Always update root segment in period_anomalies with calculated state
+            period_anomalies[root_segment] = root_state
+            print(f"      🔍 DEBUG ROOT: Override {root_segment} state='{root_state}' based on deviation={root_deviation}")
             
-            if "Global" not in nodes_with_anomalies and global_state != "?":
-                # Add Global to the analysis even if it doesn't have anomalies but has valid data
-                nodes_with_anomalies.append("Global")
-                print(f"🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added Global with state '{global_state}' + {len([n for n in nodes_with_anomalies if n != 'Global'])} anomalous nodes)")
-            elif "Global" in nodes_with_anomalies:
-                print(f"📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including Global)")
+            if root_segment not in nodes_with_anomalies and root_state != "?":
+                # Add root segment to the analysis even if it doesn't have anomalies but has valid data
+                nodes_with_anomalies.append(root_segment)
+                print(f"🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added {root_segment} with state '{root_state}' + {len([n for n in nodes_with_anomalies if n != root_segment])} anomalous nodes)")
+            elif root_segment in nodes_with_anomalies:
+                print(f"📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including {root_segment})")
             else:
-                print(f"📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (Global has no valid data)")
+                print(f"📊 Analyzing {len(nodes_with_anomalies)} anomalous segments ({root_segment} has no valid data)")
             
-            # PRIORITY: Move Global to the front to ensure it's always processed first
-            if "Global" in nodes_with_anomalies:
-                nodes_with_anomalies.remove("Global")
-                nodes_with_anomalies.insert(0, "Global")
-                print(f"🎯 PRIORITY: Global moved to front of processing queue")
+            # PRIORITY: Move root segment to the front to ensure it's always processed first
+            if root_segment in nodes_with_anomalies:
+                nodes_with_anomalies.remove(root_segment)
+                nodes_with_anomalies.insert(0, root_segment)
+                print(f"🎯 PRIORITY: {root_segment} moved to front of processing queue")
 
         if nodes_with_anomalies:
             print(f"\n🤖 AGENT WORKFLOW ANALYSIS:")
@@ -2855,92 +2879,28 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
                     print(f"   ❌ Analysis failed: {str(e)}")
         
         # AI Tree Interpretation
+        print(f"🔍 DEBUG AI INTERPRETER: ai_available={ai_available}, explanations_count={len(explanations) if explanations else 0}")
+        if explanations:
+            print(f"🔍 DEBUG AI INTERPRETER: explanations keys={list(explanations.keys())}")
+            for node, exp in explanations.items():
+                print(f"🔍 DEBUG AI INTERPRETER: {node} has explanation length={len(exp) if exp else 0}")
+        
         if ai_available and explanations:
             print(f"\n🧠 TREE INTERPRETER SUMMARY:")
             print("-" * 40)
             
             try:
-                # Check if we have causal agent explanations that should go directly to interpreter
-                causal_explanations = {}
-                for node_path, explanation in explanations.items():
-                    if explanation and ("🤖 **AGENT CAUSAL ANALYSIS**" in explanation or "AI Causal Investigation:" in explanation):
-                        # This is a full causal agent explanation - pass it directly
-                        if "🤖 **AGENT CAUSAL ANALYSIS**" in explanation:
-                            clean_explanation = explanation.replace("🤖 **AGENT CAUSAL ANALYSIS**\n", "").strip()
-                        else:
-                            clean_explanation = explanation.replace("• AI Causal Investigation:", "").strip()
-                        causal_explanations[node_path] = clean_explanation
+                # Always use the complete tree format with integrated causal explanations
+                ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
+                                               parent_interpretations, explanations, date_range, segment, None)
                 
-                if causal_explanations:
-                    # Use direct causal agent explanation instead of tree format
-                    print("🔍 Using direct causal agent explanation for tree interpretation")
-                    
-                    # For single node with causal explanation, pass it directly
-                    if len(causal_explanations) == 1:
-                        node_path, causal_explanation = next(iter(causal_explanations.items()))
-                        
-                        ai_interpretation = await asyncio.wait_for(
-                            ai_agent.interpret_anomaly_tree(causal_explanation, 
-                                                           start_date.strftime('%Y-%m-%d') if date_range else None, segment),
-                            timeout=600.0
-                        )
-                    else:
-                        # Multiple causal explanations - detect parent-child relationships for intelligent consolidation
-                        relationships = detect_parent_child_relationships(list(causal_explanations.keys()))
-                        
-                        # Prepare hierarchical explanation format with NPS values
-                        hierarchical_explanation = "Análisis jerárquico de anomalías de NPS:\n\n"
-                        
-                        # Helper function to get NPS info for a node
-                        def get_nps_info(node_path):
-                            # NPS values not available in this context
-                            return ""
-                        
-                        # Group explanations by relationships
-                        processed_groups = set()
-                        
-                        for node_path, rel_info in relationships.items():
-                            # Skip if already processed as part of another group
-                            group_key = tuple(sorted(rel_info['all_related']))
-                            if group_key in processed_groups:
-                                continue
-                            processed_groups.add(group_key)
-                            
-                            if rel_info['type'] == 'parent' and len(rel_info['children']) > 0:
-                                # Parent-child group
-                                hierarchical_explanation += f"GRUPO JERÁRQUICO: {node_path} + HIJOS\n"
-                                hierarchical_explanation += f"NODO PADRE: {node_path}{get_nps_info(node_path)}\n{causal_explanations.get(node_path, 'No disponible')}\n\n"
-                                
-                                for child_node in rel_info['children']:
-                                    hierarchical_explanation += f"NODO HIJO: {child_node}{get_nps_info(child_node)}\n{causal_explanations.get(child_node, 'No disponible')}\n\n"
-                            else:
-                                # Standalone node
-                                hierarchical_explanation += f"NODO INDEPENDIENTE: {node_path}{get_nps_info(node_path)}\n{causal_explanations[node_path]}\n\n"
-                        
-                        print(f"🔍 Clean analysis: Sending hierarchical tree to AI: {len(hierarchical_explanation)} chars")
-                        
-                        # Use the new hierarchical analysis method
-                        # For weekly analysis, we need to pass the date range
-                        if date_range and start_date and end_date:
-                            date_range_str = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
-                        else:
-                            date_range_str = start_date.strftime('%Y-%m-%d') if date_range else None
-                        
-                        ai_interpretation = await asyncio.wait_for(
-                            ai_agent.interpret_anomaly_tree_hierarchical(hierarchical_explanation, 
-                                                           date_range_str, segment),
-                            timeout=600.0  # 10 minutes for O3 with conversational steps
-                        )
-                else:
-                    # Fallback to tree format for non-causal explanations
-                    ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                                   parent_interpretations, explanations, date_range, segment, None)
-                    
-                    ai_interpretation = await asyncio.wait_for(
-                        ai_agent.interpret_anomaly_tree(ai_input, 
-                                                       start_date.strftime('%Y-%m-%d') if date_range else None, segment),
-                        timeout=600.0
-                    )
+                print(f"🔍 Using complete tree format with integrated explanations: {len(ai_input)} characters")
+                
+                ai_interpretation = await asyncio.wait_for(
+                    ai_agent.interpret_anomaly_tree(ai_input, 
+                                                   start_date.strftime('%Y-%m-%d') if date_range else None, segment),
+                    timeout=600.0
+                )
                 
                 print(ai_interpretation)
                 
@@ -2994,15 +2954,36 @@ async def print_clean_tree_only(anomalies: dict, deviations: dict, interpretatio
         if interp:
             print(f"{indent}  └─ Pattern: {interp}")
     
-    # Print tree based on segment filter
-    if segment_filter == "Global":
+    # Normalize segment_filter for correct tree printing
+    normalized_segment = segment_filter
+    if segment_filter == 'SH':
+        normalized_segment = 'Global/SH'
+    elif segment_filter == 'LH':
+        normalized_segment = 'Global/LH'
+    elif segment_filter == 'Economy' and '/' not in segment_filter:
+        normalized_segment = 'Global/SH/Economy'
+    elif segment_filter == 'Business' and '/' not in segment_filter:
+        normalized_segment = 'Global/SH/Business'
+    elif segment_filter == 'Business/LH':
+        normalized_segment = 'Global/LH/Business'
+    elif segment_filter == 'Economy/LH':
+        normalized_segment = 'Global/LH/Economy'
+    elif segment_filter == 'Premium/LH':
+        normalized_segment = 'Global/LH/Premium'
+    elif segment_filter == 'Business/SH':
+        normalized_segment = 'Global/SH/Business'
+    elif segment_filter == 'Economy/SH':
+        normalized_segment = 'Global/SH/Economy'
+    
+    # Print tree based on normalized segment filter
+    if normalized_segment == "Global":
         print_full_tree_clean(anomalies, get_state_description, get_deviation_text, print_interpretation)
-    elif segment_filter == "Global/LH":
+    elif normalized_segment == "Global/LH":
         print_lh_tree_clean(anomalies, get_state_description, get_deviation_text, print_interpretation)
-    elif segment_filter == "Global/SH":
+    elif normalized_segment == "Global/SH":
         print_sh_tree_clean(anomalies, get_state_description, get_deviation_text, print_interpretation)
     else:
-        print_single_node_clean(segment_filter, anomalies, get_state_description, get_deviation_text, print_interpretation)
+        print_single_node_clean(normalized_segment, anomalies, get_state_description, get_deviation_text, print_interpretation)
 
 def print_full_tree_clean(anomalies, get_state_description, get_deviation_text, print_interpretation):
     """Print clean full tree without explanations"""
@@ -3691,7 +3672,11 @@ def print_sh_business_tree(anomalies, get_state_description, get_deviation_text,
 
 def print_single_node(node_path, anomalies, get_state_description, get_deviation_text, print_interpretation, print_explanation):
     """Print a single node (for leaf segments)"""
+    # Debug: print available keys in anomalies dict
+    print(f"DEBUG: Looking for node_path: {node_path}")
+    print(f"DEBUG: Available keys in anomalies: {list(anomalies.keys())}")
     node_state = anomalies.get(node_path, "?")
+    print(f"DEBUG: node_state for {node_path}: {node_state}")
     node_dev = get_deviation_text(node_path)
     node_desc = get_state_description(node_state)
     
@@ -3940,6 +3925,10 @@ async def execute_analysis_flow(
     Executes a complete analysis flow for a given configuration.
     This includes data download, anomaly detection, and interpretation.
     """
+    
+    print(f"\n🚀 DEBUG: execute_analysis_flow CALLED!")
+    print(f"🔍 Parameters: segment={segment}, study_mode={study_mode}, explanation_mode={explanation_mode}")
+    print(f"🔍 Parameters: causal_filter={causal_filter}, comparison_dates={comparison_start_date} to {comparison_end_date}")
 
     # Adjust causal_filter based on study_mode
     if study_mode == "single":
@@ -3996,16 +3985,20 @@ async def execute_analysis_flow(
         print(f"✅ No anomalies found for {study_mode} {aggregation_days}d analysis.")
         return None
 
-    # 3. Get Summary
-    summary_data = await show_silent_anomaly_analysis(
+    # 3. Get Summary with AI Interpretation (using full analysis instead of silent)
+    print(f"\n🔍 DEBUG EXECUTE_ANALYSIS_FLOW: About to call show_all_anomaly_periods_with_explanations")
+    print(f"🔍 DEBUG: analysis_data type={type(analysis_data)}, has_anomaly_periods={bool(analysis_data and analysis_data.get('anomaly_periods'))}")
+    print(f"🔍 DEBUG: segment={segment}, explanation_mode={explanation_mode}, causal_filter={causal_filter}")
+    
+    summary_data = await show_all_anomaly_periods_with_explanations(
         analysis_data,
-        f"{study_mode.upper()}_ANALYSIS",
         segment=segment,
         explanation_mode=explanation_mode,
-        causal_filter=causal_filter,
-        comparison_start_date=comparison_start_date,
-        comparison_end_date=comparison_end_date
+        causal_filter=causal_filter
     )
+    
+    print(f"🔍 DEBUG EXECUTE_ANALYSIS_FLOW: show_all_anomaly_periods_with_explanations completed")
+    print(f"🔍 DEBUG: summary_data type={type(summary_data)}")
     
     return summary_data
 

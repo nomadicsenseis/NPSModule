@@ -356,6 +356,21 @@ class AnomalyInterpreterAgent:
                 tree_data=tree_data,
                 date=date if date else 'No especificada'
             )
+            
+            # DEBUG: Print exactly what's being passed to the interpreter
+            print(f"\n🔍 DEBUG INTERPRETER INPUT:")
+            print(f"=" * 80)
+            print(f"📅 Date: {date if date else 'No especificada'}")
+            print(f"📊 Tree data length: {len(tree_data)} chars")
+            print(f"🎯 Tree data content:")
+            print("-" * 40)
+            print(tree_data)
+            print("-" * 40)
+            print(f"📝 Final context message length: {len(context_message)} chars")
+            print(f"📝 Final context message preview:")
+            print(context_message[:500] + "..." if len(context_message) > 500 else context_message)
+            print(f"=" * 80)
+            
             message_history.create_and_add_message(
                 content=context_message,
                 message_type=MessageType.USER
@@ -477,36 +492,94 @@ class AnomalyInterpreterAgent:
     def _parse_hierarchy_from_explanations(self, tree_data: str) -> Dict[str, Any]:
         """Parse hierarchical structure from combined causal explanations."""
         hierarchy = {}
-        # Use regex to find all "NODO: <path>" and their subsequent content.
-        # The pattern looks for "NODO:", captures the path until a newline,
-        # and then captures all content until the next "NODO:" or the end of the string.
-        pattern = re.compile(r"NODO:\s*(.*?)\n(.*?)(?=\nNODO:|\Z)", re.DOTALL)
-
-        matches = pattern.findall(tree_data)
         
-        if not matches:
-            self.logger.warning("No matches found for 'NODO:' pattern in tree_data.")
-            return {}
+        # First try to parse NODO: format (legacy)
+        nodo_pattern = re.compile(r"NODO:\s*(.*?)\n(.*?)(?=\nNODO:|\Z)", re.DOTALL)
+        nodo_matches = nodo_pattern.findall(tree_data)
+        
+        if nodo_matches:
+            # Legacy NODO: format
+            for match in nodo_matches:
+                node_path = match[0].strip()
+                content = match[1].strip()
+                
+                # Determine level
+                level = len(node_path.split('/'))
+                
+                # Determine parent
+                parent_path = '/'.join(node_path.split('/')[:-1]) if '/' in node_path else None
 
-        for match in matches:
-            node_path = match[0].strip()
-            content = match[1].strip()
+                hierarchy[node_path] = {
+                    'type': 'node',
+                    'level': level,
+                    'path': node_path,
+                    'parent': parent_path,
+                    'children': [],
+                    'content': content  # The full explanation for this node
+                }
+        else:
+            # New hierarchical tree format - parse line by line
+            self.logger.info("Using new hierarchical tree format parser")
+            lines = tree_data.split('\n')
+            current_node_path = None
+            current_content = []
             
-            # Determine level
-            level = len(node_path.split('/'))
+            # Extract segment filter from debug information if available
+            segment_context = ""
+            for line in lines[:10]:  # Check first 10 lines for context
+                if 'segment_filter:' in line:
+                    segment_context = line
+                    break
             
-            # Determine parent
-            parent_path = '/'.join(node_path.split('/')[:-1]) if '/' in node_path else None
-
-            hierarchy[node_path] = {
-                'type': 'node',
-                'level': level,
-                'path': node_path,
-                'parent': parent_path,
-                'children': [],
-                'content': content  # The full explanation for this node
-            }
-
+            for line in lines:
+                original_line = line
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Look for node indicators with anomaly states or NPS data
+                node_indicators = ['POSITIVE ANOMALY', 'NEGATIVE ANOMALY', 'Normal', 'No Data']
+                has_node_indicator = any(indicator in line for indicator in node_indicators)
+                has_nps_data = 'NPS:' in line and ('vs' in line or 'baseline' in line)
+                
+                if (has_node_indicator or has_nps_data) and ':' in line:
+                    # Save previous node if exists
+                    if current_node_path:
+                        hierarchy[current_node_path] = {
+                            'type': 'node',
+                            'level': len(current_node_path.split('/')),
+                            'path': current_node_path,
+                            'parent': '/'.join(current_node_path.split('/')[:-1]) if '/' in current_node_path else None,
+                            'children': [],
+                            'content': '\n'.join(current_content).strip()
+                        }
+                    
+                    # Extract node path and start new node
+                    node_name = line.split(':')[0].strip()
+                    
+                    # Clean up node name (remove tree symbols)
+                    node_name = node_name.replace('├─', '').replace('└─', '').replace('  ', '').strip()
+                    
+                    # Try to determine the full node path based on context
+                    current_node_path = self._infer_node_path(node_name, tree_data, segment_context)
+                    
+                    current_content = [original_line]  # Keep original formatting
+                else:
+                    # Add content to current node
+                    if current_node_path:
+                        current_content.append(original_line)  # Keep original formatting
+            
+            # Save last node if exists
+            if current_node_path:
+                hierarchy[current_node_path] = {
+                    'type': 'node',
+                    'level': len(current_node_path.split('/')),
+                    'path': current_node_path,
+                    'parent': '/'.join(current_node_path.split('/')[:-1]) if '/' in current_node_path else None,
+                    'children': [],
+                    'content': '\n'.join(current_content).strip()
+                }
+        
         # Build parent-child relationships
         for node_path, node_data in hierarchy.items():
             parent_path = node_data.get('parent')
@@ -515,6 +588,48 @@ class AnomalyInterpreterAgent:
                     hierarchy[parent_path]['children'].append(node_path)
         
         return hierarchy
+    
+    def _infer_node_path(self, node_name: str, tree_data: str, segment_context: str) -> str:
+        """Infer the full node path from the node name and context."""
+        # If already a full path, return as is
+        if 'Global/' in node_name:
+            return node_name
+        
+        # Try to extract from segment_filter context
+        if 'segment_filter:' in segment_context:
+            filter_part = segment_context.split('segment_filter:')[1].strip()
+            if 'Business/LH' in filter_part:
+                if 'Business' in node_name:
+                    return 'Global/LH/Business'
+            elif 'Economy/SH' in filter_part:
+                if 'Economy' in node_name:
+                    return 'Global/SH/Economy'
+                elif 'IB' in node_name:
+                    return 'Global/SH/Economy/IB'
+                elif 'YW' in node_name:
+                    return 'Global/SH/Economy/YW'
+        
+        # Look for clues in the tree_data
+        if 'Global/LH/Business' in tree_data and 'Business' in node_name:
+            return 'Global/LH/Business'
+        elif 'Global/SH/Economy' in tree_data and 'Economy' in node_name:
+            return 'Global/SH/Economy'
+        elif 'Global/SH/Economy/IB' in tree_data and 'IB' in node_name:
+            return 'Global/SH/Economy/IB'
+        elif 'Global/SH/Economy/YW' in tree_data and 'YW' in node_name:
+            return 'Global/SH/Economy/YW'
+        
+        # Default mappings based on common patterns
+        if 'Business' in node_name:
+            return 'Global/LH/Business'
+        elif 'Economy' in node_name:
+            return 'Global/SH/Economy'
+        elif node_name == 'IB':
+            return 'Global/SH/Economy/IB'  # Most common
+        elif node_name == 'YW':
+            return 'Global/SH/Economy/YW'  # Most common
+        else:
+            return f'Global/{node_name}'
     
     def _format_hierarchy_structure(self, hierarchy: Dict[str, Any]) -> str:
         """Format hierarchy structure for display."""

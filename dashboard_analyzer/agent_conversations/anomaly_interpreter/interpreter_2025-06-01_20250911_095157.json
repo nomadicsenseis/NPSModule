@@ -1,0 +1,101 @@
+{
+  "metadata": {
+    "agent_type": "anomaly_interpreter",
+    "analysis_type": "hierarchical_generation_by_generation",
+    "export_timestamp": "2025-09-11T09:51:57.442680",
+    "analysis_date": "2025-06-01",
+    "llm_type": "O4_MINI",
+    "total_generations": 0,
+    "total_nodes_analyzed": 1,
+    "error": null
+  },
+  "hierarchy_structure": {
+    "Global/LH/Business": {
+      "type": "node",
+      "level": 3,
+      "path": "Global/LH/Business",
+      "parent": "Global/LH",
+      "children": [],
+      "content": "No final synthesis generated - empty LLM response"
+    }
+  },
+  "hierarchy_summary": {
+    "total_nodes": 1,
+    "generations_analyzed": 0,
+    "nodes_by_level": {
+      "3": [
+        "Global/LH/Business"
+      ]
+    },
+    "parent_child_relationships": {}
+  },
+  "conversation_log": [
+    {
+      "generation": 0,
+      "type": "CONTEXT_SETUP",
+      "content": "Analiza la siguiente información que compara dos períodos para el día 2025-06-01. Asimila toda la información en silencio. No generes ninguna respuesta todavía. Espera a la siguiente instrucción para comenzar el análisis paso a paso.\n\n<tree_data>\nNODO: Global/LH/Business\nNo final synthesis generated - empty LLM response\n</tree_data>\n",
+      "metadata": {
+        "hierarchy_nodes": 1,
+        "date": "2025-06-01"
+      },
+      "timestamp": "09:51:24"
+    },
+    {
+      "generation": 0,
+      "type": "CONTEXT_ACKNOWLEDGED",
+      "content": "Entendido. Quedo a la espera de la siguiente instrucción.",
+      "metadata": {
+        "response_length": 57
+      },
+      "timestamp": "09:51:29"
+    },
+    {
+      "generation": 0,
+      "type": "HELPER_PROMPT",
+      "content": "🔍 **PASO 4: ANÁLISIS PROFUNDO DE CAUSAS IDENTIFICADAS**\n\n**Objetivo:** Listar causas, segmentos afectados y construir la explicación causal consolidada por causa.\n\nPara cada causa identificada proporciona:\n\nA. NATURALEZA DE LA CAUSA:\n  • Hipótesis sobre la naturaleza del driver que explica el comportamiento de NPS.\n\nB. EVIDENCIA CONSOLIDADA Y ALCANCE:\n  • Selecciona el segmento \"más grande\" de clientes afectados por esa causa.\n  • Incluye el output causal detallado para ese segmento.\n  • Menciona explícitamente que la causa afecta a todos los subsegmentos bajo ese nodo.\n  • Agrega métricas clave disponibles: indicadores operativos, NPS, rutas involucradas, verbatims representativos.\n",
+      "metadata": {
+        "step": "DETAILED_CAUSE_ANALYSIS",
+        "prompt_length": 692
+      },
+      "timestamp": "09:51:29"
+    },
+    {
+      "generation": 0,
+      "type": "STEP_RESPONSE",
+      "content": "Tras revisar la información disponible para el nodo Global / LH / Business, no se identificaron causas en la síntesis previa. Por tanto, no es posible avanzar en el PASO 4 de análisis profundo de causas.  \n\nLimitación clave  \n• No existen drivers ni segmentos afectados documentados que permitan elaborar hipótesis de naturaleza, evidencia consolidada o métricas de respaldo.  \n\nRecomendación inmediata  \n1. Recolectar datos operativos desagregados (OTP, Load Factor, incidencias NCS).  \n2. Analizar verbatims por subsegmento para generar hipótesis iniciales de causa.  \n3. Ejecutar el PASO 1 y 2 con esa información para poder luego profundizar según la metodología indicada.",
+      "metadata": {
+        "step": "DETAILED_CAUSE_ANALYSIS",
+        "response_length": 676
+      },
+      "timestamp": "09:51:39"
+    },
+    {
+      "generation": 0,
+      "type": "HELPER_PROMPT",
+      "content": "🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**\n\n**Enfoque requerido:** Genera un análisis ejecutivo del árbol de anomalías NPS. Evita frameworks genéricos y enfócate en interpretar los datos NPS proporcionados.\n\n**Formato esperado:**\n\n📈 SÍNTESIS EJECUTIVA:\n\n[ESCRIBE UN PÁRRAFO NARRATIVO que explique las anomalías NPS detectadas, incluyendo:\n- Qué segmentos tienen anomalías (positivas/negativas) CON VALORES NPS EXACTOS (NPS inicial → NPS final, diferencia)\n- Causas identificadas, en que segmento se producen y que anomalías (nodos del arbol jerarquico con anomalias en NPS) explican.\n- Datos que evidencian cada una de estas causas.\n\n[ESCRIBE UN SEGUNDO PÁRRAFO NARRATIVO sobre:\n- Rutas más afectadas según los datos disponibles\n- Grupos de clientes más reactivos\n\n\n\n**⚠️ CRÍTICO:**\n- EMPIEZA DIRECTAMENTE CON \"📈 SÍNTESIS EJECUTIVA:\"\n- NO ESCRIBAS los textos entre corchetes [...], sino reemplázalos con contenido real\n- **INCLUYE OBLIGATORIAMENTE LOS VALORES NPS EXACTOS** cuando menciones segmentos, pero de forma narrativa y fluida: \"experimentó una mejora/deterioro de X puntos, pasando de un NPS de Y a Z\" o \"mostró un NPS de X (mejora/deterioro de Y puntos vs período anterior)\"\n- **INTEGRA LOS VALORES NPS NATURALMENTE** en la narrativa, no como datos crudos separados\n- **ESPECIFICA SIEMPRE EL NODO EXACTO** de los datos analizados. Si los datos corresponden a un subsegmento específico (ej: YW, IB, etc.), SIEMPRE menciona el nodo completo en el título y texto. Ejemplo: \"ECONOMY SH YW\" en lugar de solo \"ECONOMY SH\"\n- **EXTRÁE Y USA LA TERMINOLOGÍA DE COMPARACIÓN** que ya está en los datos de los nodos. Si los datos mencionan \"vs L7d\", \"período previo 7 días\", \"vs target\", etc., usa esa terminología específica en lugar de términos genéricos como \"baseline\" o \"período anterior\"\n- **OBLIGATORIO PARA CABINAS SH:** En las secciones de ECONOMY SH y BUSINESS SH, SIEMPRE menciona explícitamente los valores NPS de cada compañía (IB y YW) por separado antes de explicar el efecto neto. Si una compañía no aparece en el árbol, indica que \"mantuvo desempeño estable\".\n- **EXCEPCIÓN:** Para las secciones de cabina definidas en , sigue las instrucciones específicas de cada sección (que pueden requerir agregación de subsegmentos).\n- NO USES NUMERACIÓN NI ESTRUCTURAS DE PASOS\n- Los párrafos deben ser NARRATIVOS y FLUIDOS\n- ENFÓCATE SOLO EN INTERPRETAR LOS DATOS NPS DEL ÁRBOL\n- HABLAR DE SUBIDAS Y BAJADAS DE NPS, NO DE ANOMALÍAS\n- SI HAY ALGUNA CABINA DE LA CUAL NO TIENES DATOS, MENCIONA QUE ES UNA CABINA ESTABLE A NIVEL SEMANAL ESTA SEMANA.\n",
+      "metadata": {
+        "step": "EXECUTIVE_SYNTHESIS",
+        "prompt_length": 2556
+      },
+      "timestamp": "09:51:39"
+    },
+    {
+      "generation": 0,
+      "type": "STEP_RESPONSE",
+      "content": "📈 SÍNTESIS EJECUTIVA:  \nEn el nodo Global / LH / Business no se registraron subidas ni bajadas de NPS en el periodo 2025-06-01 vs L7d; la cabina Business mantuvo desempeño estable a nivel semanal al no contar con valores diferenciados que indiquen variación alguna.  \n\nEn ausencia de datos operativos o verbatims específicos para este nodo, no es posible identificar rutas con cambios en su NPS ni grupos de clientes especialmente reactivos. Todas las rutas y segmentos bajo Global / LH / Business permanecen sin anomalías detectables en la métrica de satisfacción.",
+      "metadata": {
+        "step": "EXECUTIVE_SYNTHESIS",
+        "response_length": 565
+      },
+      "timestamp": "09:51:57"
+    }
+  ],
+  "conversation_summary": {
+    "CONTEXT_SETUP": 1,
+    "CONTEXT_ACKNOWLEDGED": 1,
+    "HELPER_PROMPT": 2,
+    "STEP_RESPONSE": 2
+  },
+  "generation_reflections": [],
+  "generation_analysis": {}
+}

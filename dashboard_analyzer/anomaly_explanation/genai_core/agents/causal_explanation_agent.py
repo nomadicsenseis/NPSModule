@@ -6830,7 +6830,7 @@ async def investigate_anomaly_causally(
     end_date: str,
     anomaly_type: str,
     anomaly_magnitude: float,
-    llm_type: LLMType = LLMType.O4_MINI,
+    llm_type: Optional[LLMType] = None,
     custom_helper_prompts: Optional[Dict[str, Any]] = None
 ) -> str:
     """

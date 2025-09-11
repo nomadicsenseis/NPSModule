@@ -1,0 +1,49 @@
+{
+  "metadata": {
+    "agent_type": "anomaly_interpreter",
+    "analysis_type": "hierarchical_generation_by_generation",
+    "export_timestamp": "2025-09-11T09:42:41.394516",
+    "analysis_date": "2025-06-01",
+    "llm_type": "O4_MINI",
+    "total_generations": 0,
+    "total_nodes_analyzed": 1,
+    "error": "Error durante la interpretación jerárquica: Error code: 400 - {'error': {'message': \"The response was filtered due to the prompt triggering Azure OpenAI's content management policy. Please modify your prompt and retry. To learn more about our content filtering policies please read our documentation: https://go.microsoft.com/fwlink/?linkid=2198766\", 'type': None, 'param': 'prompt', 'code': 'content_filter', 'status': 400, 'innererror': {'code': 'ResponsibleAIPolicyViolation', 'content_filter_result': {'hate': {'filtered': False, 'severity': 'safe'}, 'jailbreak': {'filtered': True, 'detected': True}, 'self_harm': {'filtered': False, 'severity': 'safe'}, 'sexual': {'filtered': False, 'severity': 'safe'}, 'violence': {'filtered': False, 'severity': 'safe'}}}}}"
+  },
+  "hierarchy_structure": {
+    "Global/LH/Business": {
+      "type": "node",
+      "level": 3,
+      "path": "Global/LH/Business",
+      "parent": "Global/LH",
+      "children": [],
+      "content": "1. Resumen de la anomalía  \n   • NPS Actual (2025-06-01 a 2025-06-30): 32.77216610549944  \n   • NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n   • Variación vs baseline: –7.227833894500563 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \n   • Empeoramiento operativo por cancelaciones y retrasos  \n     – Herramienta: NCS_TOOL  \n     – Incidentes totales: de 571 a 649 (+78)  \n     – Retrasos: +33; limitación de aeronave: +26; cancelaciones: +8; desvíos: +2  \n   • Fallos en handling de equipaje y técnicos a bordo  \n     – Herramienta: VERBATIMS (1 442 comentarios señalando equipaje extraviado, demoras en entregas y problemas técnicos)  \n   • Drivers operativos y de producto identificados por SHAP  \n     – Herramienta: EXPLANATORY_DRIVERS_TOOL (sample size = 20)  \n     – Punctuality: SHAP = –0.961, Sat_diff = –0.788  \n     – Wi-Fi: SHAP = –0.172, Sat_diff = –0.861  \n     – Otros drivers de producto con impacto negativo: Arrivals experience, Aircraft interior  \n   • Validación complementaria con datos diarios operativos  \n     – Herramienta: OPERATIVE_DATA_TOOL  \n     – OTP15 subió 0.1 pp (no consistente con SHAP negativo en puntualidad)  \n     – Mishandling subió 0.7 pp (coherente con quejas de equipaje)  \n\n3. Rutas afectadas (top 5 consolidadas)  \n   • DOH-MAD: NPS –20.0, Pax 5 (explanatory_drivers, ncs)  \n   • MAD-SDQ: NPS 18.8, Pax 16 (explanatory_drivers, ncs)  \n   • EZE-MAD: NPS 56.9, Pax 131 (explanatory_drivers)  \n   • IAD-MAD: NPS 44.4, Pax 9 (explanatory_drivers)  \n   • HAV-MAD: NPS 0.0, Pax 9 (explanatory_drivers)  \n\n4. Reactividad de cliente  \n   • Residence Region: spread 167.9 pts (rango de –75.0 a +92.9)  \n   • Fleet: spread 83.1 pts  \n   • CodeShare: spread 66.8 pts  \n   • Business/Leisure: variaciones muy reducidas"
+    }
+  },
+  "hierarchy_summary": {
+    "total_nodes": 1,
+    "generations_analyzed": 0,
+    "nodes_by_level": {
+      "3": [
+        "Global/LH/Business"
+      ]
+    },
+    "parent_child_relationships": {}
+  },
+  "conversation_log": [
+    {
+      "generation": 0,
+      "type": "CONTEXT_SETUP",
+      "content": "Analiza la siguiente información que compara dos períodos para el día 2025-06-01. Asimila toda la información en silencio. No generes ninguna respuesta todavía. Espera a la siguiente instrucción para comenzar el análisis paso a paso.\n\n<tree_data>\nNODO: Global/LH/Business\n1. Resumen de la anomalía  \n   • NPS Actual (2025-06-01 a 2025-06-30): 32.77216610549944  \n   • NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n   • Variación vs baseline: –7.227833894500563 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \n   • Empeoramiento operativo por cancelaciones y retrasos  \n     – Herramienta: NCS_TOOL  \n     – Incidentes totales: de 571 a 649 (+78)  \n     – Retrasos: +33; limitación de aeronave: +26; cancelaciones: +8; desvíos: +2  \n   • Fallos en handling de equipaje y técnicos a bordo  \n     – Herramienta: VERBATIMS (1 442 comentarios señalando equipaje extraviado, demoras en entregas y problemas técnicos)  \n   • Drivers operativos y de producto identificados por SHAP  \n     – Herramienta: EXPLANATORY_DRIVERS_TOOL (sample size = 20)  \n     – Punctuality: SHAP = –0.961, Sat_diff = –0.788  \n     – Wi-Fi: SHAP = –0.172, Sat_diff = –0.861  \n     – Otros drivers de producto con impacto negativo: Arrivals experience, Aircraft interior  \n   • Validación complementaria con datos diarios operativos  \n     – Herramienta: OPERATIVE_DATA_TOOL  \n     – OTP15 subió 0.1 pp (no consistente con SHAP negativo en puntualidad)  \n     – Mishandling subió 0.7 pp (coherente con quejas de equipaje)  \n\n3. Rutas afectadas (top 5 consolidadas)  \n   • DOH-MAD: NPS –20.0, Pax 5 (explanatory_drivers, ncs)  \n   • MAD-SDQ: NPS 18.8, Pax 16 (explanatory_drivers, ncs)  \n   • EZE-MAD: NPS 56.9, Pax 131 (explanatory_drivers)  \n   • IAD-MAD: NPS 44.4, Pax 9 (explanatory_drivers)  \n   • HAV-MAD: NPS 0.0, Pax 9 (explanatory_drivers)  \n\n4. Reactividad de cliente  \n   • Residence Region: spread 167.9 pts (rango de –75.0 a +92.9)  \n   • Fleet: spread 83.1 pts  \n   • CodeShare: spread 66.8 pts  \n   • Business/Leisure: variaciones muy reducidas\n</tree_data>\n",
+      "metadata": {
+        "hierarchy_nodes": 1,
+        "date": "2025-06-01"
+      },
+      "timestamp": "09:42:36"
+    }
+  ],
+  "conversation_summary": {
+    "CONTEXT_SETUP": 1
+  },
+  "generation_reflections": [],
+  "generation_analysis": {}
+}

@@ -1,0 +1,49 @@
+{
+  "metadata": {
+    "agent_type": "anomaly_interpreter",
+    "analysis_type": "hierarchical_generation_by_generation",
+    "export_timestamp": "2025-09-11T10:38:36.827836",
+    "analysis_date": "2025-06-01",
+    "llm_type": "CLAUDE_SONNET_4",
+    "total_generations": 0,
+    "total_nodes_analyzed": 1,
+    "error": "Error durante la interpretación jerárquica: An error occurred (AccessDeniedException) when calling the InvokeModel operation: User: arn:aws:iam::737192913161:user/BedrockAPIKey-zhqx is not authorized to perform: bedrock:InvokeModel on resource: arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0 with an explicit deny in a service control policy"
+  },
+  "hierarchy_structure": {
+    "Global/LH/Business": {
+      "type": "node",
+      "level": 3,
+      "path": "Global/LH/Business",
+      "parent": "Global/LH",
+      "children": [],
+      "content": "📊 **INFORMACIÓN DE BASELINE:**\n   • Filtro de comparación: vs Sel. Period\n   • Descripción del baseline: período seleccionado (2025-05-01 a 2025-05-31)"
+    }
+  },
+  "hierarchy_summary": {
+    "total_nodes": 1,
+    "generations_analyzed": 0,
+    "nodes_by_level": {
+      "3": [
+        "Global/LH/Business"
+      ]
+    },
+    "parent_child_relationships": {}
+  },
+  "conversation_log": [
+    {
+      "generation": 0,
+      "type": "CONTEXT_SETUP",
+      "content": "Analiza la siguiente información que compara dos períodos para el día 2025-06-01. Asimila toda la información en silencio. No generes ninguna respuesta todavía. Espera a la siguiente instrucción para comenzar el análisis paso a paso.\n\n<tree_data>\nNODO: Global/LH/Business\n📊 **INFORMACIÓN DE BASELINE:**\n   • Filtro de comparación: vs Sel. Period\n   • Descripción del baseline: período seleccionado (2025-05-01 a 2025-05-31)\n</tree_data>\n",
+      "metadata": {
+        "hierarchy_nodes": 1,
+        "date": "2025-06-01"
+      },
+      "timestamp": "10:38:35"
+    }
+  ],
+  "conversation_summary": {
+    "CONTEXT_SETUP": 1
+  },
+  "generation_reflections": [],
+  "generation_analysis": {}
+}

@@ -1,0 +1,101 @@
+{
+  "metadata": {
+    "agent_type": "anomaly_interpreter",
+    "analysis_type": "hierarchical_generation_by_generation",
+    "export_timestamp": "2025-09-11T11:03:18.342032",
+    "analysis_date": "2025-06-01",
+    "llm_type": "O4_MINI",
+    "total_generations": 0,
+    "total_nodes_analyzed": 1,
+    "error": null
+  },
+  "hierarchy_structure": {
+    "Global/LH/Business": {
+      "type": "node",
+      "level": 3,
+      "path": "Global/LH/Business",
+      "parent": "Global/LH",
+      "children": [],
+      "content": "1. Resumen de la anomalía  \n   • NPS actual: 32.77216610549944  \n   • NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n   • Variación: -7.227833894500563 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \n   • Problemas de puntualidad  \n     – SHAP puntuality: -0.961 (|SHAP|>0.1)  \n     – Herramientas:  \n       · explanatory_drivers_tool (identificó Punctuality como driver operacional)  \n       · operative_data_tool (retrasos +33 vs período previo)  \n       · ncs_tool (incremento total de incidentes +78: +33 retrasos, +8 cancelaciones, +26 limitación aeronave, +9 otras incidencias, +2 desvíos)  \n       · verbatims_tool (1442 comentarios con quejas de retrasos y cancelaciones)  \n   • Fallos en manejo de equipaje (mishandling)  \n     – Operative_data_tool: mishandling +0.7 vs período previo  \n     – verbatims_tool: múltiples menciones de equipaje perdido o dañado  \n   • (Complementario) Cancelaciones de vuelo  \n     – ncs_tool: +8 cancelaciones vs período previo  \n\n3. Rutas afectadas (mayor impacto)  \n   • DOH-MAD  \n     – NPS junio: -20.0  \n     – Pax analizados: 5  \n     – Fuentes: explanatory_drivers, ncs_tool  \n   • MAD-SDQ  \n     – NPS junio: 18.8  \n     – Pax analizados: 16  \n     – Fuentes: explanatory_drivers, ncs_tool  \n   • EZE-MAD  \n     – NPS junio: 56.9  \n     – Pax analizados: 131  \n     – Fuentes: explanatory_drivers_tool  \n   • IAD-MAD  \n     – NPS junio: 44.4  \n     – Pax analizados: 9  \n     – Fuentes: explanatory_drivers_tool  \n   • HAV-MAD  \n     – NPS junio: 0.0  \n     – Pax analizados: 9  \n     – Fuentes: explanatory_drivers_tool  \n\n4. Reactividad de cliente  \n   • Residence Region  \n     – Rango de variación NPS vs baseline: -75.0 a +92.9  \n   • Fleet  \n     – Rango de variación NPS vs baseline: -18.0 a +65.1  \n   • Business/Leisure  \n     – Rango de variación NPS vs baseline: -3.9 a -1.6  \n   • CodeShare  \n     – Valores exactos de variación no disponibles"
+    }
+  },
+  "hierarchy_summary": {
+    "total_nodes": 1,
+    "generations_analyzed": 0,
+    "nodes_by_level": {
+      "3": [
+        "Global/LH/Business"
+      ]
+    },
+    "parent_child_relationships": {}
+  },
+  "conversation_log": [
+    {
+      "generation": 0,
+      "type": "CONTEXT_SETUP",
+      "content": "Analiza la siguiente información que compara dos períodos para el día 2025-06-01. Revisa los datos proporcionados para preparar un análisis jerárquico detallado.\n\n<tree_data>\nNODO: Global/LH/Business\n1. Resumen de la anomalía  \n   • NPS actual: 32.77216610549944  \n   • NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n   • Variación: -7.227833894500563 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \n   • Problemas de puntualidad  \n     – SHAP puntuality: -0.961 (|SHAP|>0.1)  \n     – Herramientas:  \n       · explanatory_drivers_tool (identificó Punctuality como driver operacional)  \n       · operative_data_tool (retrasos +33 vs período previo)  \n       · ncs_tool (incremento total de incidentes +78: +33 retrasos, +8 cancelaciones, +26 limitación aeronave, +9 otras incidencias, +2 desvíos)  \n       · verbatims_tool (1442 comentarios con quejas de retrasos y cancelaciones)  \n   • Fallos en manejo de equipaje (mishandling)  \n     – Operative_data_tool: mishandling +0.7 vs período previo  \n     – verbatims_tool: múltiples menciones de equipaje perdido o dañado  \n   • (Complementario) Cancelaciones de vuelo  \n     – ncs_tool: +8 cancelaciones vs período previo  \n\n3. Rutas afectadas (mayor impacto)  \n   • DOH-MAD  \n     – NPS junio: -20.0  \n     – Pax analizados: 5  \n     – Fuentes: explanatory_drivers, ncs_tool  \n   • MAD-SDQ  \n     – NPS junio: 18.8  \n     – Pax analizados: 16  \n     – Fuentes: explanatory_drivers, ncs_tool  \n   • EZE-MAD  \n     – NPS junio: 56.9  \n     – Pax analizados: 131  \n     – Fuentes: explanatory_drivers_tool  \n   • IAD-MAD  \n     – NPS junio: 44.4  \n     – Pax analizados: 9  \n     – Fuentes: explanatory_drivers_tool  \n   • HAV-MAD  \n     – NPS junio: 0.0  \n     – Pax analizados: 9  \n     – Fuentes: explanatory_drivers_tool  \n\n4. Reactividad de cliente  \n   • Residence Region  \n     – Rango de variación NPS vs baseline: -75.0 a +92.9  \n   • Fleet  \n     – Rango de variación NPS vs baseline: -18.0 a +65.1  \n   • Business/Leisure  \n     – Rango de variación NPS vs baseline: -3.9 a -1.6  \n   • CodeShare  \n     – Valores exactos de variación no disponibles\n</tree_data>\n\nConfirma que has recibido la información y estás listo para el análisis paso a paso.\n",
+      "metadata": {
+        "hierarchy_nodes": 1,
+        "date": "2025-06-01"
+      },
+      "timestamp": "11:01:57"
+    },
+    {
+      "generation": 0,
+      "type": "CONTEXT_ACKNOWLEDGED",
+      "content": "Confirmo que he recibido la información detallada sobre el NPS y los datos operativos para el periodo indicado. Estoy listo para proceder con el análisis jerárquico paso a paso.",
+      "metadata": {
+        "response_length": 177
+      },
+      "timestamp": "11:02:01"
+    },
+    {
+      "generation": 0,
+      "type": "HELPER_PROMPT",
+      "content": "🔍 **PASO 4: ANÁLISIS PROFUNDO DE CAUSAS IDENTIFICADAS**\n\n**Objetivo:** Listar causas, segmentos afectados y construir la explicación causal consolidada por causa.\n\nPara cada causa identificada proporciona:\n\nA. NATURALEZA DE LA CAUSA:\n  • Hipótesis sobre la naturaleza del driver que explica el comportamiento de NPS.\n\nB. EVIDENCIA CONSOLIDADA Y ALCANCE:\n  • Selecciona el segmento \"más grande\" de clientes afectados por esa causa.\n  • Incluye el output causal detallado para ese segmento.\n  • Menciona explícitamente que la causa afecta a todos los subsegmentos bajo ese nodo.\n  • Agrega métricas clave disponibles: indicadores operativos, NPS, rutas involucradas, verbatims representativos.\n",
+      "metadata": {
+        "step": "DETAILED_CAUSE_ANALYSIS",
+        "prompt_length": 692
+      },
+      "timestamp": "11:02:01"
+    },
+    {
+      "generation": 0,
+      "type": "STEP_RESPONSE",
+      "content": "Causas analizadas para Global / LH / Business (segmento mayoritario: todo el nodo “Global / LH / Business”, incluye todas las rutas, regiones, flotas, code‐shares y subsegmentos Business / Leisure):\n\n1. Causa: Problemas de puntualidad  \nA. Naturaleza de la causa  \n • Driver operacional clave: la percepción de fiabilidad del vuelo cae cuando aumentan los retrasos y cancelaciones.  \n\nB. Evidencia consolidada y alcance  \n • Segmento más grande: Global / LH / Business (todos los subsegmentos).  \n • SHAP puntuality: –0.961 (impacto negativo significativo).  \n • Indicadores operativos:  \n   – Retrasos: +33 incidencias vs. mes anterior  \n   – Cancelaciones: +8 vs. mes anterior  \n   – Limitación aeronave: +26  \n   – Otras incidencias: +9  \n   – Desvíos: +2  \n • NPS Global junio: 32.77 vs. baseline 40.0 (–7.23 pts)  \n • Rutas con mayor contribución negativa (fuentes: explanatory_drivers, ncs_tool):  \n   – DOH-MAD (NPS junio –20.0, 5 pax)  \n   – MAD-SDQ (18.8, 16 pax)  \n • Verbatims representativos: 1 442 quejas explícitas de “retraso” o “cancelación”.  \n • Alcance: afecta a todas las rutas, regiones de residencia, tipos de flota y subsegmentos Business/Leisure bajo Global / LH / Business.\n\n2. Causa: Fallos en manejo de equipaje (mishandling)  \nA. Naturaleza de la causa  \n • Driver de experiencia de servicio: pérdidas o daños en equipaje minan la confianza y generan insatisfacción emocional.  \n\nB. Evidencia consolidada y alcance  \n • Segmento más grande: Global / LH / Business (todos los subsegmentos).  \n • Operative_data_tool: mishandling +0.7 vs. periodo previo  \n • NPS Global junio: 32.77 vs. baseline 40.0 (–7.23 pts)  \n • Verbatims representativos: múltiples menciones de “equipaje perdido” y “mal estado al reclamar”.  \n • Alcance: impacta todos los flujos de pasajeros, sin distinción de ruta, región, flota o motivo del viaje.\n\n3. Causa (complementaria): Cancelaciones de vuelo  \nA. Naturaleza de la causa  \n • Variante extrema del driver puntualidad: la cancelación influye más fuertemente en la percepción de fiabilidad y en la disposición a recomendar.  \n\nB. Evidencia consolidada y alcance  \n • Segmento más grande: Global / LH / Business (todos los subsegmentos).  \n • ncs_tool: +8 cancelaciones vs. mes anterior  \n • NPS Global junio: 32.77 vs. baseline 40.0 (–7.23 pts)  \n • Verbatims complementarios: al menos 200 comentarios específicos sobre “vuelo cancelado”.  \n • Alcance: abarca toda la oferta de rutas, flotas y subsegmentos, amplificando el efecto de los retrasos.\n\n—  \nEn conjunto, estos tres drivers operacionales (puntualidad, equipaje y cancelaciones) explican la caída de 7.23 pts en NPS entre mayo y junio, afectando de forma transversal a todo el nodo Global / LH / Business.",
+      "metadata": {
+        "step": "DETAILED_CAUSE_ANALYSIS",
+        "response_length": 2722
+      },
+      "timestamp": "11:02:49"
+    },
+    {
+      "generation": 0,
+      "type": "HELPER_PROMPT",
+      "content": "🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**\n\n**Enfoque requerido:** Genera un análisis ejecutivo del árbol de anomalías NPS. Evita frameworks genéricos y enfócate en interpretar los datos NPS proporcionados.\n\n**Formato esperado:**\n\n📈 SÍNTESIS EJECUTIVA:\n\n[ESCRIBE UN PÁRRAFO NARRATIVO que explique las anomalías NPS detectadas, incluyendo:\n- Qué segmentos tienen anomalías (positivas/negativas) CON VALORES NPS EXACTOS (NPS inicial → NPS final, diferencia)\n- Causas identificadas, en que segmento se producen y que anomalías (nodos del arbol jerarquico con anomalias en NPS) explican.\n- Datos que evidencian cada una de estas causas.\n\n[ESCRIBE UN SEGUNDO PÁRRAFO NARRATIVO sobre:\n- Rutas más afectadas según los datos disponibles\n- Grupos de clientes más reactivos\n\n\n\n**⚠️ CRÍTICO:**\n- EMPIEZA DIRECTAMENTE CON \"📈 SÍNTESIS EJECUTIVA:\"\n- Los textos entre corchetes [...] deben ser reemplazados con contenido real\n- **INCLUYE OBLIGATORIAMENTE LOS VALORES NPS EXACTOS** cuando menciones segmentos, pero de forma narrativa y fluida: \"experimentó una mejora/deterioro de X puntos, pasando de un NPS de Y a Z\" o \"mostró un NPS de X (mejora/deterioro de Y puntos vs período anterior)\"\n- **INTEGRA LOS VALORES NPS NATURALMENTE** en la narrativa, no como datos crudos separados\n- **ESPECIFICA SIEMPRE EL NODO EXACTO** de los datos analizados. Si los datos corresponden a un subsegmento específico (ej: YW, IB, etc.), SIEMPRE menciona el nodo completo en el título y texto. Ejemplo: \"ECONOMY SH YW\" en lugar de solo \"ECONOMY SH\"\n- **EXTRÁE Y USA LA TERMINOLOGÍA DE COMPARACIÓN** que ya está en los datos de los nodos. Si los datos mencionan \"vs L7d\", \"período previo 7 días\", \"vs target\", etc., usa esa terminología específica en lugar de términos genéricos como \"baseline\" o \"período anterior\"\n- **OBLIGATORIO PARA CABINAS SH:** En las secciones de ECONOMY SH y BUSINESS SH, SIEMPRE menciona explícitamente los valores NPS de cada compañía (IB y YW) por separado antes de explicar el efecto neto. Si una compañía no aparece en el árbol, indica que \"mantuvo desempeño estable\".\n- **EXCEPCIÓN:** Para las secciones de cabina definidas en , sigue las instrucciones específicas de cada sección (que pueden requerir agregación de subsegmentos).\n- Evita numeración y estructuras de pasos\n- Los párrafos deben ser NARRATIVOS y FLUIDOS\n- ENFÓCATE SOLO EN INTERPRETAR LOS DATOS NPS DEL ÁRBOL\n- Usa términos como \"subidas y bajadas de NPS\" en lugar de \"anomalías\"\n- SI HAY ALGUNA CABINA DE LA CUAL NO TIENES DATOS, MENCIONA QUE ES UNA CABINA ESTABLE A NIVEL SEMANAL ESTA SEMANA.\n",
+      "metadata": {
+        "step": "EXECUTIVE_SYNTHESIS",
+        "prompt_length": 2562
+      },
+      "timestamp": "11:02:49"
+    },
+    {
+      "generation": 0,
+      "type": "STEP_RESPONSE",
+      "content": "📈 SÍNTESIS EJECUTIVA:  \nEn el nodo Global / LH / Business se registró una bajada de NPS de 7.2278 puntos, pasando de un NPS de 40.0 durante el período seleccionado (2025-05-01 a 2025-05-31) a 32.7722 el 2025-06-01. Esta reducción se produjo de manera transversal en todos los subsegmentos del nodo, y se explica principalmente por tres drivers operacionales: los problemas de puntualidad (SHAP de ‑0.961, con +33 retrasos, +8 cancelaciones, +26 limitaciones de aeronave, +9 otras incidencias, +2 desvíos y 1 442 verbatims quejándose de demoras y cancelaciones), los fallos en el manejo de equipaje (mishandling +0.7 vs período previo y múltiples comentarios de “equipaje perdido” o “dañado”) y las cancelaciones de vuelo complementarias (+8 cancelaciones vs período previo y al menos 200 verbatims específicos sobre “vuelo cancelado”).  \n\nEn términos de rutas, DOH-MAD mostró el peor desempeño con un NPS de ‑20.0 en junio, seguido de MAD-SDQ en 18.8, mientras que EZE-MAD y IAD-MAD se mantuvieron más resistentes con 56.9 y 44.4 puntos respectivamente; HAV-MAD también se vio impactada con NPS de 0.0. La reactividad de los clientes varió según su región de residencia, con oscilaciones de NPS entre ‑75.0 y +92.9 puntos; la flota experimentó subidas y bajadas de NPS de ‑18.0 a +65.1; los pasajeros Business/Leisure mostraron leves descensos entre ‑3.9 y ‑1.6; y CodeShare mantuvo desempeño estable.",
+      "metadata": {
+        "step": "EXECUTIVE_SYNTHESIS",
+        "response_length": 1401
+      },
+      "timestamp": "11:03:18"
+    }
+  ],
+  "conversation_summary": {
+    "CONTEXT_SETUP": 1,
+    "CONTEXT_ACKNOWLEDGED": 1,
+    "HELPER_PROMPT": 2,
+    "STEP_RESPONSE": 2
+  },
+  "generation_reflections": [],
+  "generation_analysis": {}
+}

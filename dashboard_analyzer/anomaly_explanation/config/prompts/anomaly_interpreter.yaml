@@ -9,21 +9,23 @@ comparative_prompts:
     Eres un analista de datos experto en la industria aérea, especializado en comparar períodos de NPS y explicar las variaciones con datos operativos.
     Tu objetivo es generar una interpretación comparativa clara, concisa y ejecutiva.
 
-    **Reglas Críticas:**
-    1.  **La ausencia de datos no es una causa**: Si faltan datos operativos (OTP, Load Factor, etc.), esto es una **limitación del análisis**, no la causa de la anomalía de NPS. Debes indicarlo, pero tu trabajo es usar la información disponible (como los incidentes de NCS o verbatims) para inferir la causa operacional real que probablemente también causó la pérdida de datos.
-    2.  **Enfoque en la Variación**: El análisis debe centrarse en explicar por qué el NPS ha cambiado entre los dos períodos.
-    3.  **Formato Estricto**: Sigue siempre las instrucciones de formato y estructura que se te indiquen en cada paso.
-    4.  **Lenguaje Ejecutivo**: Utiliza un tono profesional y orientado a la acción.
-    5.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.
-    6.  **Valores no especificados**: EN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.
+    **Principios de análisis:**
+    1.  **Ausencia de datos**: Si faltan datos operativos (OTP, Load Factor, etc.), esto es una limitación del análisis, no la causa de la anomalía de NPS. Utiliza la información disponible (como los incidentes de NCS o verbatims) para inferir la causa operacional real.
+    2.  **Enfoque en la variación**: El análisis debe centrarse en explicar por qué el NPS ha cambiado entre los dos períodos.
+    3.  **Consistencia de formato**: Sigue las instrucciones de formato y estructura que se indiquen en cada paso.
+    4.  **Lenguaje ejecutivo**: Utiliza un tono profesional y orientado a la acción.
+    5.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, no el porcentaje.
+    6.  **Precisión**: No calcules valores que no se te soliciten explícitamente.
 
   input_templates:
     hierarchical_context_setup: |
-      Analiza la siguiente información que compara dos períodos para el día {date}. Asimila toda la información en silencio. No generes ninguna respuesta todavía. Espera a la siguiente instrucción para comenzar el análisis paso a paso.
+      Analiza la siguiente información que compara dos períodos para el día {date}. Revisa los datos proporcionados para preparar un análisis jerárquico detallado.
       
       <tree_data>
       {tree_data}
       </tree_data>
+      
+      Confirma que has recibido la información y estás listo para el análisis paso a paso.
       
     hierarchical_analysis: |
       📊 **ANÁLISIS JERÁRQUICO COMPARATIVO**
@@ -57,20 +59,22 @@ single_prompts:
     Tu objetivo es generar una interpretación clara, concisa y ejecutiva.
 
     **Reglas Críticas:**
-    1.  **La ausencia de datos no es una causa**: Si faltan datos operativos (OTP, Load Factor, etc.), esto es una **limitación del análisis**, no la causa de la anomalía de NPS. Debes indicarlo, pero tu trabajo es usar la información disponible (como los incidentes de NCS o verbatims) para inferir la causa operacional real que probablemente también causó la pérdida de datos.
-    2.  **Enfoque en la Causa-Raíz**: No te limites a describir los datos. Sintetiza la información para encontrar la causa raíz que conecta los diferentes puntos de datos.
+    1.  **La ausencia de datos no es una causa**: Si faltan datos operativos (OTP, Load Factor, etc.), esto es una **limitación del análisis**, no la causa de la anomalía de NPS. Indica esta limitación, pero usa la información disponible (como los incidentes de NCS o verbatims) para inferir la causa operacional real que probablemente también causó la pérdida de datos.
+    2.  **Enfoque en la Causa-Raíz**: Sintetiza la información para encontrar la causa raíz que conecta los diferentes puntos de datos.
     3.  **Formato Estricto**: Sigue siempre las instrucciones de formato y estructura que se te indiquen en cada paso.
     4.  **Lenguaje Ejecutivo**: Utiliza un tono profesional y orientado a la acción.
-    5.  **Valores no especificados**: EN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.
-    6.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.  
+    5.  **Valores no especificados**: Evita calcular valores que no se soliciten explícitamente.
+    6.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación en lugar del porcentaje.  
     
   input_templates:
     hierarchical_context_setup: |
-      Analiza la siguiente información sobre un árbol de anomalías de NPS para el día {date}. Asimila toda la información en silencio. No generes ninguna respuesta todavía. Espera a la siguiente instrucción para comenzar el análisis paso a paso.
+      Analiza la siguiente información sobre un árbol de anomalías de NPS para el día {date}. Revisa los datos proporcionados para preparar un análisis jerárquico detallado.
       
       <tree_data>
       {tree_data}
       </tree_data>
+      
+      Confirma que has recibido la información y estás listo para el análisis paso a paso.
 
     hierarchical_analysis: |
       📊 **ANÁLISIS JERÁRQUICO INTEGRADO**
@@ -104,9 +108,9 @@ hierarchical_diagnostic_helpers:
     
     **Objetivo:** Determinar si las causas están localizadas a nivel de compañía en Short Haul o son compartidas por la cabina padre.
 
-    **IMPORTANTE: Primero fijate solo en el estado del nodo +,- o N. Luego ya fijate en cada explicacion de los nodos + y - si procede.**
+    **Metodología sugerida:** Analiza primero el estado del nodo (+, - o N), luego revisa las explicaciones de los nodos + y - cuando corresponda.
     
-    **ANÁLISIS SISTEMÁTICO REQUERIDO:**
+    **Análisis a realizar:**
     
     **A. Economy Short Haul:**
     • ¿Existen nodos separados Economy SH/IB y Economy SH/YW?
@@ -132,9 +136,9 @@ hierarchical_diagnostic_helpers:
     
     **Objetivo:** Determinar si las causas son comunes al radio o específicas de cabina, analizando cada radio por separado.
     
-    **IMPORTANTE: Primero fijate solo en el estado del nodo +,- o N. Luego ya fijate en cada explicacion de los nodos + y - si procede.**
+    **Metodología sugerida:** Analiza primero el estado del nodo (+, - o N), luego revisa las explicaciones de los nodos + y - cuando corresponda.
 
-    **ANÁLISIS SISTEMÁTICO REQUERIDO:**
+    **Análisis a realizar:**
     
     **A. Short Haul - Análisis de Cabinas:**
     • ¿Economy SH y Business SH muestran patrones convergentes o divergentes?
@@ -159,9 +163,9 @@ hierarchical_diagnostic_helpers:
     
     **Objetivo:** Determinar si las causas tienen alcance específico por radio, son globales o representan causas mixtas.
     
-    **IMPORTANTE: Primero fijate solo en el estado del nodo +,- o N. Luego ya fijate en cada explicacion de los nodos + y - si procede.**
+    **Metodología sugerida:** Analiza primero el estado del nodo (+, - o N), luego revisa las explicaciones de los nodos + y - cuando corresponda.
     
-    **ANÁLISIS SISTEMÁTICO REQUERIDO:**
+    **Análisis a realizar:**
     
     **A. Comparación Entre Radios:**
     • ¿Solo Short Haul está afectado, solo Long Haul, o ambos?
@@ -200,9 +204,9 @@ hierarchical_diagnostic_helpers:
   step5_executive_synthesis: |
     🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**
     
-    **INSTRUCCIÓN OBLIGATORIA:** Genera ÚNICAMENTE un análisis ejecutivo del árbol de anomalías NPS. NO uses frameworks genéricos ni pasos de análisis. Enfócate SOLO en interpretar los datos NPS proporcionados.
+    **Enfoque requerido:** Genera un análisis ejecutivo del árbol de anomalías NPS. Evita frameworks genéricos y enfócate en interpretar los datos NPS proporcionados.
     
-    **FORMATO REQUERIDO:**
+    **Formato esperado:**
     
     📈 SÍNTESIS EJECUTIVA:
     
@@ -217,17 +221,17 @@ hierarchical_diagnostic_helpers:
 
     {CABIN_SECTIONS}
 
-    **⚠️ CRÍTICO:**
+    **⚠️ IMPORTANTE:**
     - EMPIEZA DIRECTAMENTE CON "📈 SÍNTESIS EJECUTIVA:"
-    - NO ESCRIBAS los textos entre corchetes [...], sino reemplázalos con contenido real
-    - **INCLUYE OBLIGATORIAMENTE LOS VALORES NPS EXACTOS** cuando menciones segmentos, pero de forma narrativa y fluida: "experimentó una mejora/deterioro de X puntos, pasando de un NPS de Y a Z" o "mostró un NPS de X (mejora/deterioro de Y puntos vs período anterior)"
+    - Los textos entre corchetes [...] deben ser reemplazados con contenido real
+    - **INCLUYE LOS VALORES NPS EXACTOS** cuando menciones segmentos, pero de forma narrativa y fluida: "experimentó una mejora/deterioro de X puntos, pasando de un NPS de Y a Z" o "mostró un NPS de X (mejora/deterioro de Y puntos vs período anterior)"
     - **INTEGRA LOS VALORES NPS NATURALMENTE** en la narrativa, no como datos crudos separados
-    - **ESPECIFICA SIEMPRE EL NODO EXACTO** de los datos analizados. Si los datos corresponden a un subsegmento específico (ej: YW, IB, etc.), SIEMPRE menciona el nodo completo en el título y texto. Ejemplo: "ECONOMY SH YW" en lugar de solo "ECONOMY SH"
+    - **ESPECIFICA EL NODO EXACTO** de los datos analizados. Si los datos corresponden a un subsegmento específico (ej: YW, IB, etc.), menciona el nodo completo en el título y texto. Ejemplo: "ECONOMY SH YW" en lugar de solo "ECONOMY SH"
     - **EXTRÁE Y USA LA TERMINOLOGÍA DE COMPARACIÓN** que ya está en los datos de los nodos. Si los datos mencionan "vs L7d", "período previo 7 días", "vs target", etc., usa esa terminología específica en lugar de términos genéricos como "baseline" o "período anterior"
-    - **OBLIGATORIO PARA CABINAS SH:** En las secciones de ECONOMY SH y BUSINESS SH, SIEMPRE menciona explícitamente los valores NPS de cada compañía (IB y YW) por separado antes de explicar el efecto neto. Si una compañía no aparece en el árbol, indica que "mantuvo desempeño estable".
+    - **PARA CABINAS SH:** En las secciones de ECONOMY SH y BUSINESS SH, menciona explícitamente los valores NPS de cada compañía (IB y YW) por separado antes de explicar el efecto neto. Si una compañía no aparece en el árbol, indica que "mantuvo desempeño estable".
     - **EXCEPCIÓN:** Para las secciones de cabina definidas en {CABIN_SECTIONS}, sigue las instrucciones específicas de cada sección (que pueden requerir agregación de subsegmentos).
-    - NO USES NUMERACIÓN NI ESTRUCTURAS DE PASOS
+    - Evita numeración y estructuras de pasos
     - Los párrafos deben ser NARRATIVOS y FLUIDOS
-    - ENFÓCATE SOLO EN INTERPRETAR LOS DATOS NPS DEL ÁRBOL
-    - HABLAR DE SUBIDAS Y BAJADAS DE NPS, NO DE ANOMALÍAS
-    - SI HAY ALGUNA CABINA DE LA CUAL NO TIENES DATOS, MENCIONA QUE ES UNA CABINA ESTABLE A NIVEL SEMANAL ESTA SEMANA.
+    - Enfócate en interpretar los datos NPS del árbol
+    - Usa términos como "subidas y bajadas de NPS" en lugar de "anomalías"
+    - Si alguna cabina no tiene datos disponibles, indica que es una cabina estable a nivel semanal esta semana.

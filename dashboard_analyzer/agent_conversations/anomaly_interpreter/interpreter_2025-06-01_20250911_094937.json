@@ -1,0 +1,77 @@
+{
+  "metadata": {
+    "agent_type": "anomaly_interpreter",
+    "analysis_type": "hierarchical_generation_by_generation",
+    "export_timestamp": "2025-09-11T09:49:37.891114",
+    "analysis_date": "2025-06-01",
+    "llm_type": "O4_MINI",
+    "total_generations": 0,
+    "total_nodes_analyzed": 3,
+    "error": "Error durante la interpretación jerárquica: Error code: 400 - {'error': {'message': \"The response was filtered due to the prompt triggering Azure OpenAI's content management policy. Please modify your prompt and retry. To learn more about our content filtering policies please read our documentation: https://go.microsoft.com/fwlink/?linkid=2198766\", 'type': None, 'param': 'prompt', 'code': 'content_filter', 'status': 400, 'innererror': {'code': 'ResponsibleAIPolicyViolation', 'content_filter_result': {'hate': {'filtered': False, 'severity': 'safe'}, 'jailbreak': {'filtered': True, 'detected': True}, 'self_harm': {'filtered': False, 'severity': 'safe'}, 'sexual': {'filtered': False, 'severity': 'safe'}, 'violence': {'filtered': False, 'severity': 'safe'}}}}}"
+  },
+  "hierarchy_structure": {
+    "Global/SH/Economy": {
+      "type": "node",
+      "level": 3,
+      "path": "Global/SH/Economy",
+      "parent": "Global/SH",
+      "children": [
+        "Global/SH/Economy/IB",
+        "Global/SH/Economy/YW"
+      ],
+      "content": "1. Resumen de la anomalía  \n   • NPS actual: 22.449453869393302  \n   • NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n   • Variación vs período seleccionado (2025-05-01 a 2025-05-31): –17.550546130606698 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \n   2.1. Deterioro de la puntualidad  \n     • explanatory_drivers_tool: Punctuality SHAP = –3.679, Sat_diff = –6.1028  \n     • operative_data_tool: OTP15 cayó en 1.6 puntos  \n     • ncs_tool: Retrasos (Delays) aumentaron en 36 incidentes  \n   2.2. Aumento de incidencias de manejo de equipaje  \n     • operative_data_tool: Mishandling subió en 0.7 puntos  \n   2.3. Variaciones en ocupación  \n     • explanatory_drivers_tool: Load factor SHAP = –0.220, Sat_diff = +1.9791  \n     • operative_data_tool: Load factor aumentó en 1.2 puntos  \n   2.4. Incidentes de cancelaciones de vuelo  \n     • ncs_tool: Flight cancellations identificadas como causa; cancelaciones disminuyeron en 73 incidentes (–73)  \n   2.5. Problemas en puntos de contacto de producto/servicio  \n     • explanatory_drivers_tool (SHAP negativos y Sat_diff negativos):  \n       – Arrivals experience, Boarding, Check-in, Journey preparation support, Cabin Crew, Aircraft interior, Ticket Price, Ease of contact by phone, Connections experience, IFE, In flight food and beverage, IB Plus loyalty program, Lounge, Wi-Fi, Airport security, Pilot’s announcements  \n\n3. Rutas afectadas  \n   Total rutas únicas analizadas: 17  \n   Rutas consolidadas con mayor impacto (NPS en junio / Pax en junio / fuentes):  \n   • BIO–MAD: NPS 23.9, Pax 277 (explanatory_drivers)  \n   • MAD–VCE: NPS 25.8, Pax 213 (explanatory_drivers)  \n   • IBZ–PMI: NPS 38.1, Pax 203 (explanatory_drivers)  \n   • MAH–PMI: NPS 38.5, Pax 174 (explanatory_drivers)  \n   • MAD–VGO: NPS 40.5, Pax 158 (explanatory_drivers, ncs_tool)  \n   Rutas mencionadas en múltiples fuentes (consistencia elevada):  \n   • MAD–VGO (explanatory_drivers + ncs_tool)  \n   • MAD–MXP (explanatory_drivers + ncs_tool)  \n   • BRU–MAD (explanatory_drivers + ncs_tool)  \n   • La cuarta ruta mencionada en múltiples fuentes no está especificada en los datos disponibles  \n\n4. Reactividad de cliente  \n   Dimensiones con mayor variabilidad en NPS_diff vs Sel. Period:  \n   • Fleet: spread 121.1 pts (rango de –103.3 a +17.8)  \n   • CodeShare: spread 55.7 pts (rango no detallado)  \n   • Residence Region y Business/Leisure: rangos más reducidos (valores numéricos no disponibles)"
+    },
+    "Global/SH/Economy/IB": {
+      "type": "node",
+      "level": 4,
+      "path": "Global/SH/Economy/IB",
+      "parent": "Global/SH/Economy",
+      "children": [],
+      "content": "1. Resumen de la anomalía  \n- NPS actual (2025-06-01 a 2025-06-30): 22.51751630828686  \n- NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n- Variación de NPS vs baseline: –17.48248369171314 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \na) Disminución de puntualidad  \n   • SHAP = –3.488, Sat_diff = –6.2276 (explanatory_drivers_tool)  \n   • OTP15 disminuyó en 1.9 pts (de 91.55 a 89.68) (operative_data_tool)  \n   • Incremento en retrasos y limitaciones de aeronave (ncs_tool)  \n   • 11 444 comentarios señalan que los retrasos fueron el principal motivo de insatisfacción (verbatims_tool)  \n\nb) Aumento de mishandling de equipaje  \n   • Incremento de mishandling en 0.7 pts (de 14.33 a 15.01) (operative_data_tool)  \n   • Múltiples menciones de equipaje dañado o retrasado en los verbatims (verbatims_tool)  \n\nc) Factores de densidad de ocupación  \n   • SHAP = –0.205, Sat_diff = +1.8398 (explanatory_drivers_tool)  \n   • Load factor aumentó en 1.2 pts (de 88.16 a 89.35) (operative_data_tool)  \n\nd) Incidentes de cancelaciones  \n   • Identificados como causa en ncs_tool  \n   • Sin embargo, las cancelaciones totales disminuyeron en 73 unidades vs periodo previo (ncs_tool)  \n   • Impacto agregado mixto, aporta ruido a la interpretación pero no explica la magnitud principal  \n\n3. Rutas afectadas  \n• MAD-VCE: NPS 25.8, Pax 213 (explanatory_drivers)  \n• BIO-MAD: NPS 23.9, Pax 277 (explanatory_drivers)  \n• EAS-MAD: NPS 38.4, Pax 159 (explanatory_drivers, ncs)  \n• MAD-VGO: NPS 40.5, Pax 158 (explanatory_drivers, ncs)  \n• LIN-MAD: NPS 10.7, Pax 357 (explanatory_drivers, ncs)  \n\n4. Reactividad de cliente  \n• CodeShare: spread 130.0 pts (rango de NPS_diff –90.0 a +40.0)  \n• Fleet: spread 121.1 pts (rango –103.3 a +17.8)  \n• Residence Region: spread 13.8 pts  \n• Business/Leisure: spread 5.4 pts"
+    },
+    "Global/SH/Economy/YW": {
+      "type": "node",
+      "level": 4,
+      "path": "Global/SH/Economy/YW",
+      "parent": "Global/SH/Economy",
+      "children": [],
+      "content": "1. Resumen de la anomalía  \n   • NPS Actual: 22.327790973871736  \n   • NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n   • Variación: -17.672209026128264 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \n   a) Fallos operativos  \n      - Punctuality (SHAP = -3.740)  \n      - Load factor (SHAP = -0.260)  \n      Herramienta: explanatory_drivers_tool  \n   b) Incidentes asociados  \n      - Flight cancellations: disminuyeron en 73 --> habría esperado mejora, pero…  \n      - Delays: +36  \n      - Aircraft limitations: +9  \n      - Diversions: +8  \n      - Otras incidencias: +6  \n      Herramienta: ncs_tool  \n   c) Feedback cualitativo  \n      - 6 003 comentarios de clientes que reiteran retrasos prolongados, falta de información, problemas en reubicaciones y equipaje  \n      Herramienta: verbatims_tool  \n\n3. Rutas afectadas (mayor impacto, fuente: explanatory_drivers_tool)  \n   • MAH-PMI: NPS 38.5, Pax 174  \n   • IBZ-PMI: NPS 38.1, Pax 203  \n   • BCN-BJZ: NPS 77.8, Pax 54  \n   • BCN-LEN: NPS 60.0, Pax 35  \n   • AGP-MLN: NPS -5.3, Pax 94  \n\n4. Reactividad de cliente  \n   • Residence Region: spread 68.1 pts (mayor reactividad)  \n   • CodeShare: spread 64.4 pts  \n   • Fleet: spread 16.1 pts  \n   • Business/Leisure: spread 4.1 pts  \n   • Reactividad promedio: 38.2 pts"
+    }
+  },
+  "hierarchy_summary": {
+    "total_nodes": 3,
+    "generations_analyzed": 0,
+    "nodes_by_level": {
+      "3": [
+        "Global/SH/Economy"
+      ],
+      "4": [
+        "Global/SH/Economy/IB",
+        "Global/SH/Economy/YW"
+      ]
+    },
+    "parent_child_relationships": {
+      "Global/SH/Economy": [
+        "Global/SH/Economy/IB",
+        "Global/SH/Economy/YW"
+      ]
+    }
+  },
+  "conversation_log": [
+    {
+      "generation": 0,
+      "type": "CONTEXT_SETUP",
+      "content": "Analiza la siguiente información que compara dos períodos para el día 2025-06-01. Asimila toda la información en silencio. No generes ninguna respuesta todavía. Espera a la siguiente instrucción para comenzar el análisis paso a paso.\n\n<tree_data>\nMultiple anomalous nodes analyzed:\n\nNODO: Global/SH/Economy\n1. Resumen de la anomalía  \n   • NPS actual: 22.449453869393302  \n   • NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n   • Variación vs período seleccionado (2025-05-01 a 2025-05-31): –17.550546130606698 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \n   2.1. Deterioro de la puntualidad  \n     • explanatory_drivers_tool: Punctuality SHAP = –3.679, Sat_diff = –6.1028  \n     • operative_data_tool: OTP15 cayó en 1.6 puntos  \n     • ncs_tool: Retrasos (Delays) aumentaron en 36 incidentes  \n   2.2. Aumento de incidencias de manejo de equipaje  \n     • operative_data_tool: Mishandling subió en 0.7 puntos  \n   2.3. Variaciones en ocupación  \n     • explanatory_drivers_tool: Load factor SHAP = –0.220, Sat_diff = +1.9791  \n     • operative_data_tool: Load factor aumentó en 1.2 puntos  \n   2.4. Incidentes de cancelaciones de vuelo  \n     • ncs_tool: Flight cancellations identificadas como causa; cancelaciones disminuyeron en 73 incidentes (–73)  \n   2.5. Problemas en puntos de contacto de producto/servicio  \n     • explanatory_drivers_tool (SHAP negativos y Sat_diff negativos):  \n       – Arrivals experience, Boarding, Check-in, Journey preparation support, Cabin Crew, Aircraft interior, Ticket Price, Ease of contact by phone, Connections experience, IFE, In flight food and beverage, IB Plus loyalty program, Lounge, Wi-Fi, Airport security, Pilot’s announcements  \n\n3. Rutas afectadas  \n   Total rutas únicas analizadas: 17  \n   Rutas consolidadas con mayor impacto (NPS en junio / Pax en junio / fuentes):  \n   • BIO–MAD: NPS 23.9, Pax 277 (explanatory_drivers)  \n   • MAD–VCE: NPS 25.8, Pax 213 (explanatory_drivers)  \n   • IBZ–PMI: NPS 38.1, Pax 203 (explanatory_drivers)  \n   • MAH–PMI: NPS 38.5, Pax 174 (explanatory_drivers)  \n   • MAD–VGO: NPS 40.5, Pax 158 (explanatory_drivers, ncs_tool)  \n   Rutas mencionadas en múltiples fuentes (consistencia elevada):  \n   • MAD–VGO (explanatory_drivers + ncs_tool)  \n   • MAD–MXP (explanatory_drivers + ncs_tool)  \n   • BRU–MAD (explanatory_drivers + ncs_tool)  \n   • La cuarta ruta mencionada en múltiples fuentes no está especificada en los datos disponibles  \n\n4. Reactividad de cliente  \n   Dimensiones con mayor variabilidad en NPS_diff vs Sel. Period:  \n   • Fleet: spread 121.1 pts (rango de –103.3 a +17.8)  \n   • CodeShare: spread 55.7 pts (rango no detallado)  \n   • Residence Region y Business/Leisure: rangos más reducidos (valores numéricos no disponibles)\n\nNODO: Global/SH/Economy/IB\n1. Resumen de la anomalía  \n- NPS actual (2025-06-01 a 2025-06-30): 22.51751630828686  \n- NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n- Variación de NPS vs baseline: –17.48248369171314 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \na) Disminución de puntualidad  \n   • SHAP = –3.488, Sat_diff = –6.2276 (explanatory_drivers_tool)  \n   • OTP15 disminuyó en 1.9 pts (de 91.55 a 89.68) (operative_data_tool)  \n   • Incremento en retrasos y limitaciones de aeronave (ncs_tool)  \n   • 11 444 comentarios señalan que los retrasos fueron el principal motivo de insatisfacción (verbatims_tool)  \n\nb) Aumento de mishandling de equipaje  \n   • Incremento de mishandling en 0.7 pts (de 14.33 a 15.01) (operative_data_tool)  \n   • Múltiples menciones de equipaje dañado o retrasado en los verbatims (verbatims_tool)  \n\nc) Factores de densidad de ocupación  \n   • SHAP = –0.205, Sat_diff = +1.8398 (explanatory_drivers_tool)  \n   • Load factor aumentó en 1.2 pts (de 88.16 a 89.35) (operative_data_tool)  \n\nd) Incidentes de cancelaciones  \n   • Identificados como causa en ncs_tool  \n   • Sin embargo, las cancelaciones totales disminuyeron en 73 unidades vs periodo previo (ncs_tool)  \n   • Impacto agregado mixto, aporta ruido a la interpretación pero no explica la magnitud principal  \n\n3. Rutas afectadas  \n• MAD-VCE: NPS 25.8, Pax 213 (explanatory_drivers)  \n• BIO-MAD: NPS 23.9, Pax 277 (explanatory_drivers)  \n• EAS-MAD: NPS 38.4, Pax 159 (explanatory_drivers, ncs)  \n• MAD-VGO: NPS 40.5, Pax 158 (explanatory_drivers, ncs)  \n• LIN-MAD: NPS 10.7, Pax 357 (explanatory_drivers, ncs)  \n\n4. Reactividad de cliente  \n• CodeShare: spread 130.0 pts (rango de NPS_diff –90.0 a +40.0)  \n• Fleet: spread 121.1 pts (rango –103.3 a +17.8)  \n• Residence Region: spread 13.8 pts  \n• Business/Leisure: spread 5.4 pts\n\nNODO: Global/SH/Economy/YW\n1. Resumen de la anomalía  \n   • NPS Actual: 22.327790973871736  \n   • NPS Baseline (período seleccionado (2025-05-01 a 2025-05-31)): 40.0  \n   • Variación: -17.672209026128264 pts  \n\n2. Causa/s encontradas y herramientas que la validan  \n   a) Fallos operativos  \n      - Punctuality (SHAP = -3.740)  \n      - Load factor (SHAP = -0.260)  \n      Herramienta: explanatory_drivers_tool  \n   b) Incidentes asociados  \n      - Flight cancellations: disminuyeron en 73 --> habría esperado mejora, pero…  \n      - Delays: +36  \n      - Aircraft limitations: +9  \n      - Diversions: +8  \n      - Otras incidencias: +6  \n      Herramienta: ncs_tool  \n   c) Feedback cualitativo  \n      - 6 003 comentarios de clientes que reiteran retrasos prolongados, falta de información, problemas en reubicaciones y equipaje  \n      Herramienta: verbatims_tool  \n\n3. Rutas afectadas (mayor impacto, fuente: explanatory_drivers_tool)  \n   • MAH-PMI: NPS 38.5, Pax 174  \n   • IBZ-PMI: NPS 38.1, Pax 203  \n   • BCN-BJZ: NPS 77.8, Pax 54  \n   • BCN-LEN: NPS 60.0, Pax 35  \n   • AGP-MLN: NPS -5.3, Pax 94  \n\n4. Reactividad de cliente  \n   • Residence Region: spread 68.1 pts (mayor reactividad)  \n   • CodeShare: spread 64.4 pts  \n   • Fleet: spread 16.1 pts  \n   • Business/Leisure: spread 4.1 pts  \n   • Reactividad promedio: 38.2 pts\n\n\n</tree_data>\n",
+      "metadata": {
+        "hierarchy_nodes": 3,
+        "date": "2025-06-01"
+      },
+      "timestamp": "09:49:32"
+    }
+  ],
+  "conversation_summary": {
+    "CONTEXT_SETUP": 1
+  },
+  "generation_reflections": [],
+  "generation_analysis": {}
+}
