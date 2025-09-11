@@ -195,7 +195,7 @@ class FlexibleAnomalyDetector:
         # The baseline should be the same for all nodes analyzed within the same run.
         # Use reference_period if provided (when date_flight_local is specified), otherwise use the latest period
         latest_period_for_baseline = reference_period if reference_period is not None else all_periods[0]
-        baseline_periods = [latest_period_for_baseline + i for i in range(1, self.baseline_periods + 1) if (latest_period_for_baseline + i) in all_periods]
+        baseline_periods = [latest_period_for_baseline + i for i in range(0, self.baseline_periods) if (latest_period_for_baseline + i) in all_periods]
         
         if len(baseline_periods) < 3:
             print(f"⚠️ Insufficient baseline data for period {target_period} (need at least 3 periods)")

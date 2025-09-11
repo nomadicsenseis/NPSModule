@@ -1162,7 +1162,7 @@ class OperationalDataAnalyzer:
     Diseñado específicamente para el análisis de métricas operativas en contexto de anomalías NPS
     """
 
-    def __init__(self, comparison_mode: str = "mean", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
+    def __init__(self, comparison_mode: str = "mean", comparison_start_date: datetime = None, comparison_end_date: datetime = None, aggregation_days: int = 1, baseline_periods: int = 4):
         """
         Inicializa el analizador operativo
 
@@ -1170,14 +1170,18 @@ class OperationalDataAnalyzer:
             comparison_mode: Modo de comparación - "mean", "vslast", "vslast_dynamic", "target"
             comparison_start_date: Fecha de inicio específica para comparación (usado en "vs Sel. Period")
             comparison_end_date: Fecha de fin específica para comparación (usado en "vs Sel. Period")
+            aggregation_days: Días de agregación para análisis flexible
+            baseline_periods: Número de períodos a usar para baseline en modo mean
         """
         self.comparison_mode = comparison_mode
         self.comparison_start_date = comparison_start_date
         self.comparison_end_date = comparison_end_date
+        self.aggregation_days = aggregation_days
+        self.baseline_periods = baseline_periods
         self.operative_data = {}  # Almacena datos operativos por nodo
         self.logger = logging.getLogger(__name__)
         
-        self.logger.info(f"OperationalDataAnalyzer initialized with comparison_mode: {comparison_mode}")
+        self.logger.info(f"OperationalDataAnalyzer initialized with comparison_mode: {comparison_mode}, aggregation_days: {aggregation_days}, baseline_periods: {baseline_periods}")
 
     def load_operative_data(self, data_folder: str = None, node_path: str = None, aggregation_days: int = 7) -> bool:
         """
@@ -1823,14 +1827,29 @@ class OperationalDataAnalyzer:
                 
                 current_row = current_period.iloc[0]
                 
-                # Para el análisis de media, usar todos los períodos anteriores (Period_Group mayor)
+                # Para el análisis de media, usar baseline_periods períodos incluyendo el actual
                 current_period_group = current_row['Period_Group']
-                historical_data = data[data['Period_Group'] > current_period_group]
                 
-                if historical_data.empty:
-                    return {"error": "No historical data available for mean comparison"}
+                # NUEVA LÓGICA: Siempre usar períodos 1 a baseline_periods para el cálculo de baseline
+                # Esto significa que el baseline incluye el período que se está analizando
+                baseline_data = data[
+                    (data['Period_Group'] >= 1) & 
+                    (data['Period_Group'] <= self.baseline_periods)
+                ]
                 
-                self.logger.info(f"📊 Comparing Period {current_period_group} vs mean of {len(historical_data)} historical periods")
+                if len(baseline_data) < self.baseline_periods:
+                    # Si no hay suficientes períodos, usar todos los disponibles desde período 1
+                    available_periods = len(data[data['Period_Group'] >= 1])
+                    self.logger.warning(f"📊 Requested {self.baseline_periods} baseline periods, but only {available_periods} available")
+                    baseline_data = data[data['Period_Group'] >= 1]
+                
+                if baseline_data.empty:
+                    return {"error": "No baseline data available for mean comparison"}
+                
+                self.logger.info(f"📊 Analyzing Period {current_period_group} vs mean of {len(baseline_data)} baseline periods (1 to {self.baseline_periods}): {list(sorted(baseline_data['Period_Group'].unique()))}")
+                
+                # Para el cálculo de la media, usar todos los períodos baseline
+                historical_data = baseline_data
                 
             else:
                 # Lógica original para datos por fecha exacta
@@ -1865,6 +1884,7 @@ class OperationalDataAnalyzer:
                         
                         metrics[col] = {
                             'current': round(current_val, 2),
+                            'baseline': round(mean_val, 2),  # Mostrar como "baseline" en lugar de "historical_mean"
                             'historical_mean': round(mean_val, 2),
                             'difference': round(difference, 2),
                             'change_pct': change_pct,
@@ -1971,9 +1991,9 @@ class OperationalDataAnalyzer:
                 summary_parts.append(f"{metric_name} {direction} a la media en {abs(change)}")
 
         if summary_parts:
-            return f"vs media semanal: {', '.join(summary_parts)}"
+            return f"vs media baseline (incluyendo período actual): {', '.join(summary_parts)}"
         else:
-            return "Métricas operativas en línea con la media histórica"
+            return "Métricas operativas en línea con la media baseline"
 
     def _create_target_summary(self, metrics: Dict) -> str:
         """Crea resumen para análisis target"""

@@ -749,12 +749,21 @@ class AnomalyInterpreterAgent:
             # Convert conversation log to format similar to causal agent
             conversation_log = []
             for entry in self.conversation_tracker.conversation_log:
+                # Handle timestamp - convert datetime to string if needed
+                timestamp_value = entry.get('timestamp', datetime.now().strftime('%H:%M:%S'))
+                if hasattr(timestamp_value, 'isoformat'):
+                    timestamp_str = timestamp_value.isoformat()
+                elif hasattr(timestamp_value, 'strftime'):
+                    timestamp_str = timestamp_value.strftime('%H:%M:%S')
+                else:
+                    timestamp_str = str(timestamp_value)
+                
                 conversation_log.append({
                     "generation": entry.get('generation', 0),
                     "type": entry.get('type', 'UNKNOWN'),
                     "content": entry.get('content', ''),
                     "metadata": entry.get('metadata', {}),
-                    "timestamp": entry.get('timestamp', datetime.now().strftime('%H:%M:%S'))
+                    "timestamp": timestamp_str
                 })
             
             # Export data structure

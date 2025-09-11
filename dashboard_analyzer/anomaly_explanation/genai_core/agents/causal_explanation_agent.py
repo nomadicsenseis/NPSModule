@@ -15,6 +15,7 @@ import asyncio
 import yaml
 import pandas as pd
 import os
+import re
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
@@ -42,6 +43,9 @@ from dashboard_analyzer.anomaly_explanation.genai_core.agents.agent import Agent
 from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector
 from dashboard_analyzer.data_collection.chatbot_verbatims_collector import ChatbotVerbatimsCollector
 from dashboard_analyzer.data_collection.ncs_collector import NCSDataCollector
+
+# Data analysis imports
+from dashboard_analyzer.anomaly_explanation.data_analyzer import OperationalDataAnalyzer
 
 # Additional imports needed for tools
 import time
@@ -300,6 +304,11 @@ class CausalExplanationAgent:
         self.logger.info(f"🔍 DEBUG CAUSAL_FILTER: Original: {causal_filter}, Processed: {self.causal_filter}")
         self.study_mode = study_mode
         
+        # Calculate dynamic comparison dates if needed
+        if self.causal_filter and self.causal_filter != "vs Sel. Period" and not self.comparison_start_date:
+            self.logger.info(f"🔄 Calculating dynamic comparison dates for causal_filter: {self.causal_filter}")
+            # We'll calculate them when we have the analysis dates
+        
         # Load configuration
         self.config = self._load_prompt_config(config_path)
         if custom_helper_prompts:
@@ -339,8 +348,62 @@ class CausalExplanationAgent:
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
             handler.setFormatter(formatter)
             logger.addHandler(handler)
-        
+
         return logger
+    
+    def calculate_dynamic_comparison_dates(self, start_date: datetime, end_date: datetime) -> Tuple[datetime, datetime]:
+        """
+        Calculate comparison dates dynamically based on causal_filter
+        
+        Args:
+            start_date: Analysis start date
+            end_date: Analysis end date
+            
+        Returns:
+            Tuple of (comparison_start_date, comparison_end_date)
+        """
+        if not self.causal_filter or self.causal_filter == "vs Sel. Period":
+            return self.comparison_start_date, self.comparison_end_date
+        
+        # Calculate the period length
+        period_days = (end_date - start_date).days + 1
+        
+        # Extract time period from causal_filter using regex
+        filter_lower = self.causal_filter.lower()
+        
+        if "last week" in filter_lower or "lw" in filter_lower or "l7d" in filter_lower:
+            # vs Last Week / vs L7d
+            comp_start = start_date - timedelta(days=7)
+            comp_end = end_date - timedelta(days=7)
+        elif "last month" in filter_lower or "lm" in filter_lower or "l30d" in filter_lower:
+            # vs Last Month / vs LM / vs L30d
+            comp_start = start_date - timedelta(days=30)
+            comp_end = end_date - timedelta(days=30)
+        elif "same week last year" in filter_lower or "ly" in filter_lower:
+            # vs Same Week Last Year / vs LY
+            comp_start = start_date - timedelta(days=365)
+            comp_end = end_date - timedelta(days=365)
+        elif "last quarter" in filter_lower or "lq" in filter_lower:
+            # vs Last Quarter / vs LQ
+            comp_start = start_date - timedelta(days=90)
+            comp_end = end_date - timedelta(days=90)
+        elif re.search(r'l(\d+)d', filter_lower):
+            # vs L[N]d (e.g., vs L14d, vs L21d)
+            match = re.search(r'l(\d+)d', filter_lower)
+            days = int(match.group(1))
+            comp_start = start_date - timedelta(days=days)
+            comp_end = end_date - timedelta(days=days)
+        else:
+            # Default: assume last week
+            self.logger.warning(f"⚠️ Unknown causal_filter pattern: {self.causal_filter}, defaulting to last week")
+            comp_start = start_date - timedelta(days=7)
+            comp_end = end_date - timedelta(days=7)
+        
+        self.logger.info(f"🔄 Dynamic calculation for '{self.causal_filter}':")
+        self.logger.info(f"  Analysis period: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        self.logger.info(f"  Comparison period: {comp_start.strftime('%Y-%m-%d')} to {comp_end.strftime('%Y-%m-%d')}")
+        
+        return comp_start, comp_end
     
     def _load_prompt_config(self, config_path: str) -> Dict[str, Any]:
         """Load prompt configuration"""
@@ -779,13 +842,13 @@ class CausalExplanationAgent:
                 return f"No operative data found for {node_path} in range {baseline_start_date} to {end_date}"
             
             # Pass the full dataset and the specific target date for correlation analysis
-            return await self._operative_data_tool_correlation_analysis(node_path, operative_data, end_date, comparison_context, baseline_periods, anomaly_detection_mode)
+            return await self._operative_data_tool_correlation_analysis(node_path, operative_data, end_date, comparison_context, baseline_periods, anomaly_detection_mode, aggregation_days)
             
         except Exception as e:
             self.logger.error(f"❌ Error in single period operative data tool: {type(e).__name__}: {str(e)}")
             return f"ERROR in operative data tool: {type(e).__name__}: {str(e)}"
     
-    async def _collect_operative_data_with_query_tracking(self, node_path: str, target_date: datetime, comparison_days: int = 7, use_flexible: bool = True) -> pd.DataFrame:
+    async def _collect_operative_data_with_query_tracking(self, node_path: str, target_date: datetime, comparison_days: int = 7, use_flexible: bool = True, comparison_start_date: datetime = None, comparison_end_date: datetime = None) -> pd.DataFrame:
         """Wrapper to collect operative data while tracking DAX queries"""
         try:
             # Get filters for this node
@@ -793,18 +856,22 @@ class CausalExplanationAgent:
             
             # Generate the appropriate operative query
             if use_flexible:
-                # Check if we have specific comparison dates for "vs Sel. Period"
-                if (hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date') and 
-                    self.comparison_start_date and self.comparison_end_date):
+                # Check if we have specific comparison dates (either passed as parameters or from instance variables)
+                comp_start = comparison_start_date or (self.comparison_start_date if hasattr(self, 'comparison_start_date') else None)
+                comp_end = comparison_end_date or (self.comparison_end_date if hasattr(self, 'comparison_end_date') else None)
+                
+                if comp_start and comp_end:
                     # Use simplified vs Sel. Period query that calculates differences directly in DAX
                     start_dt = target_date - timedelta(days=comparison_days - 1)  # Calculate current period start
                     query = self.pbi_collector._get_operative_vs_sel_period_query(
                         cabins, companies, hauls,
                         start_dt, target_date,  # Current period
-                        self.comparison_start_date, self.comparison_end_date  # Comparison period
+                        comp_start, comp_end  # Comparison period
                     )
                     query_type = "vs_sel_period_operative"
                     self.logger.info(f"🎯 Using simplified vs Sel. Period operative query")
+                    self.logger.info(f"  📅 Current period: {start_dt.strftime('%Y-%m-%d')} to {target_date.strftime('%Y-%m-%d')}")
+                    self.logger.info(f"  📅 Comparison period: {comp_start.strftime('%Y-%m-%d')} to {comp_end.strftime('%Y-%m-%d')}")
                 else:
                     # Use regular flexible query
                     aggregation_days = comparison_days if comparison_days > 1 else 1
@@ -996,123 +1063,62 @@ class CausalExplanationAgent:
             self.logger.error(f"❌ Error collecting verbatims data with query tracking: {type(e).__name__}: {str(e)}")
             return pd.DataFrame()
     
-    async def _operative_data_tool_correlation_analysis(self, node_path: str, operative_data: pd.DataFrame, target_date_str: str, comparison_context: str = "", baseline_periods: int = 7, anomaly_detection_mode: str = "target") -> str:
-        """Operative data tool with correlation analysis using aggregated period data."""
+    async def _operative_data_tool_correlation_analysis(self, node_path: str, operative_data: pd.DataFrame, target_date_str: str, comparison_context: str = "", baseline_periods: int = 7, anomaly_detection_mode: str = "target", aggregation_days: int = 7) -> str:
+        """Operative data tool with correlation analysis using OperationalDataAnalyzer."""
         try:
-            # Clean the data
-            cleaned_data = operative_data.copy()
-            numeric_columns = ['Load_Factor', 'OTP15_adjusted', 'Misconex', 'Mishandling']
-            for col in numeric_columns:
-                if col in cleaned_data.columns:
-                    cleaned_data[col] = cleaned_data[col].replace('', pd.NA)
-                    cleaned_data[col] = pd.to_numeric(cleaned_data[col], errors='coerce')
-
-            # Handle aggregated data by Period_Group (not individual dates)
-            if 'Period_Group' not in cleaned_data.columns:
-                return f"❌ No Period_Group column found in operative data. Available columns: {list(cleaned_data.columns)}"
-
-            # Convert target date to datetime for period identification
-            target_date_dt = datetime.strptime(target_date_str, '%Y-%m-%d').date()
-
-            # Sort data by Period_Group (most recent first)
-            cleaned_data = cleaned_data.sort_values('Period_Group', ascending=True)
-
-            # Find the target period (most recent period = period 1)
-            # The data is already sorted by Period_Group ascending, so period 1 is the most recent
-            if cleaned_data.empty:
-                return f"No operative data found for {node_path}"
-
-            # Get target period data (most recent period)
-            target_period_data = cleaned_data.iloc[0]  # First row is most recent period
-
-            # Calculate baseline from previous periods using the same logic as NPS
-            # Use exactly baseline_periods periods (e.g., periods 2, 3, 4, 5, 6 for baseline_periods=5)
-            baseline_data = cleaned_data.iloc[1:baseline_periods+1]  # Only the specified number of baseline periods
-
-            if len(baseline_data) < 2:
-                return f"📊 **DATOS OPERATIVOS - ANÁLISIS PERIODO**\n📅 Fecha: {target_date_str}\n🎯 Segmento: {node_path}\n⚠️ Insuficientes períodos para baseline (solo {len(baseline_data)} períodos disponibles)"
+            self.logger.info(f"🔍 Starting correlation analysis for {node_path} on {target_date_str}")
             
-            # Format correlation analysis results
+            # Use OperationalDataAnalyzer for consistent analysis
+            analyzer = OperationalDataAnalyzer(
+                comparison_mode=anomaly_detection_mode,  # "target", "mean", etc.
+                comparison_start_date=None,  # No specific comparison dates in single mode
+                comparison_end_date=None,
+                aggregation_days=aggregation_days,
+                baseline_periods=baseline_periods
+            )
+            
+            # Load the data into the analyzer
+            analyzer.operative_data[node_path] = operative_data
+            
+            # Analyze the metrics
+            analysis_result = analyzer.analyze_operative_metrics(node_path, target_date_str)
+            
+            if 'error' in analysis_result:
+                self.logger.error(f"❌ Analyzer error: {analysis_result['error']}")
+                return f"📊 **DATOS OPERATIVOS - ERROR**\n📅 Fecha: {target_date_str}\n🎯 Segmento: {node_path}\n❌ {analysis_result['error']}"
+            
+            # Format the results
             result_parts = []
             result_parts.append(f"📊 **DATOS OPERATIVOS - ANÁLISIS CORRELACIÓN**")
             result_parts.append(f"📅 Fecha: {target_date_str}")
             result_parts.append(f"🎯 Segmento: {node_path}")
             result_parts.append("")
-            result_parts.append("**VALORES ABSOLUTOS Y CORRELACIÓN CON NPS:**")
             
-            # Analyze each metric for correlation with NPS anomaly using period data
-            correlation_analysis = []
-            metrics_analysis = []
-
-            # Get period information for context
-            target_period = target_period_data.get('Period_Group', 'N/A')
-            num_baseline_periods = len(baseline_data)
-            target_min_date = target_period_data.get('Min_Date', 'N/A')
-            target_max_date = target_period_data.get('Max_Date', 'N/A')
-
-            result_parts.append(f"📊 Período Objetivo: {target_period}")
-            result_parts.append(f"📅 Fecha del período: {target_date_str}")
-            result_parts.append(f"📈 Períodos baseline: {num_baseline_periods}")
-            result_parts.append("")
-            
-            for metric in numeric_columns:
-                if metric in cleaned_data.columns:
-                    baseline_values = baseline_data[metric].dropna()
-                    period_value = target_period_data.get(metric)
+            if 'metrics' in analysis_result:
+                result_parts.append("**VALORES ABSOLUTOS Y CORRELACIÓN CON NPS:**")
+                
+                for metric_name, metric_data in analysis_result['metrics'].items():
+                    current_value = metric_data.get('current_value', 'N/A')
+                    baseline_value = metric_data.get('baseline_value', 'N/A')
+                    delta = metric_data.get('delta', 0)
+                    direction = metric_data.get('direction', 'unchanged')
                     
-                    if not baseline_values.empty and not pd.isna(period_value) and len(baseline_values) >= 2:
-                        baseline_avg = baseline_values.mean()
-                        delta = period_value - baseline_avg
-                        
-                        # Determine significance threshold
-                        thresholds = {
-                            'Load_Factor': 3.0,
-                            'OTP15_adjusted': 3.0,
-                            'Misconex': 1.0,
-                            'Mishandling': 0.5
-                        }
-                        threshold = thresholds.get(metric, 2.0)
-                        is_significant = abs(delta) > threshold
-                        
-                        direction = "↑" if delta > 0 else "↓"
-                        significance = " ⚠️" if is_significant else ""
-                        
-                        # Format metric line with comparison context
-                        if comparison_context:
-                            # Extract the comparison part from the context (e.g., "vs media de los últimos 5 días")
-                            if "vs " in comparison_context:
-                                comparison_text = comparison_context.split("vs ")[1] if "vs " in comparison_context else "media"
-                            else:
-                                comparison_text = "media"
-                        else:
-                            comparison_text = "media"
-                        metric_line = f"• {metric}: {period_value:.1f}% ({comparison_text}: {baseline_avg:.1f}%, {direction}{abs(delta):.1f}pts){significance}"
-                        metrics_analysis.append(metric_line)
-                        
-                        # Analyze correlation with NPS anomaly (assuming negative NPS anomaly)
-                        # For negative NPS anomaly, we expect:
-                        # - Lower OTP (worse performance)
-                        # - Higher Misconex/Mishandling (worse performance)  
-                        # - Higher Load Factor (inversely proportional to NPS)
-                        
-                        if metric == 'OTP15_adjusted' and delta < 0:
-                            correlation_analysis.append(f"✅ {metric}: Correlaciona con caída NPS (peor puntualidad)")
-                        elif metric in ['Misconex', 'Mishandling'] and delta > 0:
-                            correlation_analysis.append(f"✅ {metric}: Correlaciona con caída NPS (más incidentes)")
-                        elif metric == 'Load_Factor' and delta > 0:
-                            correlation_analysis.append(f"✅ {metric}: Correlaciona con caída NPS (mayor ocupación, peor experiencia)")
-                        elif metric == 'Load_Factor' and delta < 0:
-                            correlation_analysis.append(f"❌ {metric}: No correlaciona (menor ocupación vs caída NPS)")
-                        else:
-                            correlation_analysis.append(f"❌ {metric}: No correlaciona con caída NPS")
+                    # Map direction to symbols
+                    direction_symbol = "📈" if direction == "increase" else "📉" if direction == "decrease" else "➡️"
+                    
+                    # Format the metric line
+                    if isinstance(current_value, (int, float)) and isinstance(baseline_value, (int, float)):
+                        result_parts.append(f"   • **{metric_name}**: {current_value:.1f} vs {baseline_value:.1f} ({direction_symbol}{delta:+.1f})")
+                    else:
+                        result_parts.append(f"   • **{metric_name}**: {current_value} vs {baseline_value} ({direction_symbol})")
+                    
+                    # Log correlation debug info
+                    self.logger.info(f"🔍 DEBUG CORRELATION: metric='{metric_name}', direction='{direction}', delta={delta}")
             
-            # Add metrics analysis
-            result_parts.extend(metrics_analysis)
-            result_parts.append("")
-            result_parts.append("**CORRELACIÓN CON ANOMALÍA NPS:**")
-            result_parts.extend(correlation_analysis)
-            result_parts.append("")
-            result_parts.append("**NOTA:** Análisis de correlación entre métricas operativas y anomalía NPS detectada.")
+            if 'summary' in analysis_result:
+                result_parts.append("")
+                result_parts.append("**RESUMEN:**")
+                result_parts.append(f"   {analysis_result['summary']}")
             
             return "\n".join(result_parts)
             
@@ -1761,7 +1767,7 @@ class CausalExplanationAgent:
                 )
                 
                 # Export conversation log
-                conversation_file = self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
                 if conversation_file:
                     self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
                 
@@ -2064,7 +2070,7 @@ class CausalExplanationAgent:
                 )
                 
                 # Export conversation log
-                conversation_file = self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
                 if conversation_file:
                     self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
                     
@@ -2341,37 +2347,43 @@ class CausalExplanationAgent:
             from ....anomaly_explanation.data_analyzer import OperationalDataAnalyzer
             
             # Initialize the operational analyzer with specified comparison mode
-            # Pass specific comparison dates if available (for "vs Sel. Period")
+            # Pass specific comparison dates if available (for "vs Sel. Period" or dynamic calculation)
             comparison_start_date_for_analyzer = None
             comparison_end_date_for_analyzer = None
-            if (comparison_mode == "vslast_dynamic" and 
-                hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date') and 
-                self.comparison_start_date and self.comparison_end_date):
-                comparison_start_date_for_analyzer = self.comparison_start_date
-                comparison_end_date_for_analyzer = self.comparison_end_date
-                self.logger.info(f"🎯 Passing specific comparison dates to OperationalDataAnalyzer: {comparison_start_date_for_analyzer.strftime('%Y-%m-%d')} to {comparison_end_date_for_analyzer.strftime('%Y-%m-%d')}")
+            if comparison_mode == "vslast_dynamic":
+                if (hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date') and 
+                    self.comparison_start_date and self.comparison_end_date):
+                    # Use explicitly provided dates (for "vs Sel. Period")
+                    comparison_start_date_for_analyzer = self.comparison_start_date
+                    comparison_end_date_for_analyzer = self.comparison_end_date
+                    self.logger.info(f"🎯 Using explicit comparison dates: {comparison_start_date_for_analyzer.strftime('%Y-%m-%d')} to {comparison_end_date_for_analyzer.strftime('%Y-%m-%d')}")
+                elif hasattr(self, 'causal_filter') and self.causal_filter and self.causal_filter != "vs Sel. Period":
+                    # Calculate dynamic dates based on causal_filter
+                    comparison_start_date_for_analyzer, comparison_end_date_for_analyzer = self.calculate_dynamic_comparison_dates(start_dt, target_dt)
+                    self.logger.info(f"🔄 Using dynamically calculated comparison dates: {comparison_start_date_for_analyzer.strftime('%Y-%m-%d')} to {comparison_end_date_for_analyzer.strftime('%Y-%m-%d')}")
             
             operational_analyzer = OperationalDataAnalyzer(
                 comparison_mode=comparison_mode,
                 comparison_start_date=comparison_start_date_for_analyzer,
-                comparison_end_date=comparison_end_date_for_analyzer
+                comparison_end_date=comparison_end_date_for_analyzer,
+                aggregation_days=comparison_days,
+                baseline_periods=baseline_periods
             )
             
             # For vslast modes, we need data for BOTH current and previous periods
             # So we need to collect more days to ensure we have both periods
             if comparison_mode in ["vslast", "vslast_dynamic"]:
-                # Check if we have specific comparison dates (for "vs Sel. Period")
+                # Check if we have specific comparison dates (for "vs Sel. Period" or dynamic calculation)
                 if (comparison_mode == "vslast_dynamic" and 
-                    hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date') and 
-                    self.comparison_start_date and self.comparison_end_date):
-                    # For "vs Sel. Period", calculate days needed to cover both periods
+                    comparison_start_date_for_analyzer and comparison_end_date_for_analyzer):
+                    # For specific comparison dates, calculate days needed to cover both periods
                     from datetime import timedelta
                     current_period_days = (target_dt - start_dt).days + 1
-                    comparison_period_days = (self.comparison_end_date - self.comparison_start_date).days + 1
+                    comparison_period_days = (comparison_end_date_for_analyzer - comparison_start_date_for_analyzer).days + 1
                     # Calculate the earliest date we need
-                    earliest_date = min(start_dt, self.comparison_start_date)
+                    earliest_date = min(start_dt, comparison_start_date_for_analyzer)
                     extended_days = (target_dt - earliest_date).days + 1
-                    self.logger.info(f"VSLAST_DYNAMIC with specific dates: collecting {extended_days} days to cover both current period ({current_period_days} days) and selected period ({comparison_period_days} days)")
+                    self.logger.info(f"VSLAST_DYNAMIC with specific dates: collecting {extended_days} days to cover both current period ({current_period_days} days) and comparison period ({comparison_period_days} days)")
                 else:
                     # For regular vslast we need current period + previous period data
                     # If we're doing 7-day analysis, we need 14 days total (7 + 7)
@@ -2382,8 +2394,11 @@ class CausalExplanationAgent:
                 extended_days = comparison_days
             
             # Collect operational data using wrapper to track DAX queries
+            # Pass the calculated comparison dates if we have them
             operational_data = await self._collect_operative_data_with_query_tracking(
-                node_path, target_dt, extended_days
+                node_path, target_dt, extended_days, 
+                comparison_start_date=comparison_start_date_for_analyzer,
+                comparison_end_date=comparison_end_date_for_analyzer
             )
             
             if operational_data.empty:
@@ -5351,14 +5366,18 @@ class CausalExplanationAgent:
             
             full_path = base_dir / filename
             
+            # Convert dates to strings for JSON serialization
+            start_date_str = start_date.strftime('%Y-%m-%d') if hasattr(start_date, 'strftime') else str(start_date) if start_date else None
+            end_date_str = end_date.strftime('%Y-%m-%d') if hasattr(end_date, 'strftime') else str(end_date) if end_date else None
+            
             conversation_data = {
             "metadata": {
                             "agent_type": "causal_explanation",
                             "analysis_type": "separated_workflow_investigation",
                 "export_timestamp": datetime.now().isoformat(),
                             "node_path": node_path,
-                            "start_date": start_date,
-                            "end_date": end_date,
+                            "start_date": start_date_str,
+                            "end_date": end_date_str,
                 "total_iterations": self.tracker.iteration_count,
                 "llm_type": self.llm_type.value,
                             "anomaly_type": self.current_anomaly_type,

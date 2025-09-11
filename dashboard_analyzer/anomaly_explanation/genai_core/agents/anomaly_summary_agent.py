@@ -213,7 +213,7 @@ class AnomalySummaryAgent:
             
             # Export conversation for debugging (use first period date as identifier)
             first_period_date = periods_data[0].get('period', 'unknown') if periods_data else None
-            conversation_file = self.export_conversation(message_history, first_period_date)
+            conversation_file = await self.export_conversation(message_history, first_period_date)
             if conversation_file:
                 self.logger.info(f"🗂️ Conversación de summary guardada: {conversation_file}")
             
@@ -328,7 +328,7 @@ class AnomalySummaryAgent:
             comprehensive_response = response.content if hasattr(response, 'content') else str(response)
             
             # Export conversation for debugging
-            conversation_file = self.export_conversation(message_history, date_flight_local)
+            conversation_file = await self.export_conversation(message_history, date_flight_local)
             if conversation_file:
                 self.logger.info(f"🗂️ Conversación de summary guardada: {conversation_file}")
             
@@ -536,7 +536,7 @@ PERÍODO {period} ({date_range}):
                     {
                         "role": self._get_message_role(msg),
                         "content": msg.content,
-                        "timestamp": getattr(msg, 'timestamp', None)
+                        "timestamp": getattr(msg, 'timestamp', None).isoformat() if hasattr(getattr(msg, 'timestamp', None), 'isoformat') else getattr(msg, 'timestamp', None)
                     } for msg in message_history.get_messages()
                 ]
             }
