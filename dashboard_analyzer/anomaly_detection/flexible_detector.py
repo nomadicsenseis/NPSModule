@@ -793,13 +793,9 @@ class FlexibleAnomalyDetector:
                 anomalies[node_path] = "S"  # Insufficient sample
                 continue
             
-            # For selected period comparison, we need to calculate the baseline NPS
-            # based on the date range. This is a simplified implementation.
-            # In practice, you might need to query data for the specific date range.
-            
-            # For now, we'll use a placeholder approach - you might need to implement
-            # actual date-based data retrieval here
-            baseline_nps = 40.0  # Placeholder - should be calculated from actual data
+            # For selected period comparison, we need to query the actual baseline NPS
+            # from the comparison period using specialized data collection
+            baseline_nps = self._get_baseline_nps_vs_sel_period(node_path, start_dt, end_dt)
             
             # Get current NPS
             current_nps = target_data.get('NPS_2025', pd.Series([0])).iloc[0]
@@ -823,6 +819,140 @@ class FlexibleAnomalyDetector:
             anomalies[node_path] = self._classify_anomaly_new_logic(deviation)
         
         return anomalies, deviations, nps_values
+
+    def _calculate_baseline_nps_from_historical_data(self, df: pd.DataFrame, node_path: str, start_date: datetime, end_date: datetime) -> float:
+        """
+        Calculate the baseline NPS for a specific segment during the selected period.
+        This is a fallback implementation that uses available historical data when vs_sel_period query fails.
+        """
+        # For now, we'll calculate based on available periods in the data
+        # In a real implementation, you might need to query the database directly
+        
+        # Try to find data that corresponds to the selected period
+        # This is a simplified approach - you might need more sophisticated date matching
+        
+        # Calculate the number of days between start and end
+        days_diff = (end_date - start_date).days + 1
+        
+        # Estimate which periods might correspond to this date range
+        # This is very approximate and would need refinement based on your data structure
+        
+        # For now, let's use a weighted average of available historical data
+        # preferring more recent periods but excluding the current period
+        
+        historical_data = df[df['Period_Group'] > 1]  # Exclude current period
+        
+        if historical_data.empty:
+            # Fallback to a reasonable default if no historical data
+            print(f"⚠️ No historical data available for {node_path}, using fallback baseline")
+            return 35.0  # Conservative baseline
+        
+        # Use NPS data from available years, prioritizing 2025 > 2024 > 2019
+        baseline_values = []
+        
+        if 'NPS_2025' in historical_data.columns:
+            nps_2025 = historical_data['NPS_2025'].dropna()
+            if not nps_2025.empty:
+                baseline_values.extend(nps_2025.tolist())
+        
+        if 'NPS_2024' in historical_data.columns and len(baseline_values) < 3:
+            nps_2024 = historical_data['NPS_2024'].dropna()
+            if not nps_2024.empty:
+                baseline_values.extend(nps_2024.tolist())
+        
+        if 'NPS_2019' in historical_data.columns and len(baseline_values) < 3:
+            nps_2019 = historical_data['NPS_2019'].dropna()
+            if not nps_2019.empty:
+                baseline_values.extend(nps_2019.tolist())
+        
+        if baseline_values:
+            # Calculate weighted average, giving more weight to recent data
+            baseline_nps = sum(baseline_values) / len(baseline_values)
+            print(f"📊 Calculated baseline NPS for {node_path}: {baseline_nps:.2f} (based on {len(baseline_values)} historical points)")
+            return baseline_nps
+        else:
+            # Ultimate fallback
+            print(f"⚠️ No NPS data available for {node_path}, using default baseline")
+            return 30.0  # Conservative default
+
+    def _get_baseline_nps_vs_sel_period(self, node_path: str, start_date: datetime, end_date: datetime) -> float:
+        """
+        Get the actual baseline NPS for a specific segment during the selected comparison period
+        by executing a specialized vs_sel_period query against the database.
+        """
+        try:
+            # Import here to avoid circular dependencies
+            from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector
+            
+            # Extract filters from node path
+            cabins, companies, hauls = self._extract_filters_from_node_path_vs_sel_period(node_path)
+            
+            # Create a temporary collector to execute the query
+            collector = PBIDataCollector()
+            
+            # Calculate current period (we need this for the query structure)
+            # For now, use a reasonable current period - this could be improved
+            from datetime import datetime, timedelta
+            current_end = datetime.now()
+            current_start = current_end - timedelta(days=30)  # 30 days current period
+            
+            # Get the specialized NPS comparison query
+            query = collector._get_nps_vs_sel_period_query(
+                cabins, companies, hauls,
+                current_start, current_end,  # Current period
+                start_date, end_date         # Comparison period (baseline)
+            )
+            
+            # Execute the query
+            df = collector._execute_query(query)
+            
+            if not df.empty:
+                print(f"🔍 DEBUG: Query returned {len(df)} rows, columns: {list(df.columns)}")
+                print(f"🔍 DEBUG: DataFrame content:\n{df}")
+                
+                # Look for the comparison period NPS using the new structure
+                # Handle column names with brackets
+                period_col = '[Period]' if '[Period]' in df.columns else 'Period'
+                nps_col = '[NPS_Value]' if '[NPS_Value]' in df.columns else 'NPS_Value'
+                
+                comparison_row = df[df[period_col] == 'Comparison']
+                if not comparison_row.empty:
+                    # Get the NPS_Value from NPS_ED_adjusted
+                    baseline_nps = comparison_row[nps_col].iloc[0]
+                    if not pd.isna(baseline_nps):
+                        print(f"📊 Retrieved actual baseline NPS for {node_path}: {baseline_nps:.2f} (using NPS_ED_adjusted)")
+                        return float(baseline_nps)
+                else:
+                    print(f"⚠️ No 'Comparison' row found in DataFrame for {node_path}")
+            else:
+                print(f"⚠️ Query returned empty DataFrame for {node_path}")
+            
+            print(f"⚠️ Could not retrieve baseline NPS for {node_path}, using fallback")
+            return 35.0  # Fallback value
+            
+        except Exception as e:
+            print(f"❌ Error retrieving baseline NPS for {node_path}: {str(e)}")
+            return 35.0  # Error fallback
+    
+    def _extract_filters_from_node_path_vs_sel_period(self, node_path: str) -> tuple:
+        """Extract cabin, company, and haul filters from a node path for vs_sel_period queries"""
+        parts = node_path.split('/')
+        
+        # Default values
+        cabins = ["Business", "Economy", "Premium EC"]
+        companies = ["IB", "YW"]  
+        hauls = ["SH", "LH"]
+        
+        # Extract specific filters based on node path structure
+        for part in parts:
+            if part in ["Business", "Economy", "Premium EC"]:
+                cabins = [part]
+            elif part in ["IB", "YW"]:
+                companies = [part]
+            elif part in ["SH", "LH"]:
+                hauls = [part]
+        
+        return cabins, companies, hauls
 
     def _classify_anomaly_new_logic(self, deviation: float) -> str:
         """

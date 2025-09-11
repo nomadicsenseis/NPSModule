@@ -418,7 +418,7 @@ async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7
         print(f"      • 💬 Customer verbatims sentiment")
         print(f"      • 📅 Date-filtered data for specific periods")
 
-async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", explanation_mode: str = "agent", causal_filter: str = "vs L7d"):
+async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", explanation_mode: str = "agent", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
     """Show trees for all periods analyzed INCLUDING explanations and parent interpretations"""
     if not analysis_data:
         return
@@ -434,7 +434,7 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     
     # Initialize interpreter for explanations with specified mode
     pbi_collector = PBIDataCollector()
-    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, explanation_mode=explanation_mode, causal_filter=causal_filter)
+    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, explanation_mode=explanation_mode, causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date)
     print(f"🔧 Explanation mode: {explanation_mode.upper()}")
     
     # Initialize AI agent for interpretation
@@ -665,21 +665,81 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             
             try:
                 # Always use the complete tree format with integrated causal explanations
-                ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                                 parent_interpretations, explanations, date_range, segment, period_nps_values)
+                print("🔍 DEBUG: About to call build_ai_input_string", file=sys.stderr)
+                print(f"   period: {period}", file=sys.stderr)
+                print(f"   period_anomalies keys: {list(period_anomalies.keys()) if period_anomalies else None}", file=sys.stderr)
+                print(f"   explanations keys: {list(explanations.keys()) if explanations else None}", file=sys.stderr)
+                print(f"   segment: {segment}", file=sys.stderr)
+
+                try:
+                    print("🔍 DEBUG: Calling build_ai_input_string...", file=sys.stderr)
+                    ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
+                                                     parent_interpretations, explanations, date_range, segment, period_nps_values)
+                    print("🔍 DEBUG: build_ai_input_string returned successfully", file=sys.stderr)
+                    print(f"🔍 DEBUG: Received ai_input of length: {len(ai_input) if ai_input else 0}", file=sys.stderr)
+                except Exception as build_e:
+                    print(f"🔍 DEBUG: build_ai_input_string failed with exception: {build_e}", file=sys.stderr)
+                    import traceback
+                    traceback.print_exc()
+                    raise
                 
                 print(f"🔍 Using complete tree format with integrated explanations: {len(ai_input)} characters")
                 
-                ai_interpretation = await asyncio.wait_for(
-                    ai_agent.interpret_anomaly_tree(ai_input, 
-                                                   start_date.strftime('%Y-%m-%d') if date_range else None, segment),
-                    timeout=600.0
-                )
+                print("🔍 DEBUG: About to call ai_agent.interpret_anomaly_tree", file=sys.stderr)
                 
-                print(ai_interpretation)
+                # Extract date from date_range if available
+                date_param = None
+                if date_range and len(date_range) >= 2:
+                    range_start_date, range_end_date = date_range
+                    if range_start_date and range_end_date:
+                        date_param = f"{range_start_date.strftime('%Y-%m-%d')} to {range_end_date.strftime('%Y-%m-%d')}"
+                
+                try:
+                    ai_interpretation = await asyncio.wait_for(
+                        ai_agent.interpret_anomaly_tree(ai_input, date_param, segment),
+                        timeout=600.0
+                    )
+                    print("🔍 DEBUG: ai_agent.interpret_anomaly_tree completed successfully", file=sys.stderr)
+                except asyncio.TimeoutError:
+                    print("🔍 DEBUG: ai_agent.interpret_anomaly_tree timed out after 600 seconds", file=sys.stderr)
+                    raise
+                except Exception as interp_e:
+                    print(f"🔍 DEBUG: ai_agent.interpret_anomaly_tree failed: {interp_e}", file=sys.stderr)
+                    import traceback
+                    traceback.print_exc()
+                    raise
+                
+                print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
+                
+                # Extract only the executive synthesis section
+                if "📋 SÍNTESIS EJECUTIVA FINAL" in ai_interpretation:
+                    # Find the synthesis section
+                    synthesis_start = ai_interpretation.find("📋 SÍNTESIS EJECUTIVA FINAL")
+                    if synthesis_start != -1:
+                        # Find the end (next major section or end of text)
+                        synthesis_section = ai_interpretation[synthesis_start:]
+                        end_markers = ["---", "✅ **ANÁLISIS COMPLETADO**", "*Este análisis utiliza"]
+                        
+                        synthesis_end = len(synthesis_section)
+                        for marker in end_markers:
+                            marker_pos = synthesis_section.find(marker)
+                            if marker_pos != -1:
+                                synthesis_end = min(synthesis_end, marker_pos)
+                        
+                        final_synthesis = synthesis_section[:synthesis_end].strip()
+                        print("=" * 80)
+                        print(final_synthesis)
+                        print("=" * 80)
+                    else:
+                        print("⚠️ No se encontró la sección de síntesis ejecutiva")
+                        print(ai_interpretation[:1000] + "..." if len(ai_interpretation) > 1000 else ai_interpretation)
+                else:
+                    print("⚠️ Formato de interpretación inesperado")
+                    print(ai_interpretation[:1000] + "..." if len(ai_interpretation) > 1000 else ai_interpretation)
                 
             except Exception as e:
                 ai_interpretation = f"AI interpretation failed: {str(e)}"
+                print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
                 print(ai_interpretation)
         
         # Collect period data for summary
@@ -957,26 +1017,28 @@ def build_ai_input_string(period: int, anomalies: dict, deviations: dict,
                          interpretations: dict, explanations: dict, date_range: tuple, segment_filter: str = "Global", nps_values: dict = None) -> str:
     """Build comprehensive input string for AI interpretation, filtered by segment"""
     
-    # Normalize segment_filter to match the same logic as get_segment_node_paths
-    if segment_filter == 'SH':
-        segment_filter = 'Global/SH'
-    elif segment_filter == 'LH':
-        segment_filter = 'Global/LH'
-    elif segment_filter == 'Economy' and '/' not in segment_filter:
-        segment_filter = 'Global/SH/Economy'
-    elif segment_filter == 'Business' and '/' not in segment_filter:
-        segment_filter = 'Global/SH/Business'
+    # Normalize segment_filter to match the tree structure
+    if segment_filter != "Global":
+        normalized_segment = normalize_segment_to_root(segment_filter)
+        print(f"🔍 DEBUG: segment_filter '{segment_filter}' normalized to '{normalized_segment}'", file=sys.stderr)
+    else:
+        normalized_segment = segment_filter
     
-    # Filter data to only include relevant nodes for the selected segment
-    relevant_nodes = get_segment_node_paths(segment_filter)
-    filtered_anomalies = {node: state for node, state in anomalies.items() if node in relevant_nodes}
-    filtered_deviations = {node: dev for node, dev in deviations.items() if node in relevant_nodes}
-    filtered_nps_values = {k: v for k, v in nps_values.items() if k in relevant_nodes} if nps_values else {}
+    # Use the original anomalies tree directly (period_anomalies that gets enriched)
+    # No filtering needed - let the interpreter see the full tree with all explanations
+    filtered_anomalies = anomalies  # Use original tree directly
+    filtered_deviations = deviations  # Use original deviations directly
+    filtered_nps_values = nps_values if nps_values else {}
     
-    # DEBUG: Show what's being filtered
-    print(f"🔍 DEBUG build_ai_input_string FILTERING:", file=sys.stderr)
+    # DEBUG: Show what we're working with
+    print(f"🔍 DEBUG build_ai_input_string:", file=sys.stderr)
     print(f"   segment_filter: {segment_filter}", file=sys.stderr)
-    print(f"   relevant_nodes: {relevant_nodes}", file=sys.stderr)
+    print(f"   using full tree (no filtering)", file=sys.stderr)
+    print(f"   explanations keys: {list(explanations.keys())}", file=sys.stderr)
+    print(f"   explanations content preview:", file=sys.stderr)
+    for key, value in explanations.items():
+        preview = value[:200] if value else "None"
+        print(f"     {key}: {len(value) if value else 0} chars - {repr(preview)}", file=sys.stderr)
     print(f"   original anomalies: {list(anomalies.keys())}", file=sys.stderr)
     print(f"   filtered_anomalies: {list(filtered_anomalies.keys())}", file=sys.stderr)
     print(f"   original explanations: {list(explanations.keys())}", file=sys.stderr)
@@ -1029,14 +1091,7 @@ def build_ai_input_string(period: int, anomalies: dict, deviations: dict,
     
     # Build hierarchical structure with interpretations - filtered by segment
     def add_node_info(node_path: str, name: str, indent: str = ""):
-        print(f"🔍 DEBUG add_node_info called for {node_path}", file=sys.stderr)
-        
-        # Include nodes that are in the relevant segment (whether anomalous or normal)
-        if node_path not in relevant_nodes:
-            print(f"   → SKIPPED: not in relevant_nodes", file=sys.stderr)
-            return ""  # Skip nodes not in the filtered segment
-        
-        print(f"   → INCLUDED: in relevant_nodes", file=sys.stderr)
+        # Include all nodes (no filtering - show full tree)
         
         # Get state and deviation - default to "N" (Normal) for nodes not in anomalies
         state = filtered_anomalies.get(node_path, "N")
@@ -1046,15 +1101,12 @@ def build_ai_input_string(period: int, anomalies: dict, deviations: dict,
         nps_info = ""
         if filtered_nps_values and node_path in filtered_nps_values:
             nps_data = filtered_nps_values[node_path]
-            print(f"🔍 DEBUG add_node_info NPS for {node_path}: {nps_data}", file=sys.stderr)
             if isinstance(nps_data, dict):
                 current_nps = nps_data.get('current', 'N/A')
                 baseline_nps = nps_data.get('baseline', 'N/A')
                 nps_info = f" (NPS: {current_nps} vs baseline: {baseline_nps})"
             else:
                 nps_info = f" (NPS: {nps_data})"
-        else:
-            print(f"🔍 DEBUG add_node_info NO NPS for {node_path}", file=sys.stderr)
         
         ai_input_part = f"{indent}{name}: {get_state_desc(state, deviation)}{nps_info}\n"
         
@@ -1075,110 +1127,27 @@ def build_ai_input_string(period: int, anomalies: dict, deviations: dict,
         elif state == "N" and (not filtered_nps_values or node_path not in filtered_nps_values):
             ai_input_part += f"{indent}  └─ Note: No significant changes detected. NPS data not available for this segment.\n"
         
-        # Add explanation if available and is actual anomaly
-        if state in ['+', '-']:
+        # Add explanation if available and is actual anomaly (or has explanation)
+        if state in ['+', '-'] or (node_path in explanations and explanations[node_path] and explanations[node_path] != "Analysis timeout"):
             ai_input_part += f"{indent}  └─ ANALYSIS:\n"
             
             if node_path in explanations:
                 explanation = explanations[node_path]
                 
-                # DEBUG: Show what we're processing
-                print(f"🔍 DEBUG build_ai_input_string for {node_path}:", file=sys.stderr)
-                print(f"   Explanation length: {len(explanation) if explanation else 0}", file=sys.stderr)
-                print(f"   First 100 chars: {repr(explanation[:100])}", file=sys.stderr)
-                print(f"   Contains AGENT header: {'🤖 **AGENT CAUSAL ANALYSIS**' in explanation}", file=sys.stderr)
-                
                 if explanation and explanation != "Analysis timeout":
-                    # Check if this is an AI Causal Investigation or Agent explanation
-                    if "AI Causal Investigation:" in explanation:
-                        # Extract the AI analysis directly
-                        ai_analysis = explanation.replace("• AI Causal Investigation:", "").strip()
-                        ai_input_part += f"{indent}     • AI Causal Investigation: {ai_analysis}\n"
-                    elif "🤖 **AGENT CAUSAL ANALYSIS**" in explanation:
-                        # Extract the agent analysis directly
-                        ai_analysis = explanation.replace("🤖 **AGENT CAUSAL ANALYSIS**\n", "").strip()
-                        ai_input_part += f"{indent}     • AI Causal Investigation: {ai_analysis}\n"
-                    elif "## SÍNTESIS FINAL" in explanation:
-                        # This is a full causal agent report - include it directly
-                        ai_input_part += f"{indent}     • CAUSAL AGENT INVESTIGATION:\n"
-                        # Add the full explanation with proper indentation
-                        for line in explanation.split('\n'):
-                            ai_input_part += f"{indent}       {line}\n"
-                    else:
-                        # Legacy format - try to parse the components
-                        # Initialize with default values
-                        routes_content = "Not enough answers for statistical analysis"
-                        verbatims_content = "Not enough answers for statistical analysis"
-                        drivers_content = "Not enough answers for statistical analysis"
-                        
-                        # Split explanation into components and clean them up
-                        parts = explanation.split(" | ")
-                        
-                        for part in parts:
-                            part = part.strip()
-                            if not part or part.startswith("Period"):
-                                continue
-                            
-                            # Clean up and format different explanation types (look for text patterns, not emojis)
-                            if "Customer feedback:" in part or "verbatims collected" in part or "predominantly" in part:
-                                if "predominantly negative" in part:
-                                    sentiment = "negative feedback"
-                                elif "predominantly positive" in part:
-                                    sentiment = "positive feedback"
-                                else:
-                                    sentiment = "mixed feedback"
-                                
-                                topics = ""
-                                if "main topics:" in part:
-                                    topics_part = part.split("main topics:")[1].strip()
-                                    if topics_part and not topics_part.endswith("("):
-                                        topics = f", topics: {topics_part}"
-                                
-                                count = ""
-                                if "verbatims collected" in part:
-                                    try:
-                                        count_part = part.split(" verbatims collected")[0]
-                                        count_num = count_part.split()[-1]
-                                        count = f"{count_num} verbatims, "
-                                    except:
-                                        pass
-                                
-                                # Remove emoji and clean the part
-                                clean_part = part.replace("💬", "").replace("Customer feedback:", "").strip()
-                                if clean_part:
-                                    verbatims_content = f"{count}{sentiment}{topics} - {clean_part}"
-                                else:
-                                    verbatims_content = f"{count}{sentiment}{topics}"
-                            
-                            elif "routes analyzed" in part or "Routes:" in part:
-                                clean_part = part.replace("🛣️ Routes:", "").replace("🛣️", "").replace("Routes:", "").strip()
-                                if clean_part:
-                                    routes_content = clean_part
-                            
-                            elif "Operational:" in part:
-                                clean_part = part.replace("🔧 Operational:", "").replace("🔧", "").strip()
-                                if clean_part:
-                                    # We can add operational data here if needed, or skip it
-                                    pass
-                            
-                            elif "NPS change:" in part or "touchpoints analyzed" in part or "Drivers:" in part:
-                                clean_part = part.replace("🚚 Drivers:", "").replace("🚚", "").replace("Drivers:", "").strip()
-                                if clean_part:
-                                    drivers_content = clean_part
-                        
-                        # Show legacy format components
-                        ai_input_part += f"{indent}     • Routes: {routes_content}\n"
-                        ai_input_part += f"{indent}     • Verbatims: {verbatims_content}\n"
-                        ai_input_part += f"{indent}     • Explanatory Drivers: {drivers_content}\n"
+                    # Add the full explanation as-is with clear delimiters
+                    ai_input_part += f"{indent}  └─ CAUSAL EXPLANATION:\n"
+                    ai_input_part += f"{indent}     [{explanation}]\n"
                 else:
-                    ai_input_part += f"{indent}     • No analysis available\n"
+                    # No explanation available
+                    ai_input_part += f"{indent}     • No causal analysis available\n"
             else:
                 ai_input_part += f"{indent}     • No analysis available\n"
         
         return ai_input_part
     
-    # Build hierarchical structure based on segment filter
-    if segment_filter == "Global":
+    # Build hierarchical structure based on normalized segment filter
+    if normalized_segment == "Global":
         # Full tree
         ai_input += add_node_info("Global", "Global")
         ai_input += add_node_info("Global/LH", "Long Haul (LH)", "  ")
@@ -1192,13 +1161,13 @@ def build_ai_input_string(period: int, anomalies: dict, deviations: dict,
         ai_input += add_node_info("Global/SH/Business", "└─ Business", "    ")
         ai_input += add_node_info("Global/SH/Business/IB", "    └─ IB", "      ")
         ai_input += add_node_info("Global/SH/Business/YW", "    └─ YW", "      ")
-    elif segment_filter == "Global/LH":
+    elif normalized_segment == "Global/LH":
         # LH tree only
         ai_input += add_node_info("Global/LH", "Long Haul (LH)")
         ai_input += add_node_info("Global/LH/Economy", "├─ Economy", "  ")
         ai_input += add_node_info("Global/LH/Business", "├─ Business", "  ")
         ai_input += add_node_info("Global/LH/Premium", "└─ Premium", "  ")
-    elif segment_filter == "Global/SH":
+    elif normalized_segment == "Global/SH":
         # SH tree only
         ai_input += add_node_info("Global/SH", "Short Haul (SH)")
         ai_input += add_node_info("Global/SH/Economy", "├─ Economy", "  ")
@@ -1207,29 +1176,65 @@ def build_ai_input_string(period: int, anomalies: dict, deviations: dict,
         ai_input += add_node_info("Global/SH/Business", "└─ Business", "  ")
         ai_input += add_node_info("Global/SH/Business/IB", "  └─ IB", "    ")
         ai_input += add_node_info("Global/SH/Business/YW", "  └─ YW", "    ")
-    elif segment_filter == "Global/SH/Economy":
+    elif normalized_segment == "Global/SH/Economy":
         # SH Economy tree only
+        print("🔍 DEBUG: About to process Global/SH/Economy", file=sys.stderr)
         ai_input += add_node_info("Global/SH/Economy", "SH Economy")
+        print("🔍 DEBUG: Processed Global/SH/Economy", file=sys.stderr)
         ai_input += add_node_info("Global/SH/Economy/IB", "├─ IB", "  ")
+        print("🔍 DEBUG: Processed Global/SH/Economy/IB", file=sys.stderr)
         ai_input += add_node_info("Global/SH/Economy/YW", "└─ YW", "  ")
-    elif segment_filter == "Global/SH/Business":
+        print("🔍 DEBUG: Processed Global/SH/Economy/YW", file=sys.stderr)
+    elif normalized_segment == "Global/SH/Business":
         # SH Business tree only
         ai_input += add_node_info("Global/SH/Business", "SH Business")
         ai_input += add_node_info("Global/SH/Business/IB", "├─ IB", "  ")
         ai_input += add_node_info("Global/SH/Business/YW", "└─ YW", "  ")
+    elif normalized_segment == "Global/LH/Business":
+        # LH Business node only
+        ai_input += add_node_info("Global/LH/Business", "LH Business")
+    elif normalized_segment == "Global/LH/Economy":
+        # LH Economy node only
+        ai_input += add_node_info("Global/LH/Economy", "LH Economy")
+    elif normalized_segment == "Global/LH/Premium":
+        # LH Premium node only
+        ai_input += add_node_info("Global/LH/Premium", "LH Premium")
+    elif normalized_segment == "Global/SH/Economy/IB":
+        # SH Economy IB node only
+        ai_input += add_node_info("Global/SH/Economy/IB", "SH Economy IB")
+    elif normalized_segment == "Global/SH/Economy/YW":
+        # SH Economy YW node only
+        ai_input += add_node_info("Global/SH/Economy/YW", "SH Economy YW")
+    elif normalized_segment == "Global/SH/Business/IB":
+        # SH Business IB node only
+        ai_input += add_node_info("Global/SH/Business/IB", "SH Business IB")
+    elif normalized_segment == "Global/SH/Business/YW":
+        # SH Business YW node only
+        ai_input += add_node_info("Global/SH/Business/YW", "SH Business YW")
     else:
-        # Single node
-        node_name = segment_filter.split('/')[-1] if '/' in segment_filter else segment_filter
-        ai_input += add_node_info(segment_filter, node_name)
+        # Single node - use the normalized segment
+        node_name = normalized_segment.split('/')[-1] if '/' in normalized_segment else normalized_segment
+        ai_input += add_node_info(normalized_segment, node_name)
     
+    print("🔍 DEBUG: About to add instructions", file=sys.stderr)
     ai_input += "\nINTERPRETATION INSTRUCTIONS:\n"
     ai_input += "• Focus ONLY on segments marked as 'POSITIVE ANOMALY' or 'NEGATIVE ANOMALY'\n"
     ai_input += "• 'Normal' segments (even with deviations) are NOT anomalies - they are expected variations\n"
     ai_input += "• Explain the root causes using the analysis data provided for anomalous segments\n"
-    if segment_filter != "Global":
+    if normalized_segment != "Global":
         ai_input += f"• Analysis scope limited to {segment_filter} segment and its children\n"
     else:
         ai_input += "• If Global shows 'Normal' despite segment anomalies, this means the anomalies are localized and balanced out\n"
+    
+    print("🔍 DEBUG: About to return ai_input", file=sys.stderr)
+    print(f"🔍 DEBUG: ai_input length: {len(ai_input)} characters", file=sys.stderr)
+    print(f"🔍 DEBUG: ai_input type: {type(ai_input)}", file=sys.stderr)
+    # Check for problematic characters
+    try:
+        ai_input.encode('utf-8')
+        print("🔍 DEBUG: ai_input encoding check passed", file=sys.stderr)
+    except Exception as enc_e:
+        print(f"🔍 DEBUG: ai_input encoding error: {enc_e}", file=sys.stderr)
     
     return ai_input
 
@@ -1241,12 +1246,13 @@ async def print_enhanced_tree_with_explanations_and_interpretations(
     
 
     
-    # Filter data based on segment
-    filtered_anomalies = {k: v for k, v in anomalies.items() if segment_filter in k or segment_filter == "Global"}
-    filtered_deviations = {k: v for k, v in deviations.items() if segment_filter in k or segment_filter == "Global"}
-    filtered_explanations = {k: v for k, v in explanations.items() if segment_filter in k or segment_filter == "Global"}
-    filtered_interpretations = {k: v for k, v in interpretations.items() if segment_filter in k or segment_filter == "Global"}
-    filtered_nps_values = {k: v for k, v in nps_values.items() if segment_filter in k or segment_filter == "Global"} if nps_values else {}
+    # Use the original trees directly (period_anomalies that gets enriched)
+    # No filtering needed - show the full tree with all explanations
+    filtered_anomalies = anomalies  # Use original tree directly
+    filtered_deviations = deviations  # Use original deviations directly
+    filtered_explanations = explanations  # Use all explanations
+    filtered_interpretations = interpretations  # Use all interpretations
+    filtered_nps_values = nps_values if nps_values else {}
     
     # Create a more descriptive title with date range
     if analysis_date and date_parameter:
@@ -1621,6 +1627,14 @@ def normalize_segment_to_root(segment: str) -> str:
         return 'Global/SH/Economy'
     elif segment == 'Business/SH':
         return 'Global/SH/Business'
+    elif segment == 'Economy/SH/IB':
+        return 'Global/SH/Economy/IB'
+    elif segment == 'Economy/SH/YW':
+        return 'Global/SH/Economy/YW'
+    elif segment == 'Business/SH/IB':
+        return 'Global/SH/Business/IB'
+    elif segment == 'Business/SH/YW':
+        return 'Global/SH/Business/YW'
     elif segment == 'Economy' and '/' not in segment:
         # Ambiguous - default to SH/Economy
         return 'Global/SH/Economy'
@@ -2203,7 +2217,7 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
         aggregation_days=aggregation_days,
         threshold=5.0,
         min_sample_size=5,
-        detection_mode=anomaly_detection_mode,
+        detection_mode=("vslast_dynamic" if anomaly_detection_mode == "vslast" and locals().get('causal_filter') == "vs Sel. Period" else anomaly_detection_mode),
         baseline_periods=baseline_periods,
         causal_filter=causal_filter,
         causal_comparison_dates=causal_comparison_dates
@@ -2285,7 +2299,7 @@ async def run_flexible_analysis(data_folder: str, explanation_mode: str = "agent
         aggregation_days=aggregation_days,
         threshold=5.0,
         min_sample_size=5,
-        detection_mode=anomaly_detection_mode,
+        detection_mode=("vslast_dynamic" if anomaly_detection_mode == "vslast" and locals().get('causal_filter') == "vs Sel. Period" else anomaly_detection_mode),
         baseline_periods=baseline_periods
     )
     
@@ -2353,7 +2367,7 @@ async def run_weekly_current_vs_average_analysis_silent(data_folder: str, analys
         aggregation_days=aggregation_days,
         threshold=5.0,
         min_sample_size=5,
-        detection_mode=anomaly_detection_mode,
+        detection_mode=("vslast_dynamic" if anomaly_detection_mode == "vslast" and locals().get('causal_filter') == "vs Sel. Period" else anomaly_detection_mode),
         baseline_periods=baseline_periods
     )
     
@@ -2410,6 +2424,8 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
     else:
         study_mode = "comparative"  # Default to comparative
     
+    print(f"🔍 DEBUG MAIN: analysis_data['detector'].detection_mode = '{analysis_data['detector'].detection_mode}'")
+    print(f"🔍 DEBUG MAIN: About to create FlexibleAnomalyInterpreter with detection_mode='{analysis_data['detector'].detection_mode}'")
     interpreter = FlexibleAnomalyInterpreter(
         data_folder, 
         pbi_collector=pbi_collector, 
@@ -2669,10 +2685,12 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
                     timeout=600.0
                 )
                 
+                print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
                 print(ai_interpretation)
                 
             except Exception as e:
                 ai_interpretation = f"AI interpretation failed: {str(e)}"
+                print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
                 print(ai_interpretation)
         
         # Collect period data for summary
@@ -2902,6 +2920,7 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
                     timeout=600.0
                 )
                 
+                print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
                 print(ai_interpretation)
                 
             except Exception as e:
@@ -3994,7 +4013,9 @@ async def execute_analysis_flow(
         analysis_data,
         segment=segment,
         explanation_mode=explanation_mode,
-        causal_filter=causal_filter
+        causal_filter=causal_filter,
+        comparison_start_date=comparison_start_date,
+        comparison_end_date=comparison_end_date
     )
     
     print(f"🔍 DEBUG EXECUTE_ANALYSIS_FLOW: show_all_anomaly_periods_with_explanations completed")

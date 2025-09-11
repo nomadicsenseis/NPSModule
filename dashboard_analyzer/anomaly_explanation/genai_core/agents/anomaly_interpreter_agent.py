@@ -332,30 +332,34 @@ class AnomalyInterpreterAgent:
         self.conversation_tracker.reset_tracker()
         
         try:
-            # Parse hierarchy structure from explanations
-            hierarchy = self._parse_hierarchy_from_explanations(tree_data)
+            # Skip parsing - just use the tree_data as-is
+            print("🔍 DEBUG INTERPRETER: Skipping parsing, using tree_data as-is", file=sys.stderr)
+            self.logger.info("🔄 Using tree_data directly without parsing")
             
-            if not hierarchy:
-                return "❌ No se pudo parsear la estructura jerárquica de las explicaciones proporcionadas."
-            
-            self.conversation_tracker.set_hierarchy_structure(hierarchy)
-            self.logger.info(f"🏗️ Hierarchy parsed: {len(hierarchy)} nodes")
-            
+            print("🔍 DEBUG INTERPRETER: Creating message history...", file=sys.stderr)
             # Create message history for conversational analysis
             message_history = MessageHistory(logger=self.logger)
+            print("🔍 DEBUG INTERPRETER: Message history created", file=sys.stderr)
             
+            print("🔍 DEBUG INTERPRETER: Getting system prompt...", file=sys.stderr)
             # Add system prompt based on study mode
             system_prompt = self._get_system_prompt()
+            print("🔍 DEBUG INTERPRETER: System prompt obtained", file=sys.stderr)
+            
+            print("🔍 DEBUG INTERPRETER: Adding system message...", file=sys.stderr)
             message_history.create_and_add_message(
                 content=system_prompt,
                 message_type=MessageType.SYSTEM
             )
+            print("🔍 DEBUG INTERPRETER: System message added", file=sys.stderr)
             
+            print("🔍 DEBUG INTERPRETER: Creating context message...", file=sys.stderr)
             # Step 1: Provide all context to the model and get acknowledgment
             context_message = self._get_input_template('hierarchical_context_setup').format(
                 tree_data=tree_data,
                 date=date if date else 'No especificada'
             )
+            print("🔍 DEBUG INTERPRETER: Context message created", file=sys.stderr)
             
             # DEBUG: Print exactly what's being passed to the interpreter
             print(f"\n🔍 DEBUG INTERPRETER INPUT:")
@@ -376,12 +380,21 @@ class AnomalyInterpreterAgent:
                 message_type=MessageType.USER
             )
             self.conversation_tracker.log_message("CONTEXT_SETUP", context_message, {
-                'hierarchy_nodes': len(hierarchy),
                 'date': date
             })
 
             # Get AI acknowledgment of context
-            context_response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+            print("🔍 DEBUG INTERPRETER: About to call OpenAI for context acknowledgment", file=sys.stderr)
+            messages = message_history.get_messages()
+            print(f"🔍 DEBUG INTERPRETER: Sending {len(messages)} messages to OpenAI", file=sys.stderr)
+            for i, msg in enumerate(messages):
+                msg_type = getattr(msg, 'type', 'unknown')
+                msg_content = getattr(msg, 'content', '')
+                print(f"🔍 DEBUG INTERPRETER: Message {i}: type={msg_type}, length={len(msg_content)}", file=sys.stderr)
+                print(f"🔍 DEBUG INTERPRETER: Message {i} content preview: {msg_content[:200]}...", file=sys.stderr)
+            
+            context_response, _, _ = await self.agent.invoke(messages=messages)
+            print("🔍 DEBUG INTERPRETER: OpenAI context acknowledgment completed", file=sys.stderr)
             message_history.add_message(context_response)
             
             self.conversation_tracker.log_message("CONTEXT_ACKNOWLEDGED", context_response.content, {
@@ -440,9 +453,20 @@ class AnomalyInterpreterAgent:
                 self.logger.info(f"💬 Asking AI: {helper_prompt[:100]}...")
                 
                 # Get AI response for this step
+                print(f"🔍 DEBUG INTERPRETER: About to call OpenAI for step: {step_name}", file=sys.stderr)
+                step_messages = message_history.get_messages()
+                print(f"🔍 DEBUG INTERPRETER: Sending {len(step_messages)} messages to OpenAI for {step_name}", file=sys.stderr)
+                
+                # Show the last message (the one we just added)
+                if step_messages:
+                    last_msg = step_messages[-1]
+                    last_content = getattr(last_msg, 'content', '')
+                    print(f"🔍 DEBUG INTERPRETER: Last message for {step_name}: {last_content[:300]}...", file=sys.stderr)
+                
                 step_response, _, _ = await self.agent.invoke(
-                    messages=message_history.get_messages()
+                    messages=step_messages
                 )
+                print(f"🔍 DEBUG INTERPRETER: OpenAI step '{step_name}' completed", file=sys.stderr)
                 
                 step_content = step_response.content.strip()
                 step_responses.append({
@@ -461,10 +485,13 @@ class AnomalyInterpreterAgent:
                 self.logger.info(f"✅ {step_name} completed ({len(step_content)} chars)")
             
             # Compile final response from all steps
+            print("🔍 DEBUG INTERPRETER: Compiling final interpretation...", file=sys.stderr)
             final_interpretation = self._compile_final_interpretation(
                 step_responses,
-                hierarchy
+                {}  # Empty hierarchy since we're not parsing
             )
+            print(f"🔍 DEBUG INTERPRETER: Final interpretation compiled, length: {len(final_interpretation)}", file=sys.stderr)
+            print(f"🔍 DEBUG INTERPRETER: Final interpretation preview: {final_interpretation[:500]}...", file=sys.stderr)
             
             # Update desempeño metrics
             end_time = datetime.now()
@@ -478,6 +505,8 @@ class AnomalyInterpreterAgent:
             if conversation_file:
                 self.logger.info(f"🗂️ Conversación jerárquica guardada: {conversation_file}")
             
+            print("🔍 DEBUG INTERPRETER: About to return final interpretation", file=sys.stderr)
+            print(f"🔍 DEBUG INTERPRETER: Returning {len(final_interpretation)} characters", file=sys.stderr)
             return final_interpretation
             
         except Exception as e:
@@ -491,11 +520,16 @@ class AnomalyInterpreterAgent:
     
     def _parse_hierarchy_from_explanations(self, tree_data: str) -> Dict[str, Any]:
         """Parse hierarchical structure from combined causal explanations."""
+        print("🔍 DEBUG PARSER: Starting _parse_hierarchy_from_explanations", file=sys.stderr)
+        print(f"🔍 DEBUG PARSER: tree_data length: {len(tree_data)}", file=sys.stderr)
+        
         hierarchy = {}
         
         # First try to parse NODO: format (legacy)
+        print("🔍 DEBUG PARSER: Trying NODO: format", file=sys.stderr)
         nodo_pattern = re.compile(r"NODO:\s*(.*?)\n(.*?)(?=\nNODO:|\Z)", re.DOTALL)
         nodo_matches = nodo_pattern.findall(tree_data)
+        print(f"🔍 DEBUG PARSER: Found {len(nodo_matches)} NODO matches", file=sys.stderr)
         
         if nodo_matches:
             # Legacy NODO: format
@@ -519,8 +553,10 @@ class AnomalyInterpreterAgent:
                 }
         else:
             # New hierarchical tree format - parse line by line
+            print("🔍 DEBUG PARSER: Using new hierarchical tree format parser", file=sys.stderr)
             self.logger.info("Using new hierarchical tree format parser")
             lines = tree_data.split('\n')
+            print(f"🔍 DEBUG PARSER: Split into {len(lines)} lines", file=sys.stderr)
             current_node_path = None
             current_content = []
             

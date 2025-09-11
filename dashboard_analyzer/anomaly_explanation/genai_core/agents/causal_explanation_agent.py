@@ -277,7 +277,7 @@ class CausalExplanationAgent:
         logger: Optional[logging.Logger] = None,
         silent_mode: bool = False,
         custom_helper_prompts: Optional[Dict[str, Any]] = None,
-        detection_mode: str = "mean",
+        detection_mode: str = "vslast",
         causal_filter: str = "vs L7d",
         comparison_start_date: datetime = None,
         comparison_end_date: datetime = None,
@@ -290,15 +290,34 @@ class CausalExplanationAgent:
         self.config_path = config_path
         self.logger = logger or self._setup_logger()
         self.silent_mode = silent_mode
-        self.detection_mode = detection_mode
+        # Transform detection_mode if needed (vslast -> vslast_dynamic when causal_filter is "vs Sel. Period")
+        if detection_mode == "vslast" and causal_filter == "vs Sel. Period":
+            self.detection_mode = "vslast_dynamic"
+        else:
+            self.detection_mode = detection_mode
+        
         # Handle causal_filter conversion from string 'None' to actual None
         if causal_filter == 'None' or causal_filter == 'none':
             self.causal_filter = None
         else:
             self.causal_filter = causal_filter
         
-        self.comparison_start_date = comparison_start_date
-        self.comparison_end_date = comparison_end_date
+        # Convert string dates to datetime objects if needed
+        if isinstance(comparison_start_date, str):
+            try:
+                self.comparison_start_date = datetime.strptime(comparison_start_date, '%Y-%m-%d')
+            except (ValueError, TypeError):
+                self.comparison_start_date = comparison_start_date
+        else:
+            self.comparison_start_date = comparison_start_date
+            
+        if isinstance(comparison_end_date, str):
+            try:
+                self.comparison_end_date = datetime.strptime(comparison_end_date, '%Y-%m-%d')
+            except (ValueError, TypeError):
+                self.comparison_end_date = comparison_end_date
+        else:
+            self.comparison_end_date = comparison_end_date
         
         # Debug log the filter value
         self.logger.info(f"🔍 DEBUG CAUSAL_FILTER: Original: {causal_filter}, Processed: {self.causal_filter}")
@@ -863,6 +882,7 @@ class CausalExplanationAgent:
                 if comp_start and comp_end:
                     # Use simplified vs Sel. Period query that calculates differences directly in DAX
                     start_dt = target_date - timedelta(days=comparison_days - 1)  # Calculate current period start
+                    self.logger.info(f"🎯 USING vs Sel. Period operative query!")
                     query = self.pbi_collector._get_operative_vs_sel_period_query(
                         cabins, companies, hauls,
                         start_dt, target_date,  # Current period
@@ -2142,13 +2162,25 @@ class CausalExplanationAgent:
                     anomaly_type=getattr(self, 'current_anomaly_type', 'unknown')
                 )
             elif tool_name == "operative_data_tool":
+                # The detector already handles the transformation to vslast_dynamic when needed
+                # So we just pass the detection_mode directly to all tools
+                self.logger.info(f"🔍 DEBUG OPERATIVE_MODE: self.detection_mode='{self.detection_mode}', causal_filter='{self.causal_filter}'")
+                # Debug: Check if we have comparison dates and should override comparison_context
+                if hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date') and self.comparison_start_date and self.comparison_end_date:
+                    custom_comparison_context = f"• **Comparación**: vs período seleccionado ({self.comparison_start_date.strftime('%Y-%m-%d')} a {self.comparison_end_date.strftime('%Y-%m-%d')})"
+                    self.logger.info(f"🔍 DEBUG: Using custom comparison_context for vs Sel. Period: {custom_comparison_context}")
+                    final_comparison_context = custom_comparison_context
+                else:
+                    final_comparison_context = comparison_context
+                    self.logger.info(f"🔍 DEBUG: Using original comparison_context: {comparison_context}")
+                
                 return await self._operative_data_tool(
                     node_path=node_path,
                     start_date=start_date,
                     end_date=end_date,
                     comparison_mode=self.detection_mode,
                     baseline_periods=baseline_periods,
-                    comparison_context=comparison_context
+                    comparison_context=final_comparison_context
                 )
             elif tool_name == "customer_profile_tool":
                 return await self._customer_profile_tool(
@@ -2350,7 +2382,7 @@ class CausalExplanationAgent:
             # Pass specific comparison dates if available (for "vs Sel. Period" or dynamic calculation)
             comparison_start_date_for_analyzer = None
             comparison_end_date_for_analyzer = None
-            if comparison_mode == "vslast_dynamic":
+            if comparison_mode == "vs Sel. Period" or comparison_mode == "vslast_dynamic":
                 if (hasattr(self, 'comparison_start_date') and hasattr(self, 'comparison_end_date') and 
                     self.comparison_start_date and self.comparison_end_date):
                     # Use explicitly provided dates (for "vs Sel. Period")
@@ -2372,9 +2404,9 @@ class CausalExplanationAgent:
             
             # For vslast modes, we need data for BOTH current and previous periods
             # So we need to collect more days to ensure we have both periods
-            if comparison_mode in ["vslast", "vslast_dynamic"]:
+            if comparison_mode in ["vslast", "vslast_dynamic", "vs Sel. Period"]:
                 # Check if we have specific comparison dates (for "vs Sel. Period" or dynamic calculation)
-                if (comparison_mode == "vslast_dynamic" and 
+                if ((comparison_mode == "vslast_dynamic" or comparison_mode == "vs Sel. Period") and 
                     comparison_start_date_for_analyzer and comparison_end_date_for_analyzer):
                     # For specific comparison dates, calculate days needed to cover both periods
                     from datetime import timedelta

@@ -1,0 +1,41 @@
+EVALUATE
+    UNION(
+        ROW(
+            "Period", "Current",
+            "NPS_Value", CALCULATE(
+                [NPS_ED_adjusted],
+                {CABIN_FILTER},
+                {COMPANY_FILTER},
+                {HAUL_FILTER},
+                Date_Master[Date] >= DATE({CURRENT_START_YEAR},{CURRENT_START_MONTH},{CURRENT_START_DAY}),
+                Date_Master[Date] <= DATE({CURRENT_END_YEAR},{CURRENT_END_MONTH},{CURRENT_END_DAY})
+            ),
+            "Responses", CALCULATE(
+                [n_count],
+                {CABIN_FILTER},
+                {COMPANY_FILTER},
+                {HAUL_FILTER},
+                Date_Master[Date] >= DATE({CURRENT_START_YEAR},{CURRENT_START_MONTH},{CURRENT_START_DAY}),
+                Date_Master[Date] <= DATE({CURRENT_END_YEAR},{CURRENT_END_MONTH},{CURRENT_END_DAY})
+            )
+        ),
+        ROW(
+            "Period", "Comparison",
+            "NPS_Value", CALCULATE(
+                [NPS_ED_adjusted],
+                {CABIN_FILTER},
+                {COMPANY_FILTER},
+                {HAUL_FILTER},
+                Date_Master[Date] >= DATE({COMPARISON_START_YEAR},{COMPARISON_START_MONTH},{COMPARISON_START_DAY}),
+                Date_Master[Date] <= DATE({COMPARISON_END_YEAR},{COMPARISON_END_MONTH},{COMPARISON_END_DAY})
+            ),
+            "Responses", CALCULATE(
+                [n_count],
+                {CABIN_FILTER},
+                {COMPANY_FILTER},
+                {HAUL_FILTER},
+                Date_Master[Date] >= DATE({COMPARISON_START_YEAR},{COMPARISON_START_MONTH},{COMPARISON_START_DAY}),
+                Date_Master[Date] <= DATE({COMPARISON_END_YEAR},{COMPARISON_END_MONTH},{COMPARISON_END_DAY})
+            )
+        )
+    )

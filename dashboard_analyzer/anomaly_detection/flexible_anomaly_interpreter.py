@@ -16,8 +16,8 @@ class FlexibleAnomalyInterpreter:
     Supports dual explanation modes: 'raw' (current detailed data) and 'agent' (intelligent causal analysis)
     """
     
-    def __init__(self, data_folder: str, pbi_collector: PBIDataCollector = None, drivers_survey_threshold: int = 100, default_comparison_days: int = 7, explanation_mode: str = "agent", silent_mode: bool = False, detection_mode: str = "mean", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, study_mode: str = None):
-        print(f"         🔍 DEBUG: FlexibleAnomalyInterpreter.__init__ called with causal_filter: '{causal_filter}'")
+    def __init__(self, data_folder: str, pbi_collector: PBIDataCollector = None, drivers_survey_threshold: int = 100, default_comparison_days: int = 7, explanation_mode: str = "agent", silent_mode: bool = False, detection_mode: str = "vslast", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, study_mode: str = None):
+        print(f"         🔍 DEBUG: FlexibleAnomalyInterpreter.__init__ called with detection_mode: '{detection_mode}', causal_filter: '{causal_filter}'")
         self.data_folder = data_folder
         self.pbi_collector = pbi_collector
         self.operational_analyzer = OperationalDataAnalyzer()
@@ -26,7 +26,12 @@ class FlexibleAnomalyInterpreter:
         self.default_comparison_days = default_comparison_days  # Default number of days for operational comparison (7, 5, or 15)
         self.explanation_mode = explanation_mode  # "raw" or "agent"
         self.silent_mode = silent_mode
-        self.detection_mode = detection_mode  # "vslast", "mean", or "target" - should align with NPS detection mode
+        # Transform detection_mode if needed (vslast -> vslast_dynamic when causal_filter is "vs Sel. Period")
+        if detection_mode == "vslast" and causal_filter == "vs Sel. Period":
+            self.detection_mode = "vslast_dynamic"
+        else:
+            self.detection_mode = detection_mode  # "vslast", "mean", or "target" - should align with NPS detection mode
+        
         self.causal_filter = causal_filter  # Comparison filter for causal agent
         self.comparison_start_date = comparison_start_date  # Start date for comparison period
         self.comparison_end_date = comparison_end_date  # End date for comparison period
@@ -50,6 +55,7 @@ class FlexibleAnomalyInterpreter:
                 agent_causal_filter = causal_filter if causal_filter else self.causal_filter
                 agent_comparison_start_date = comparison_start_date if comparison_start_date else self.comparison_start_date
                 agent_comparison_end_date = comparison_end_date if comparison_end_date else self.comparison_end_date
+                
                 
                 # Use the study_mode passed from main.py, or determine based on causal_filter as fallback
                 if study_mode:

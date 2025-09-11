@@ -147,6 +147,45 @@ class PBIDataCollector:
         
         return query
     
+    def _get_nps_vs_sel_period_query(self, cabins: List[str], companies: List[str], hauls: List[str], 
+                                    current_start_date: datetime, current_end_date: datetime,
+                                    comparison_start_date: datetime, comparison_end_date: datetime) -> str:
+        """Generate DAX query for NPS comparison between two specific periods using NPS_ED_adjusted"""
+        template = self._load_query_template("NPS_vs_sel_period.txt")
+        
+        # Create filter strings for the new format
+        cabin_filter = f"Cabin_Master[Cabin_Show] IN {{{', '.join([f'"{cabin}"' for cabin in cabins])}}}"
+        company_filter = f"Company_Master[Company] IN {{{', '.join([f'"{company}"' for company in companies])}}}"
+        haul_filter = f"Haul_Master[Haul_Aggr] IN {{{', '.join([f'"{haul}"' for haul in hauls])}}}"
+        
+        # Replace filter placeholders
+        query = template.replace('{CABIN_FILTER}', cabin_filter)
+        query = query.replace('{COMPANY_FILTER}', company_filter)
+        query = query.replace('{HAUL_FILTER}', haul_filter)
+        
+        # Replace current period dates
+        query = query.replace('{CURRENT_START_YEAR}', str(current_start_date.year))
+        query = query.replace('{CURRENT_START_MONTH}', str(current_start_date.month))
+        query = query.replace('{CURRENT_START_DAY}', str(current_start_date.day))
+        query = query.replace('{CURRENT_END_YEAR}', str(current_end_date.year))
+        query = query.replace('{CURRENT_END_MONTH}', str(current_end_date.month))
+        query = query.replace('{CURRENT_END_DAY}', str(current_end_date.day))
+        
+        # Replace comparison period dates
+        query = query.replace('{COMPARISON_START_YEAR}', str(comparison_start_date.year))
+        query = query.replace('{COMPARISON_START_MONTH}', str(comparison_start_date.month))
+        query = query.replace('{COMPARISON_START_DAY}', str(comparison_start_date.day))
+        query = query.replace('{COMPARISON_END_YEAR}', str(comparison_end_date.year))
+        query = query.replace('{COMPARISON_END_MONTH}', str(comparison_end_date.month))
+        query = query.replace('{COMPARISON_END_DAY}', str(comparison_end_date.day))
+        
+        print(f"  📊 Using NPS vs Sel. Period query with NPS_ED_adjusted")
+        print(f"  📅 Current period: {current_start_date.strftime('%Y-%m-%d')} to {current_end_date.strftime('%Y-%m-%d')}")
+        print(f"  📅 Comparison period: {comparison_start_date.strftime('%Y-%m-%d')} to {comparison_end_date.strftime('%Y-%m-%d')}")
+        print(f"  🎯 Filters: {cabins} | {companies} | {hauls}")
+        
+        return query
+    
     def _get_flexible_nps_query(self, aggregation_days: int, cabins: List[str], companies: List[str], hauls: List[str], analysis_date: datetime = None) -> str:
         """Generate DAX query for flexible NPS aggregation using template"""
         template = self._load_query_template("NPS_flex_agg.txt")
