@@ -4,7 +4,6 @@ from pathlib import Path
 import pandas as pd
 import asyncio
 
-from .anomaly_interpreter import AnomalyInterpreter
 from ..data_collection.pbi_collector import PBIDataCollector
 from ..anomaly_explanation.data_analyzer import OperationalDataAnalyzer
 from ..anomaly_explanation.routes_analyzer import RoutesAnalyzer
