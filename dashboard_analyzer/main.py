@@ -2065,73 +2065,6 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
         'baseline_periods': baseline_periods
     }
 
-async def run_flexible_analysis(data_folder: str, explanation_mode: str = "agent", analysis_date=None, anomaly_detection_mode: str = "target", baseline_periods: int = 7, periods: int = 7):
-    """Run flexible period analysis and return results"""
-    print(f"🔄 Analyzing periods in: {data_folder}")
-    
-    # Extract aggregation days from folder name
-    folder_name = Path(data_folder).name
-    if 'flexible_' in folder_name and 'd_' in folder_name:
-        try:
-            aggregation_days = int(folder_name.split('flexible_')[1].split('d_')[0])
-        except:
-            aggregation_days = 7  # Default
-    else:
-        aggregation_days = 7
-    
-    # Configure anomaly detection based on mode
-    detector = FlexibleAnomalyDetector(
-        aggregation_days=aggregation_days,
-        threshold=5.0,
-        min_sample_size=5,
-        detection_mode=("vslast_dynamic" if anomaly_detection_mode == "vslast" and locals().get('causal_filter') == "vs Sel. Period" else anomaly_detection_mode),
-        baseline_periods=baseline_periods
-    )
-    
-    # Analyze the specified number of most recent periods
-    print(f"🔍 Analyzing the {periods} most recent periods...")
-    periods_to_analyze = list(range(1, periods + 1))  # Periods 1, 2, 3, ... up to specified count
-    anomaly_periods = []
-    
-    try:
-        for period in periods_to_analyze:
-            period_anomalies, period_deviations, period_explanations, period_nps_values = await detector.analyze_period(data_folder, period, analysis_date)
-            
-            # Check if any node has an anomaly
-            has_anomaly = any(state in ['+', '-'] for state in period_anomalies.values())
-            if has_anomaly:
-                anomaly_periods.append(period)
-    
-    except Exception as e:
-        print(f"⚠️ Analysis stopped: {str(e)}")
-    
-    if anomaly_periods:
-        print(f"🚨 Found anomalies in {len(anomaly_periods)} of {periods} periods: {anomaly_periods}")
-        return {
-            'detector': detector,
-            'data_folder': data_folder,
-            'aggregation_days': aggregation_days,
-            'anomaly_periods': anomaly_periods,
-            'total_periods': periods,
-            'periods_analyzed': periods_to_analyze,
-            'analysis_date': analysis_date,
-            'anomaly_detection_mode': anomaly_detection_mode,
-            'baseline_periods': baseline_periods
-        }
-    else:
-        print(f"✅ No anomalies detected in the {periods} most recent periods")
-        return {
-            'detector': detector,
-            'data_folder': data_folder,
-            'aggregation_days': aggregation_days,
-            'anomaly_periods': [],
-            'total_periods': periods,
-            'periods_analyzed': periods_to_analyze,
-            'analysis_date': analysis_date,
-            'anomaly_detection_mode': anomaly_detection_mode,
-            'baseline_periods': baseline_periods
-        }
-
 async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, show_all_periods=False, segment: str = "Global", explanation_mode: str = "agent", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
     """Show only trees and AI summaries for periods with anomalies - silent version"""
     import os
@@ -3021,8 +2954,8 @@ async def main():
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Enhanced Flexible NPS Anomaly Detection')
-    parser.add_argument('--mode', choices=['download', 'analyze', 'both', 'comprehensive'], default='comprehensive',
-                       help='Mode: download data, analyze existing data, both, or comprehensive (daily + weekly)')
+    parser.add_argument('--mode', choices=['both', 'comprehensive'], default='comprehensive',
+                       help='Mode: both (flexible with custom parameters) or comprehensive (daily + weekly analysis)')
     parser.add_argument('--study-mode', choices=['single', 'comparative'], default='comparative',
                        help='Analysis mode: single (no comparison) or comparative (with comparison). Default: comparative')
     parser.add_argument('--folder', type=str, 
