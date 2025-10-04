@@ -1989,7 +1989,31 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
         }
         all_periods_data.append(period_data)
     
-    return all_periods_data
+    # Conditional return based on number of periods analyzed
+    if len(all_periods_data) == 1:
+        # Single period: return only the interpretation (no summary needed)
+        print("\n📋 Single period analysis - returning interpretation only")
+        return all_periods_data[0]['ai_interpretation']
+    else:
+        # Multiple periods: generate consolidated summary
+        print(f"\n📋 Multiple periods ({len(all_periods_data)}) - generating consolidated summary...")
+        if summary_available:
+            try:
+                consolidated_summary = await generate_consolidated_summary(
+                    summary_agent,
+                    all_periods_data,
+                    date_flight_local=None  # Will be passed from caller if needed
+                )
+                return consolidated_summary
+            except Exception as e:
+                print(f"❌ Error generating consolidated summary: {e}")
+                import traceback
+                traceback.print_exc()
+                # Fallback: return the raw data
+                return all_periods_data
+        else:
+            print("⚠️ Summary agent not available, returning raw period data")
+            return all_periods_data
 
 async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
     """Show clean, focused analysis: tree + agent workflow + summary"""

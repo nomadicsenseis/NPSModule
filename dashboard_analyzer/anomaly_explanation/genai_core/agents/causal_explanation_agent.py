@@ -1699,53 +1699,25 @@ class CausalExplanationAgent:
                                 current_tool = await self._determine_next_tool_from_reflection(
                                     reflection, current_tool, iteration, max_iterations
                                 )
-
-                            # Execute the tool and get results
+                            
+                            # Continue to next iteration with the selected tool
+                            # The tool will be executed in the next iteration of the while loop
+                        else:
+                            # Let the agent decide the next tool based on reflection and helper prompts
+                            current_tool = await self._determine_next_tool_from_reflection(
+                                reflection, current_tool, iteration, max_iterations
+                            )
+                            
                             if current_tool:
-                                self.logger.info(f"🔄 Executing tool: {current_tool}")
-                                tool_result = await self._execute_single_period_tool(
-                                    current_tool, node_path, start_date, end_date, iteration, comparison_context, baseline_periods, anomaly_detection_mode, aggregation_days
-                                )
-
-                                # Store tool context
-                                self.tracker.set_tool_context(current_tool, tool_result)
-
-                                # Get reflection for this tool execution
-                                reflection_result = await self._get_clean_reflection(
-                                    system_prompt=system_prompt,
-                                    tool_name=current_tool,
-                                    tool_result=tool_result,
-                                    message_history=message_history
-                                )
-                    
-                                if reflection_result and isinstance(reflection_result, dict):
-                                    reflection = reflection_result.get("reflection", "")
-                                    next_tool_code = reflection_result.get("next_tool_code", "")
-                
-                                    if reflection:
-                                        self.tracker.add_explanation(reflection)
-                                        message_history.create_and_add_message(
-                                            content=reflection,
-                                            message_type=MessageType.AI,
-                                            agent=AgentName.CONVERSATIONAL
-                                        )
-                                        self.tracker.log_message("AI", f"REFLECTION: {reflection}")
-                                        self.logger.info(f"💭 Reflection captured for {current_tool}")
-
-                                        # Continue with next iteration
-                                        continue
-                                    else:
-                                        # Let the agent decide the next tool based on reflection and helper prompts
-                                        current_tool = await self._determine_next_tool_from_reflection(
-                                            reflection, current_tool, iteration, max_iterations
-                                        )
-                                
-                                    if current_tool:
-                                        self.logger.info(f"🔄 Agent decided next tool: {current_tool}")
-                                    else:
-                                        self.logger.info(f"✅ Agent decided to end investigation")
-                                        break
-
+                                self.logger.info(f"🔄 Agent decided next tool: {current_tool}")
+                            else:
+                                self.logger.info(f"✅ Agent decided to end investigation")
+                                break
+                    else:
+                        self.logger.warning(f"⚠️ No reflection captured for {current_tool}")
+                        # ❌ NO FALLBACK - INVESTIGATION MUST END IF AGENT CANNOT REFLECT
+                        self.logger.error(f"❌ Investigation cannot continue without agent reflection")
+                        break
                 else:
                     self.logger.warning(f"⚠️ No reflection captured for {current_tool}")
                     # ❌ NO FALLBACK - INVESTIGATION MUST END IF AGENT CANNOT REFLECT
