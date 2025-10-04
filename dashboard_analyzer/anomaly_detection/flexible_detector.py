@@ -8,7 +8,6 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
-from .anomaly_tree import AnomalyTree, AnomalyNode
 
 class FlexibleAnomalyDetector:
     """Enhanced flexible anomaly detector with target-based detection support"""
@@ -29,7 +28,6 @@ class FlexibleAnomalyDetector:
         self.aggregation_days = aggregation_days
         self.threshold = threshold
         self.min_sample_size = min_sample_size
-        self.tree: Optional[AnomalyTree] = None
         self.causal_filter = causal_filter
         self.causal_comparison_dates = causal_comparison_dates
         
