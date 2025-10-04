@@ -736,33 +736,6 @@ class CausalExplanationAgent:
 
 
     
-    def _determine_next_tool_dynamic(self, current_tool: str, iteration: int, max_tools: int) -> Optional[str]:
-        """Determine next tool dynamically based on context and identified routes"""
-        
-        # Check if we should validate routes after NCS/verbatims
-        if self.tracker.should_validate_routes_after_tool(current_tool):
-            return "routes_tool"
-        
-        # Standard tool sequence (fallback)
-        standard_sequence = [
-            "explanatory_drivers_tool",
-            "operative_data_tool",     # ← Add operative tool after explanatory drivers
-            "ncs_tool",                # ← First NCS for operational incidents
-            "verbatims_tool",          # ← Then verbatims to validate correlation
-            "routes_tool",
-            "customer_profile_tool"
-        ]
-        
-        # Find current position and return next
-        try:
-            current_index = standard_sequence.index(current_tool)
-            if current_index + 1 < len(standard_sequence) and iteration < max_tools:
-                return standard_sequence[current_index + 1]
-        except ValueError:
-            pass
-        
-        return None  # No more tools
-    
     def _get_single_period_system_prompt(self) -> str:
         """DEPRECATED: Use _get_system_prompt(mode='single') instead"""
         return self._get_system_prompt(mode="single")
