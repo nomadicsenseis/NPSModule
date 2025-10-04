@@ -14,14 +14,61 @@ from typing import List, Dict, Any, Optional
 import sys
 
 # Import execute_analysis_flow and helpers from deep_research_period
-from deep_research_period import (
+from dashboard_analyzer.deep_research_period import (
     execute_analysis_flow,
-    determine_anomaly_mode_for_vslast,
-    generate_consolidated_summary
+    determine_anomaly_mode_for_vslast
 )
 
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type
+
+
+async def generate_consolidated_summary(agent, consolidated_data: List[Dict], date_flight_local: str = None) -> str:
+    """Generate a consolidated summary from multiple analysis types including weekly comparative and daily single analyses."""
+    
+    # Check if it's the weekly format (with 'weekly_comparative' and 'daily_singles' keys)
+    if consolidated_data and isinstance(consolidated_data[0], dict) and 'weekly_comparative' in consolidated_data[0]:
+        # New format from weekly_deep_research.py
+        data = consolidated_data[0]
+        weekly_data = data.get('weekly_comparative', '')
+        daily_data = data.get('daily_singles', [])
+        
+        # Format weekly data (it's a list of periods from execute_analysis_flow)
+        if isinstance(weekly_data, list) and weekly_data:
+            weekly_comparative_analysis = ""
+            for period in weekly_data:
+                date_range = period.get('date_range', 'Unknown')
+                interpretation = period.get('ai_interpretation', '')
+                weekly_comparative_analysis += f"{interpretation}\n\n"
+        elif isinstance(weekly_data, str):
+            weekly_comparative_analysis = weekly_data
+        else:
+            weekly_comparative_analysis = ""
+        
+        # Daily data is already formatted
+        daily_single_analyses = daily_data
+        
+        # Call generate_comprehensive_summary
+        try:
+            comprehensive_summary = await asyncio.wait_for(
+                agent.generate_comprehensive_summary(
+                    weekly_comparative_analysis=weekly_comparative_analysis,
+                    daily_single_analyses=daily_single_analyses,
+                    date_flight_local=date_flight_local
+                ),
+                timeout=600.0
+            )
+            return comprehensive_summary
+        except Exception as e:
+            print(f"❌ Error in generate_comprehensive_summary: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"❌ Error generating comprehensive summary: {str(e)}"
+    
+    else:
+        # Unexpected format
+        print(f"⚠️ Unexpected consolidated_data format")
+        return f"❌ Error: Unexpected data format for consolidation"
 
 
 async def run_weekly_comprehensive_analysis(
