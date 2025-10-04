@@ -110,30 +110,29 @@ class FlexibleAnomalyInterpreter:
             self.comparison_end_date = comparison_end_date
         
         # Initialize or update the causal agent with the correct filter
-        if self.explanation_mode == "agent":
-            print(f"         🔍 DEBUG: Agent init check - _agent_initialized: {self._agent_initialized}")
-            if not self._agent_initialized:
-                print(f"         🔍 DEBUG: Initializing causal agent with causal_filter: '{causal_filter}'")
-                # Use the study_mode from the instance if available, otherwise determine from causal_filter
-                if hasattr(self, 'study_mode') and self.study_mode:
-                    study_mode = self.study_mode
-                else:
-                    study_mode = "single" if causal_filter is None else "comparative"
-                self._initialize_causal_agent(causal_filter, comparison_start_date, comparison_end_date, study_mode)
-            elif self.causal_agent and causal_filter and self.causal_agent.causal_filter != causal_filter:
-                print(f"         🔍 DEBUG: Recreating causal agent - filter changed from '{self.causal_agent.causal_filter}' to '{causal_filter}'")
-                # Recreate the agent with the correct filter
-                self._agent_initialized = False
+        print(f"         🔍 DEBUG: Agent init check - _agent_initialized: {self._agent_initialized}")
+        if not self._agent_initialized:
+            print(f"         🔍 DEBUG: Initializing causal agent with causal_filter: '{causal_filter}'")
+            # Use the study_mode from the instance if available, otherwise determine from causal_filter
+            if hasattr(self, 'study_mode') and self.study_mode:
+                study_mode = self.study_mode
+            else:
                 study_mode = "single" if causal_filter is None else "comparative"
-                self._initialize_causal_agent(causal_filter, comparison_start_date, comparison_end_date, study_mode)
-            elif self.causal_agent and causal_filter:
-                print(f"         🔍 DEBUG: Updating causal agent filter from '{self.causal_agent.causal_filter}' to '{causal_filter}'")
-                self.causal_agent.causal_filter = causal_filter
-                self.causal_agent.comparison_start_date = comparison_start_date
-                self.causal_agent.comparison_end_date = comparison_end_date
-                # Update study_mode based on causal_filter (but respect the original study_mode if it was set)
-                if not hasattr(self.causal_agent, 'study_mode') or self.causal_agent.study_mode is None:
-                    self.causal_agent.study_mode = "single" if causal_filter is None else "comparative"
+            self._initialize_causal_agent(causal_filter, comparison_start_date, comparison_end_date, study_mode)
+        elif self.causal_agent and causal_filter and self.causal_agent.causal_filter != causal_filter:
+            print(f"         🔍 DEBUG: Recreating causal agent - filter changed from '{self.causal_agent.causal_filter}' to '{causal_filter}'")
+            # Recreate the agent with the correct filter
+            self._agent_initialized = False
+            study_mode = "single" if causal_filter is None else "comparative"
+            self._initialize_causal_agent(causal_filter, comparison_start_date, comparison_end_date, study_mode)
+        elif self.causal_agent and causal_filter:
+            print(f"         🔍 DEBUG: Updating causal agent filter from '{self.causal_agent.causal_filter}' to '{causal_filter}'")
+            self.causal_agent.causal_filter = causal_filter
+            self.causal_agent.comparison_start_date = comparison_start_date
+            self.causal_agent.comparison_end_date = comparison_end_date
+            # Update study_mode based on causal_filter (but respect the original study_mode if it was set)
+            if not hasattr(self.causal_agent, 'study_mode') or self.causal_agent.study_mode is None:
+                self.causal_agent.study_mode = "single" if causal_filter is None else "comparative"
         
         try:
             # 1. Get the date range - use direct dates if provided, otherwise map period
@@ -153,87 +152,57 @@ class FlexibleAnomalyInterpreter:
             anomaly_type = anomaly_state  # Pass through: '+', '-', 'N', or 'unknown'
             
             # 3. Choose explanation method based on mode
-            if self.explanation_mode == "agent" and self.causal_agent:
-                # Agent mode: Use intelligent causal analysis
-                print(f"         🤖 Running agent-based causal investigation...")
-                
-                # For daily periods (aggregation_days = 1), report data availability but proceed with investigation
-                if aggregation_days == 1:
-                    # Quick data availability check for daily periods
-                    try:
-                        if self.pbi_collector:
-                            verbatims_data = self.pbi_collector.collect_verbatims_for_date_range(
-                                node_path, start_date, end_date
-                            )
-                            survey_count = len(verbatims_data) if not verbatims_data.empty else 0
-                            
-                            if survey_count < 5:  # Low survey count
-                                print(f"         ⚠️ Daily period has low survey data ({survey_count} surveys), proceeding with agent investigation using other tools")
-                            else:
-                                print(f"         ✅ Daily period has sufficient survey data ({survey_count} surveys)")
-                    except Exception as e:
-                        print(f"         ⚠️ Could not check data availability: {str(e)[:50]}")
-                        # Continue with agent investigation anyway
-                
-                # Calculate final magnitude
-                final_magnitude = anomaly_magnitude if anomaly_magnitude is not None else 0.0
-                
-                # Debug the dates being passed
-                start_date_str = start_date.strftime('%Y-%m-%d')
-                end_date_str = end_date.strftime('%Y-%m-%d')
-                print(f"🔍 DEBUG INTERPRETER: Passing dates to causal agent: start_date='{start_date_str}', end_date='{end_date_str}'")
-                print(f"🔍 DEBUG INTERPRETER: Original dates - start_date={start_date}, end_date={end_date}")
-                
-                explanation = await self.causal_agent.investigate_anomaly(
-                    node_path=node_path,
-                    start_date=start_date_str,
-                    end_date=end_date_str,
-                    anomaly_type=anomaly_type,
-                    anomaly_magnitude=final_magnitude,
-                    nps_context=nps_context,  # Pass the NPS context from main.py
-                    causal_filter=causal_filter,
-                    comparison_start_date=comparison_start_date,
-                    comparison_end_date=comparison_end_date,
-                    # New parameters for enriched context
-                    anomaly_detection_mode=anomaly_detection_mode,
-                    aggregation_days=aggregation_days,
-                    comparison_context=comparison_context,
-                    baseline_periods=baseline_periods
-                )
-                
-                # Add header to distinguish agent explanations
-                explanation = f"🤖 **AGENT CAUSAL ANALYSIS**\n{explanation}"
-                
-            else:
-                # Raw mode: Use detailed data collection (current behavior)
-                print(f"         📊 Running raw data collection analysis...")
-                
-                # 3. Collect operational data for the date range
-                operational_explanation = await self._analyze_operational_data(
-                    node_path, start_date, end_date, aggregation_days, anomaly_type
-                )
-                
-                # 4. Collect verbatims for the date range
-                verbatims_explanation = await self._analyze_verbatims_data(
-                    node_path, start_date, end_date
-                )
-                
-                # 5. Collect routes data for the date range with anomaly type
-                routes_explanation = await self._analyze_routes_data(
-                    node_path, start_date, end_date, anomaly_type
-                )
-                
-                # 6. Collect explanatory drivers data for the date range
-                drivers_explanation = await self._analyze_explanatory_drivers_data(
-                    node_path, start_date, end_date, anomaly_type
-                )
-                
-                # 7. Combine all explanations
-                explanation = self._combine_explanations(
-                    node_path, target_period, aggregation_days,
-                    operational_explanation, verbatims_explanation, routes_explanation, drivers_explanation
-                )
+            # Agent mode: Use intelligent causal analysis
+            # Agent mode: Use intelligent causal analysis
+            print(f"         🤖 Running agent-based causal investigation...")
             
+            # For daily periods (aggregation_days = 1), report data availability but proceed with investigation
+            if aggregation_days == 1:
+                # Quick data availability check for daily periods
+                try:
+                    if self.pbi_collector:
+                        verbatims_data = self.pbi_collector.collect_verbatims_for_date_range(
+                            node_path, start_date, end_date
+                        )
+                        survey_count = len(verbatims_data) if not verbatims_data.empty else 0
+                        
+                        if survey_count < 5:  # Low survey count
+                            print(f"         ⚠️ Daily period has low survey data ({survey_count} surveys), proceeding with agent investigation using other tools")
+                        else:
+                            print(f"         ✅ Daily period has sufficient survey data ({survey_count} surveys)")
+                except Exception as e:
+                    print(f"         ⚠️ Could not check data availability: {str(e)[:50]}")
+                    # Continue with agent investigation anyway
+            
+            # Calculate final magnitude
+            final_magnitude = anomaly_magnitude if anomaly_magnitude is not None else 0.0
+            
+            # Debug the dates being passed
+            start_date_str = start_date.strftime('%Y-%m-%d')
+            end_date_str = end_date.strftime('%Y-%m-%d')
+            print(f"🔍 DEBUG INTERPRETER: Passing dates to causal agent: start_date='{start_date_str}', end_date='{end_date_str}'")
+            print(f"🔍 DEBUG INTERPRETER: Original dates - start_date={start_date}, end_date={end_date}")
+            
+            explanation = await self.causal_agent.investigate_anomaly(
+                node_path=node_path,
+                start_date=start_date_str,
+                end_date=end_date_str,
+                anomaly_type=anomaly_type,
+                anomaly_magnitude=final_magnitude,
+                nps_context=nps_context,  # Pass the NPS context from main.py
+                causal_filter=causal_filter,
+                comparison_start_date=comparison_start_date,
+                comparison_end_date=comparison_end_date,
+                # New parameters for enriched context
+                anomaly_detection_mode=anomaly_detection_mode,
+                aggregation_days=aggregation_days,
+                comparison_context=comparison_context,
+                baseline_periods=baseline_periods
+            )
+            
+            # Add header to distinguish agent explanations
+            explanation = f"🤖 **AGENT CAUSAL ANALYSIS**\n{explanation}"
+                
             return explanation
             
         except Exception as e:
