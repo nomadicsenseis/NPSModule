@@ -104,153 +104,6 @@ def debug_save_hierarchical_data(hierarchical_explanation: str, period: int, dat
     except Exception as e:
         print(f"⚠️ DEBUG: Failed to save hierarchical data: {e}")
 
-async def debug_run_interpreter_only(debug_file: str):
-    """Run only the interpreter agent using saved hierarchical data"""
-    try:
-        # Load debug data
-        debug_path = Path(debug_file)
-        if not debug_path.exists():
-            print(f"❌ Debug file not found: {debug_file}")
-            return
-        
-        with open(debug_path, 'r', encoding='utf-8') as f:
-            debug_data = json.load(f)
-        
-        print(f"📂 Loading debug data from {debug_file}")
-        print(f"   • Period: {debug_data['period']}")
-        print(f"   • Date: {debug_data['date_param']}")
-        print(f"   • Nodes: {debug_data['metadata']['nodes_analyzed']}")
-        print(f"   • Data length: {debug_data['metadata']['explanation_length']} chars")
-        
-        # Parse the hierarchical explanation to extract anomalies and deviations
-        anomalies = {}
-        deviations = {}
-        
-        # Parse the hierarchical explanation text to extract data
-        hierarchical_text = debug_data['hierarchical_explanation']
-        
-        # Extract segments with anomalies from the text
-        import re
-        
-        # Find all anomaly lines like "• Global: NEGATIVE ANOMALY (-7.8 points)"
-        anomaly_pattern = r'• ([^:]+): (POSITIVE|NEGATIVE) ANOMALY \(([+-]?\d+\.?\d*) points\)'
-        matches = re.findall(anomaly_pattern, hierarchical_text)
-        
-        for node_path, anomaly_type, deviation_str in matches:
-            state = "+" if anomaly_type == "POSITIVE" else "-"
-            anomalies[node_path] = state
-            deviations[node_path] = float(deviation_str)
-        
-        # Also extract normal variations from the detailed hierarchy section
-        lines = hierarchical_text.split('\n')
-        for line in lines:
-            line = line.strip()
-            # Match patterns like "Global: NEGATIVE ANOMALY (-7.8 pts)" or "YW: Normal (-4.7 pts - within normal range)"
-            if ':' in line and ('ANOMALY' in line or 'Normal' in line):
-                parts = line.split(':', 1)
-                if len(parts) == 2:
-                    node_name = parts[0].strip()
-                    description = parts[1].strip()
-                    
-                    # Extract deviation value
-                    dev_match = re.search(r'\(([+-]?\d+\.?\d*) pts', description)
-                    if dev_match:
-                        deviation_val = float(dev_match.group(1))
-                        
-                        if 'POSITIVE ANOMALY' in description:
-                            anomalies[node_name] = "+"
-                            deviations[node_name] = deviation_val
-                        elif 'NEGATIVE ANOMALY' in description:
-                            anomalies[node_name] = "-"
-                            deviations[node_name] = deviation_val
-                        elif 'Normal' in description:
-                            anomalies[node_name] = "N"
-                            deviations[node_name] = deviation_val
-        
-        # Generate interpretations from the detailed hierarchy section
-        interpretations = {}
-        lines = hierarchical_text.split('\n')
-        current_node = None
-        
-        for line in lines:
-            line = line.strip()
-            # Look for pattern lines like "└─ Pattern: ..."
-            if '└─ Pattern:' in line:
-                pattern = line.replace('└─ Pattern:', '').strip()
-                if current_node:
-                    interpretations[current_node] = pattern
-            # Track current node context
-            elif ':' in line and ('ANOMALY' in line or 'Normal' in line):
-                parts = line.split(':', 1)
-                if len(parts) == 2:
-                    current_node = parts[0].strip()
-        
-        # Use the causal explanations from the JSON
-        explanations = debug_data.get('causal_explanations', {})
-        
-        # Calculate date range (approximate from the date_param)
-        from datetime import datetime, timedelta
-        try:
-            analysis_date = datetime.strptime(debug_data['date_param'], '%Y-%m-%d')
-            period = debug_data['period']
-            # Approximate date range calculation
-            start_date = analysis_date - timedelta(days=7*(period-1))
-            end_date = start_date + timedelta(days=6)
-            date_range = (start_date, end_date)
-        except:
-            # Default date range if parsing fails
-            today = datetime.now()
-            date_range = (today, today)
-        
-        # Build the proper hierarchical input using build_ai_input_string
-        hierarchical_input = build_ai_input_string(
-            period=debug_data['period'],
-            anomalies=anomalies,
-            deviations=deviations,
-            interpretations=interpretations,
-            explanations=explanations,
-            date_range=date_range,
-            segment_filter="Global"
-        )
-        
-        print(f"\n🔧 RECONSTRUCTED HIERARCHICAL INPUT:")
-        print("-" * 60)
-        print(hierarchical_input[:500] + "..." if len(hierarchical_input) > 500 else hierarchical_input)
-        print("-" * 60)
-        
-        # Initialize interpreter agent
-        from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_interpreter_agent import AnomalyInterpreterAgent
-        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type
-        
-        ai_agent = AnomalyInterpreterAgent(
-            llm_type=get_default_llm_type(),
-            config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
-            logger=logging.getLogger("debug_interpreter"),
-            study_mode="comparative"
-        )
-        
-        print("\n🤖 Running hierarchical interpretation...")
-        print("="*80)
-        
-        # Run the hierarchical interpretation with the properly formatted input
-        ai_interpretation = await asyncio.wait_for(
-            ai_agent.interpret_anomaly_tree_hierarchical(
-                hierarchical_input, 
-                debug_data['date_param']
-            ),
-                            timeout=600.0  # 10 minutes for O3 with large prompts
-        )
-        
-        print(ai_interpretation)
-        print("="*80)
-        
-        print(f"\n✅ Interpreter debugging complete!")
-        
-    except Exception as e:
-        print(f"❌ Debug interpreter failed: {e}")
-        import traceback
-        traceback.print_exc()
-
 async def collect_flexible_data(aggregation_days: int, target_folder: str, segment: str = "Global", analysis_date: datetime = None):
     """
     Collect flexible NPS data for all nodes in the specified segment
@@ -418,7 +271,7 @@ async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7
         print(f"      • 💬 Customer verbatims sentiment")
         print(f"      • 📅 Date-filtered data for specific periods")
 
-async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", explanation_mode: str = "agent", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
+async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
     """Show trees for all periods analyzed INCLUDING explanations and parent interpretations"""
     if not analysis_data:
         return
@@ -432,10 +285,10 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     anomaly_periods = analysis_data['anomaly_periods']
     periods_analyzed = analysis_data.get('periods_analyzed', anomaly_periods)
     
-    # Initialize interpreter for explanations with specified mode
+    # Initialize interpreter for explanations with agent mode
     pbi_collector = PBIDataCollector()
-    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, explanation_mode=explanation_mode, causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date)
-    print(f"🔧 Explanation mode: {explanation_mode.upper()}")
+    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, explanation_mode='agent', causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date)
+    print(f"🔧 Explanation mode: AGENT")
     
     # Initialize AI agent for interpretation
     try:
@@ -1761,7 +1614,6 @@ async def run_comprehensive_analysis(
     analysis_date: datetime,
     date_parameter: str,
     segment: str = "Global",
-    explanation_mode: str = "agent",
     causal_filter: str = "vs L7d",
     comparison_start_date: Optional[datetime] = None,
     comparison_end_date: Optional[datetime] = None,
@@ -1802,7 +1654,6 @@ async def run_comprehensive_analysis(
             analysis_date=analysis_date,
             date_parameter=date_parameter,
             segment=segment,
-            explanation_mode=explanation_mode,
             anomaly_detection_mode=anomaly_mode,
             baseline_periods=7,
             aggregation_days=7,
@@ -1843,7 +1694,6 @@ async def run_comprehensive_analysis(
             analysis_date=analysis_date,
             date_parameter=date_parameter,
             segment=segment,
-            explanation_mode=explanation_mode,
             anomaly_detection_mode=daily_anomaly_detection_mode,
             baseline_periods=daily_baseline_periods,
             aggregation_days=daily_aggregation_days,
@@ -2065,7 +1915,7 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
         'baseline_periods': baseline_periods
     }
 
-async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, show_all_periods=False, segment: str = "Global", explanation_mode: str = "agent", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
+async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, show_all_periods=False, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
     """Show only trees and AI summaries for periods with anomalies - silent version"""
     import os
     from contextlib import redirect_stdout, redirect_stderr
@@ -2092,7 +1942,6 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
     interpreter = FlexibleAnomalyInterpreter(
         data_folder, 
         pbi_collector=pbi_collector, 
-        explanation_mode=explanation_mode, 
         silent_mode=True, 
         detection_mode=analysis_data['detector'].detection_mode, 
         causal_filter=causal_filter, 
@@ -2100,8 +1949,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
         comparison_end_date=comparison_end_date,
         study_mode=study_mode
     )
-    print(f"🔧 Explanation mode: {explanation_mode.upper()}")
-    
+        
     # Initialize AI agent for interpretation
     try:
         from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_interpreter_agent import AnomalyInterpreterAgent
@@ -2958,8 +2806,6 @@ async def main():
                        help='Mode: both (flexible with custom parameters) or comprehensive (daily + weekly analysis)')
     parser.add_argument('--study-mode', choices=['single', 'comparative'], default='comparative',
                        help='Analysis mode: single (no comparison) or comparative (with comparison). Default: comparative')
-    parser.add_argument('--folder', type=str, 
-                       help='Specific folder to analyze (e.g., tables/available_2025_06_04)')
     parser.add_argument('--aggregation-days', type=int, default=1,
                        help='Number of days per aggregation period (default: 1)')
     parser.add_argument('--periods', type=int, default=74, help="Number of periods to download/analyze")
@@ -2991,22 +2837,6 @@ async def main():
     parser.add_argument('--comparison-end-date', type=str,
                         help='End date for comparison period (YYYY-MM-DD) when using --causal-filter-comparison "vs Sel. Period"')
     
-    # Debug mode parameter
-    parser.add_argument('--debug', action='store_true',
-                       help='Enable debug mode with verbose print statements')
-    
-    # Explanation mode parameter
-    parser.add_argument('--explanation-mode', choices=['raw', 'agent'], default='agent',
-                       help='Explanation mode: raw (detailed data dumps) or agent (intelligent causal analysis). Default: agent')
-    
-    # Clean output mode parameter
-    parser.add_argument('--clean', action='store_true',
-                       help='Enable clean output mode: shows only tree, workflow decisions, and summary (suppresses verbose logs)')
-    
-    # Interpreter debug mode parameter
-    parser.add_argument('--debug-interpreter', type=str, metavar='JSON_FILE',
-                        help='Debug interpreter agent only using saved hierarchical data from specified JSON file')
-    
     args = parser.parse_args()
 
     # Add placeholders for arguments that might not be defined by the parser in all cases
@@ -3014,13 +2844,6 @@ async def main():
         args.comparison_start_date = None
     if not hasattr(args, 'comparison_end_date'):
         args.comparison_end_date = None
-    
-    # Set global debug mode based on flag
-    global DEBUG_MODE
-    DEBUG_MODE = args.debug
-    
-    if DEBUG_MODE:
-        print("🔍 DEBUG MODE ENABLED - Verbose output activated")
     
     # Calculate the analysis start date based on date parameters
     today = datetime.now().date()
@@ -3102,7 +2925,6 @@ async def main():
                 analysis_date=analysis_date,
                 date_parameter=date_parameter,
                 segment=args.segment,
-                explanation_mode=args.explanation_mode,
                 daily_baseline_periods=args.baseline_periods,
                 causal_filter=args.causal_filter_comparison,
                 comparison_start_date=args.comparison_start_date,
@@ -3119,7 +2941,6 @@ async def main():
                 analysis_date=analysis_date,
                 date_parameter=date_parameter,
                 segment=args.segment,
-                explanation_mode=args.explanation_mode,
                 anomaly_detection_mode=args.anomaly_detection_mode,
                 baseline_periods=args.baseline_periods,
                 aggregation_days=args.aggregation_days,
@@ -3541,53 +3362,6 @@ def should_consolidate_explanations(causal_explanations: dict, relationships: di
     
     return False
 
-def debug_save_interpreter_input_tree(
-    tree_data: str,
-    date: str,
-    segment: str,
-    mode: str = "single"
-) -> str:
-    """
-    Save the exact input tree data given to the interpreter for debugging
-    
-    Args:
-        tree_data: The exact tree data string passed to interpreter
-        date: Analysis date
-        segment: Segment analyzed
-        mode: Analysis mode (single/comparative)
-        
-    Returns:
-        Path to saved file
-    """
-    try:
-        # Create debug directory if it doesn't exist
-        debug_dir = Path("dashboard_analyzer/debug/interpreter_inputs")
-        debug_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Generate filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_segment = segment.replace("/", "_").replace(" ", "_")
-        filename = f"interpreter_input_{mode}_{date}_{safe_segment}_{timestamp}.txt"
-        filepath = debug_dir / filename
-        
-        # Save tree data
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(f"# INTERPRETER INPUT TREE DATA\n")
-            f.write(f"# Date: {date}\n")
-            f.write(f"# Segment: {segment}\n")
-            f.write(f"# Mode: {mode}\n")
-            f.write(f"# Timestamp: {timestamp}\n")
-            f.write(f"# Input size: {len(tree_data)} characters\n")
-            f.write("="*80 + "\n\n")
-            f.write(tree_data)
-        
-        debug_print(f"Interpreter input tree saved to: {filepath}")
-        return str(filepath)
-        
-    except Exception as e:
-        debug_print(f"Failed to save interpreter input tree: {e}")
-        return ""
-
 async def execute_analysis_flow(
     analysis_date: datetime,
     date_parameter: str,
@@ -3609,7 +3383,7 @@ async def execute_analysis_flow(
     """
     
     print(f"\n🚀 DEBUG: execute_analysis_flow CALLED!")
-    print(f"🔍 Parameters: segment={segment}, study_mode={study_mode}, explanation_mode={explanation_mode}")
+    print(f"🔍 Parameters: segment={segment}, study_mode={study_mode}, explanation_mode=AGENT")
     print(f"🔍 Parameters: causal_filter={causal_filter}, comparison_dates={comparison_start_date} to {comparison_end_date}")
 
     # Adjust causal_filter based on study_mode
@@ -3670,12 +3444,11 @@ async def execute_analysis_flow(
     # 3. Get Summary with AI Interpretation (using full analysis instead of silent)
     print(f"\n🔍 DEBUG EXECUTE_ANALYSIS_FLOW: About to call show_all_anomaly_periods_with_explanations")
     print(f"🔍 DEBUG: analysis_data type={type(analysis_data)}, has_anomaly_periods={bool(analysis_data and analysis_data.get('anomaly_periods'))}")
-    print(f"🔍 DEBUG: segment={segment}, explanation_mode={explanation_mode}, causal_filter={causal_filter}")
+    print(f"🔍 DEBUG: segment={segment}, explanation_mode=AGENT, causal_filter={causal_filter}")
     
     summary_data = await show_all_anomaly_periods_with_explanations(
         analysis_data,
         segment=segment,
-        explanation_mode=explanation_mode,
         causal_filter=causal_filter,
         comparison_start_date=comparison_start_date,
         comparison_end_date=comparison_end_date

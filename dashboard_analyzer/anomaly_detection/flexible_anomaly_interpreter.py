@@ -99,19 +99,13 @@ class FlexibleAnomalyInterpreter:
             Comprehensive explanation string (raw data or intelligent agent analysis)
         """
         print(f"         🔍 DEBUG: explain_anomaly method called with node_path: {node_path}, causal_filter: '{causal_filter}'")
-        # Check cache first (only for raw mode, agent mode is dynamic)
-        cache_key = (node_path, target_period)
-        if self.explanation_mode == "raw" and cache_key in self.explanation_cache:
-            return self.explanation_cache[cache_key]
-        
         # Update instance variables with the passed parameters
         print(f"         🔍 DEBUG: explain_anomaly called with causal_filter: '{causal_filter}'")
         
         # Always reinitialize the causal agent completely for each analysis
-        if self.explanation_mode == "agent":
-            print(f"         🔄 Forcing complete causal agent reinitialization for segment: {node_path}")
-            self.causal_agent = None
-            self._agent_initialized = False
+        print(f"         🔄 Forcing complete causal agent reinitialization for segment: {node_path}")
+        self.causal_agent = None
+        self._agent_initialized = False
         
         if causal_filter:
             self.causal_filter = causal_filter
@@ -244,10 +238,6 @@ class FlexibleAnomalyInterpreter:
                     node_path, target_period, aggregation_days,
                     operational_explanation, verbatims_explanation, routes_explanation, drivers_explanation
                 )
-            
-            # Cache the result (only for raw mode)
-            if self.explanation_mode == "raw":
-                self.explanation_cache[cache_key] = explanation
             
             return explanation
             
