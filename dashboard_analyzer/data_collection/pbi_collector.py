@@ -399,6 +399,40 @@ class PBIDataCollector:
             print(f"Error executing query: {str(e)}")
             return pd.DataFrame()
     
+    async def _execute_query_async(self, query: str) -> pd.DataFrame:
+        """Execute a DAX query against Power BI API asynchronously"""
+        dax_query = {
+            "queries": [{"query": query}],
+            "serializerSettings": {"includeNulls": True}
+        }
+        
+        url = f"https://api.powerbi.com/v1.0/myorg/groups/{self.group_id}/datasets/{self.dataset_id}/executeQueries"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=dax_query) as response:
+                    if response.status != 200:
+                        response_text = await response.text()
+                        print(f"Error {response.status}: {response_text}")
+                        return pd.DataFrame()
+                        
+                    results = await response.json()
+                    
+                    if not results.get('results') or not results['results'][0].get('tables'):
+                        print("No data returned from query")
+                        return pd.DataFrame()
+                        
+                    rows = results['results'][0]['tables'][0].get('rows', [])
+                    return pd.DataFrame(rows)
+                    
+        except Exception as e:
+            print(f"Error executing async query: {str(e)}")
+            return pd.DataFrame()
+    
     def _get_node_filters(self, node_path: str) -> Tuple[List[str], List[str], List[str]]:
         """Get the filter values for cabins, companies, and hauls based on node path"""
         path_parts = node_path.split('/')
