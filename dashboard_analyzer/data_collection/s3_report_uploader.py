@@ -235,26 +235,6 @@ class S3ReportUploader:
             self.logger.error(f"❌ Unexpected error uploading to S3: {str(e)}")
             return None
     
-    def test_connection(self) -> bool:
-        """
-        Test S3 connection and permissions
-        
-        Returns:
-            True if connection successful, False otherwise
-        """
-        try:
-            # Try to list objects in the bucket (minimal permission test)
-            self.s3_client.list_objects_v2(
-                Bucket=self.bucket_name,
-                Prefix=self.base_prefix,
-                MaxKeys=1
-            )
-            self.logger.info("✅ S3 connection test successful")
-            return True
-        except Exception as e:
-            self.logger.error(f"❌ S3 connection test failed: {str(e)}")
-            return False
-    
     async def upload_agent_conversation(self, 
                                       conversation_data: Dict[str, Any],
                                       agent_type: str,
