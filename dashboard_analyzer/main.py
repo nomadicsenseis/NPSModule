@@ -287,7 +287,7 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     
     # Initialize interpreter for explanations with agent mode
     pbi_collector = PBIDataCollector()
-    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, explanation_mode='agent', causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date)
+    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date)
     print(f"🔧 Explanation mode: AGENT")
     
     # Initialize AI agent for interpretation
@@ -1772,7 +1772,6 @@ async def run_comprehensive_analysis(
             execution_metadata = {
                 'analysis_date': analysis_date.strftime('%Y-%m-%d'),
                 'segment': segment,
-                'explanation_mode': explanation_mode,
                 'causal_filter': causal_filter
             }
             
@@ -1948,8 +1947,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
         comparison_start_date=comparison_start_date, 
         comparison_end_date=comparison_end_date,
         study_mode=study_mode
-    )
-        
+    )    
     # Initialize AI agent for interpretation
     try:
         from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_interpreter_agent import AnomalyInterpreterAgent
@@ -3366,7 +3364,6 @@ async def execute_analysis_flow(
     analysis_date: datetime,
     date_parameter: str,
     segment: str,
-    explanation_mode: str,
     anomaly_detection_mode: str,
     baseline_periods: int,
     aggregation_days: int,
@@ -3383,7 +3380,7 @@ async def execute_analysis_flow(
     """
     
     print(f"\n🚀 DEBUG: execute_analysis_flow CALLED!")
-    print(f"🔍 Parameters: segment={segment}, study_mode={study_mode}, explanation_mode=AGENT")
+    print(f"🔍 Parameters: segment={segment}, study_mode={study_mode}")
     print(f"🔍 Parameters: causal_filter={causal_filter}, comparison_dates={comparison_start_date} to {comparison_end_date}")
 
     # Adjust causal_filter based on study_mode
@@ -3444,7 +3441,7 @@ async def execute_analysis_flow(
     # 3. Get Summary with AI Interpretation (using full analysis instead of silent)
     print(f"\n🔍 DEBUG EXECUTE_ANALYSIS_FLOW: About to call show_all_anomaly_periods_with_explanations")
     print(f"🔍 DEBUG: analysis_data type={type(analysis_data)}, has_anomaly_periods={bool(analysis_data and analysis_data.get('anomaly_periods'))}")
-    print(f"🔍 DEBUG: segment={segment}, explanation_mode=AGENT, causal_filter={causal_filter}")
+    print(f"🔍 DEBUG: segment={segment}, causal_filter={causal_filter}")
     
     summary_data = await show_all_anomaly_periods_with_explanations(
         analysis_data,
