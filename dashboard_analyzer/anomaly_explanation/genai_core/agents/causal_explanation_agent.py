@@ -1831,7 +1831,7 @@ class CausalExplanationAgent:
             self.logger.info(f"🔍 DEBUG COMPARATIVE: Final values for template - current_nps: {current_nps}, baseline_nps: {baseline_nps}, nps_difference: {nps_difference}")
             
             # Get baseline description for display and store it for final synthesis
-            from dashboard_analyzer.main import determine_anomaly_mode_for_vslast
+            from dashboard_analyzer.deep_research_period import determine_anomaly_mode_for_vslast
             
             # Pass comparison dates if available for "vs Sel. Period"
             comparison_start_str = None

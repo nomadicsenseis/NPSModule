@@ -1632,13 +1632,16 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
                     if has_anomaly or root_has_data:
                         anomaly_periods.append(period)
             
-            except Exception:
-                return None
+            except Exception as e:
+                # Exception occurred - will handle after exiting silent block
+                exception_occurred = e
+                exception_traceback = __import__('traceback').format_exc()
     
-    # DEBUG: Check NPS values after silenced analysis
-    print(f"🔍 DEBUG SILENT_ANALYSIS: period_nps_values type: {type(period_nps_values) if 'period_nps_values' in locals() else 'Not defined'}", file=sys.stderr)
-    if 'period_nps_values' in locals():
-        print(f"🔍 DEBUG SILENT_ANALYSIS: period_nps_values content: {period_nps_values}", file=sys.stderr)
+    # Check if exception occurred (must be after silent block)
+    if 'exception_occurred' in locals():
+        print(f"❌ Exception in analysis loop: {exception_occurred}")
+        print(exception_traceback)
+        return None
     
     return {
         'detector': detector,

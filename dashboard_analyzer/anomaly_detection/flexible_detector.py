@@ -33,7 +33,7 @@ class FlexibleAnomalyDetector:
         
         # Determine the actual detection mode based on detection_mode and causal_filter
         if detection_mode == "vslast" and causal_filter:
-            from dashboard_analyzer.main import determine_anomaly_mode_for_vslast
+            from dashboard_analyzer.deep_research_period import determine_anomaly_mode_for_vslast
             # Extract comparison dates if available
             comp_start_date = None
             comp_end_date = None
@@ -672,7 +672,7 @@ class FlexibleAnomalyDetector:
         """
         Dynamic vslast detection that calculates baseline period based on causal filter
         """
-        from dashboard_analyzer.main import calculate_baseline_period_for_causal_filter
+        from dashboard_analyzer.deep_research_period import calculate_baseline_period_for_causal_filter
         
         # Calculate baseline period based on causal filter
         baseline_period, baseline_description = calculate_baseline_period_for_causal_filter(

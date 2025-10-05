@@ -126,7 +126,7 @@ async def run_weekly_comprehensive_analysis(
             study_mode="comparative",
         )
         
-        # Always add weekly report to generated_reports, even if no anomalies
+        # Add weekly report to generated_reports
         if weekly_report_path and "Error" not in str(weekly_report_path):
             generated_reports.append({
                 'type': 'weekly',
@@ -134,17 +134,7 @@ async def run_weekly_comprehensive_analysis(
             })
             print(f"✅ Weekly analysis completed. Data length: {len(str(weekly_report_path))} chars")
         else:
-            # No anomalies found - create a summary message for the report
-            no_anomaly_message = [{
-                'period': 1,
-                'date_range': f"{(analysis_date - timedelta(days=6)).strftime('%Y-%m-%d')} to {analysis_date.strftime('%Y-%m-%d')}",
-                'ai_interpretation': f"📊 **ANÁLISIS COMPARATIVO SEMANAL (últimos 7 días)**\n\n✅ No se detectaron anomalías significativas en el NPS durante la semana analizada ({(analysis_date - timedelta(days=6)).strftime('%Y-%m-%d')} a {analysis_date.strftime('%Y-%m-%d')}). Todos los segmentos mantuvieron un comportamiento dentro de los rangos esperados respecto al baseline de referencia."
-            }]
-            generated_reports.append({
-                'type': 'weekly',
-                'data': no_anomaly_message
-            })
-            print(f"⚠️ Weekly analysis completed but no anomalies found. Added informative report.")
+            print(f"⚠️ Weekly analysis did not generate a report (error or insufficient data).")
 
     except Exception as e:
         print(f"❌ CRITICAL ERROR during weekly analysis: {e}")
