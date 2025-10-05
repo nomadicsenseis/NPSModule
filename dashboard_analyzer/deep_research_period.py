@@ -614,6 +614,7 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     
     # Note: Summary generation has been moved to weekly_deep_research.py
     # This function now only returns all_periods_data for consolidation
+    return all_periods_data
 
 def generate_parent_interpretations(anomalies: dict) -> dict:
     """Generate parent node interpretations based on children states"""
