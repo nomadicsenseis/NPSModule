@@ -581,14 +581,13 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
                 print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
                 print(ai_interpretation)
         
-        # Collect period data for summary
-        if summary_available:
-            period_data = {
-                'period': period,
-                'date_range': date_range_str,
-                'ai_interpretation': ai_interpretation or "No AI interpretation available"
-            }
-            all_periods_data.append(period_data)
+        # Collect period data
+        period_data = {
+            'period': period,
+            'date_range': date_range_str,
+            'ai_interpretation': ai_interpretation or "No AI interpretation available"
+        }
+        all_periods_data.append(period_data)
     
     # Summary of all 7 periods
     print(f"\n📋 SUMMARY OF 7 PERIODS ANALYZED:")
@@ -613,42 +612,8 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     
     print(f"\n🎯 Total periods with anomalies: {len(anomaly_periods)}/7")
     
-    # Generate Executive Summary Report (COMMENTED OUT - Using Interpreter Agent Final Summary Instead)
-    # if summary_available and all_periods_data:
-    #     print(f"\n" + "="*80)
-    #     print(f"📋 EXECUTIVE SUMMARY REPORT")
-    #     print("="*80)
-    #     
-    #     try:
-    #         print("🤖 Generating comprehensive summary across all periods...")
-    #         summary_report = await asyncio.wait_for(
-    #             summary_agent.generate_summary_report(all_periods_data),
-    #             timeout=60.0
-    #         )
-    #         
-    #         print(f"\n{summary_report}")
-    #         
-    #         # Performance metrics
-    #         metrics = summary_agent.get_performance_metrics()
-    #         print(f"\n📊 Summary Generation Metrics:")
-    #         print(f"   • Input tokens: {metrics.get('input_tokens', 0)}")
-    #         print(f"   • Output tokens: {metrics.get('output_tokens', 0)}")
-    #         print(f"   • LLM: {metrics.get('llm_type', 'Unknown')}")
-    #         
-    #     except Exception as e:
-    #         print(f"❌ Executive summary generation failed: {str(e)}")
-    #         print(f"   Manual review recommended for the {len(all_periods_data)} periods with anomalies")
-    #     
-    #     print("="*80)
-    # 
-    # elif summary_available and not all_periods_data:
-    #     print(f"\n📋 EXECUTIVE SUMMARY:")
-    #     print("No anomalies detected in any of the 7 periods analyzed.")
-    #     print("All segments are operating within normal NPS variation ranges.")
-    
-    if not summary_available:
-        print(f"\n⚠️ Executive summary not available (Summary Agent initialization failed)")
-        print(f"   Individual period analyses completed for {len(periods_with_anomalies)} periods with anomalies")
+    # Note: Summary generation has been moved to weekly_deep_research.py
+    # This function now only returns all_periods_data for consolidation
 
 def generate_parent_interpretations(anomalies: dict) -> dict:
     """Generate parent node interpretations based on children states"""

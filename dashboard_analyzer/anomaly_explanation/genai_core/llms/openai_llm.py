@@ -46,5 +46,5 @@ class OpenAiLLM(LLM):
             deployment_name=self.api_dep_gpt,
             openai_api_version=self.api_version,
             temperature=self.temperature,
-            max_completion_tokens=3000
+            max_completion_tokens=16000
         ) 
