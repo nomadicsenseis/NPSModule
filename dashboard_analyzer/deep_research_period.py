@@ -1564,7 +1564,7 @@ def get_segment_node_paths(segment: str) -> list:
             print(f"⚠️ Segment '{segment}' not found. Using Global as fallback.")
             return all_nodes["Global"]
 
-async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime = None, date_parameter: str = None, anomaly_detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = "vs L7d", periods: int = 7, causal_comparison_dates: tuple = None):
+async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime = None, date_parameter: str = None, anomaly_detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = "vs L7d", periods: int = 7, causal_comparison_dates: tuple = None, segment: str = "Global"):
     """Run flexible analysis completely silently"""
     import os
     from contextlib import redirect_stdout, redirect_stderr
@@ -1623,7 +1623,13 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
                     
                     # Check if any node has an anomaly
                     has_anomaly = any(state in ['+', '-'] for state in period_anomalies.values())
-                    if has_anomaly:
+                    
+                    # Also check if root segment has valid data (even if no anomalies)
+                    root_segment = normalize_segment_to_root(segment)
+                    root_has_data = root_segment in period_anomalies and period_anomalies[root_segment] != "?"
+                    
+                    # Include period if there are anomalies OR if root segment has valid data
+                    if has_anomaly or root_has_data:
                         anomaly_periods.append(period)
             
             except Exception:
@@ -2957,7 +2963,8 @@ async def execute_analysis_flow(
         baseline_periods,
         causal_filter,
         periods=periods,
-        causal_comparison_dates=(str(comparison_start_date), str(comparison_end_date)) if comparison_start_date and comparison_end_date else None
+        causal_comparison_dates=(str(comparison_start_date), str(comparison_end_date)) if comparison_start_date and comparison_end_date else None,
+        segment=segment
     )
 
     if not analysis_data or not analysis_data.get('anomaly_periods'):
