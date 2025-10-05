@@ -351,43 +351,45 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
         explanations = {}
         nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
 
-        # ENHANCEMENT: Always include root segment in causal analysis if it has valid data
-        if nodes_with_anomalies:
-            # Get the root segment for the analysis
-            root_segment = normalize_segment_to_root(segment)
-            print(f"🔍 DEBUG ROOT SEGMENT: segment='{segment}' -> root_segment='{root_segment}'")
-            
-            # Check if root segment has valid data (not "?" or missing)
-            root_state = period_anomalies.get(root_segment, "?")
-            print(f"🔍 DEBUG ROOT STATE: root_state='{root_state}', period_anomalies keys: {list(period_anomalies.keys())}")
-            
-            # Always recalculate root segment's anomaly state based on deviation (override detector's decision)
-            root_deviation = period_deviations.get(root_segment, 0.0)
-            print(f"🔍 DEBUG ROOT CALCULATION: root_deviation={root_deviation}")
-            if root_deviation > 0:
-                root_state = "+"  # Positive anomaly
-            elif root_deviation < 0:
-                root_state = "-"  # Negative anomaly
+        # ENHANCEMENT: Always include root segment (--segment parameter) in causal analysis
+        # Get the root segment for the analysis
+        root_segment = normalize_segment_to_root(segment)
+        print(f"🔍 DEBUG ROOT SEGMENT: segment='{segment}' -> root_segment='{root_segment}'")
+        
+        # Check if root segment has valid data (not "?" or missing)
+        root_state = period_anomalies.get(root_segment, "?")
+        print(f"🔍 DEBUG ROOT STATE: root_state='{root_state}', period_anomalies keys: {list(period_anomalies.keys())}")
+        
+        # Always recalculate root segment's anomaly state based on deviation (override detector's decision)
+        root_deviation = period_deviations.get(root_segment, 0.0)
+        print(f"🔍 DEBUG ROOT CALCULATION: root_deviation={root_deviation}")
+        if root_deviation > 0:
+            root_state = "+"  # Positive anomaly
+        elif root_deviation < 0:
+            root_state = "-"  # Negative anomaly
+        else:
+            root_state = "N"  # Neutral (only when deviation is exactly 0)
+        # Always update root segment in period_anomalies with calculated state
+        period_anomalies[root_segment] = root_state
+        print(f"      🔍 DEBUG ROOT: Override {root_segment} state='{root_state}' based on deviation={root_deviation}")
+        
+        # Always add root segment to the analysis, even if no other anomalies exist
+        if root_segment not in nodes_with_anomalies and root_state != "?":
+            nodes_with_anomalies.append(root_segment)
+            if len(nodes_with_anomalies) == 1:
+                print(f"      🔍 ENHANCED: Analyzing root segment {root_segment} (state '{root_state}', no child anomalies)")
             else:
-                root_state = "N"  # Neutral (only when deviation is exactly 0)
-            # Always update root segment in period_anomalies with calculated state
-            period_anomalies[root_segment] = root_state
-            print(f"      🔍 DEBUG ROOT: Override {root_segment} state='{root_state}' based on deviation={root_deviation}")
-            
-            if root_segment not in nodes_with_anomalies:
-                # Always add root segment to the analysis (it's always analyzed)
-                nodes_with_anomalies.append(root_segment)
                 print(f"      🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added {root_segment} with state '{root_state}' + {len([n for n in nodes_with_anomalies if n != root_segment])} anomalous nodes)")
-            elif root_segment in nodes_with_anomalies:
-                print(f"      📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including {root_segment})")
-            else:
-                print(f"      📊 Analyzing {len(nodes_with_anomalies)} anomalous segments ({root_segment} has no valid data)")
-            
-            # PRIORITY: Move root segment to the front to ensure it's always processed first
-            if root_segment in nodes_with_anomalies:
-                nodes_with_anomalies.remove(root_segment)
-                nodes_with_anomalies.insert(0, root_segment)
-                print(f"      🎯 PRIORITY: {root_segment} moved to front of processing queue")
+        elif root_segment in nodes_with_anomalies:
+            print(f"      📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including {root_segment})")
+        else:
+            print(f"      📊 Analyzing {len(nodes_with_anomalies)} anomalous segments ({root_segment} has no valid data)")
+        
+        # PRIORITY: Move root segment to the front to ensure it's always processed first
+        if root_segment in nodes_with_anomalies:
+            nodes_with_anomalies.remove(root_segment)
+            nodes_with_anomalies.insert(0, root_segment)
+            print(f"      🎯 PRIORITY: {root_segment} moved to front of processing queue")
 
         if nodes_with_anomalies:
             # Collect explanations for anomalous nodes
@@ -1766,43 +1768,45 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
         explanations = {}
         nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
 
-        # ENHANCEMENT: Always include root segment in causal analysis if it has valid data
-        if nodes_with_anomalies:
-            # Get the root segment for the analysis
-            root_segment = normalize_segment_to_root(segment)
-            print(f"🔍 DEBUG ROOT SEGMENT: segment='{segment}' -> root_segment='{root_segment}'")
-            
-            # Check if root segment has valid data (not "?" or missing)
-            root_state = period_anomalies.get(root_segment, "?")
-            print(f"🔍 DEBUG ROOT STATE: root_state='{root_state}', period_anomalies keys: {list(period_anomalies.keys())}")
-            
-            # Always recalculate root segment's anomaly state based on deviation (override detector's decision)
-            root_deviation = period_deviations.get(root_segment, 0.0)
-            print(f"🔍 DEBUG ROOT CALCULATION: root_deviation={root_deviation}")
-            if root_deviation > 0:
-                root_state = "+"  # Positive anomaly
-            elif root_deviation < 0:
-                root_state = "-"  # Negative anomaly
+        # ENHANCEMENT: Always include root segment (--segment parameter) in causal analysis
+        # Get the root segment for the analysis
+        root_segment = normalize_segment_to_root(segment)
+        print(f"🔍 DEBUG ROOT SEGMENT: segment='{segment}' -> root_segment='{root_segment}'", file=sys.stderr)
+        
+        # Check if root segment has valid data (not "?" or missing)
+        root_state = period_anomalies.get(root_segment, "?")
+        print(f"🔍 DEBUG ROOT STATE: root_state='{root_state}', period_anomalies keys: {list(period_anomalies.keys())}", file=sys.stderr)
+        
+        # Always recalculate root segment's anomaly state based on deviation (override detector's decision)
+        root_deviation = period_deviations.get(root_segment, 0.0)
+        print(f"🔍 DEBUG ROOT CALCULATION: root_deviation={root_deviation}", file=sys.stderr)
+        if root_deviation > 0:
+            root_state = "+"  # Positive anomaly
+        elif root_deviation < 0:
+            root_state = "-"  # Negative anomaly
+        else:
+            root_state = "N"  # Neutral (only when deviation is exactly 0)
+        # Always update root segment in period_anomalies with calculated state
+        period_anomalies[root_segment] = root_state
+        print(f"      🔍 DEBUG ROOT: Override {root_segment} state='{root_state}' based on deviation={root_deviation}", file=sys.stderr)
+        
+        # Always add root segment to the analysis, even if no other anomalies exist
+        if root_segment not in nodes_with_anomalies and root_state != "?":
+            nodes_with_anomalies.append(root_segment)
+            if len(nodes_with_anomalies) == 1:
+                print(f"      🔍 ENHANCED: Analyzing root segment {root_segment} (state '{root_state}', no child anomalies)", file=sys.stderr)
             else:
-                root_state = "N"  # Neutral (only when deviation is exactly 0)
-            # Always update root segment in period_anomalies with calculated state
-            period_anomalies[root_segment] = root_state
-            print(f"      🔍 DEBUG ROOT: Override {root_segment} state='{root_state}' based on deviation={root_deviation}")
-            
-            if root_segment not in nodes_with_anomalies and root_state != "?":
-                # Add root segment to the analysis even if it doesn't have anomalies but has valid data
-                nodes_with_anomalies.append(root_segment)
-                print(f"🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added {root_segment} with state '{root_state}' + {len([n for n in nodes_with_anomalies if n != root_segment])} anomalous nodes)", file=sys.stderr)
-            elif root_segment in nodes_with_anomalies:
-                print(f"🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including {root_segment})", file=sys.stderr)
-            else:
-                print(f"🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments ({root_segment} has no valid data)", file=sys.stderr)
-            
-            # PRIORITY: Move root segment to the front to ensure it's always processed first
-            if root_segment in nodes_with_anomalies:
-                nodes_with_anomalies.remove(root_segment)
-                nodes_with_anomalies.insert(0, root_segment)
-                print(f"🎯 PRIORITY: {root_segment} moved to front of processing queue", file=sys.stderr)
+                print(f"      🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added {root_segment} with state '{root_state}' + {len([n for n in nodes_with_anomalies if n != root_segment])} anomalous nodes)", file=sys.stderr)
+        elif root_segment in nodes_with_anomalies:
+            print(f"      🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including {root_segment})", file=sys.stderr)
+        else:
+            print(f"      🔍 📊 Analyzing {len(nodes_with_anomalies)} anomalous segments ({root_segment} has no valid data)", file=sys.stderr)
+        
+        # PRIORITY: Move root segment to the front to ensure it's always processed first
+        if root_segment in nodes_with_anomalies:
+            nodes_with_anomalies.remove(root_segment)
+            nodes_with_anomalies.insert(0, root_segment)
+            print(f"      🎯 PRIORITY: {root_segment} moved to front of processing queue", file=sys.stderr)
 
         if nodes_with_anomalies:
             # DEBUG: Temporarily NOT suppressing output to see what explanations are being collected

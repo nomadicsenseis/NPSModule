@@ -1,0 +1,210 @@
+{
+  "metadata": {
+    "agent_type": "causal_explanation",
+    "analysis_type": "separated_workflow_investigation",
+    "export_timestamp": "2025-10-05T10:56:53.349759",
+    "node_path": "Global/LH/Business",
+    "start_date": "2025-09-25",
+    "end_date": "2025-09-25",
+    "total_iterations": 5,
+    "llm_type": "O4_MINI",
+    "anomaly_type": "+",
+    "total_messages": 7,
+    "tools_used": [],
+    "investigation_success": true
+  },
+  "conversation_log": [
+    {
+      "iteration": 0,
+      "type": "SYSTEM",
+      "content": "Eres un **analista sénior de NPS** especializado en investigación de anomalías para períodos únicos. Tu análisis se enfoca en entender qué pasó en un día específico.\n\n⚠️ **CRÍTICO - NO INVENTES DATOS:**\nSi hay algún dato que te falta, NO lo supongas ni inventes. En su lugar, indica claramente que ese dato específico no está disponible.\nPara las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.\nEN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.\n\n**MODO SINGLE:** Análisis de un período único sin comparación\n\n**OBJETIVOS:**\n1. **IDENTIFICAR FACTORES** que influyeron en el NPS del día\n2. **ANALIZAR MÉTRICAS OPERATIVAS** del período específico\n3. **ENTENDER FEEDBACK** de los clientes de ese día\n4. **IDENTIFICAR RUTAS** que tuvieron mayor impacto\n\n**Metodología**: Una herramienta por iteración, reflexiona y elige la siguiente. Máximo 5 iteraciones.\n\n**Flujo de Trabajo** (se ejecuta automáticamente):\n▸ `operative_data_tool` → Analiza métricas operativas del día\n▸ `ncs_tool` → Revisa incidentes reportados\n▸ `verbatims_tool` → Obtiene feedback cualitativo\n▸ `routes_tool` → Identifica rutas con mayor impacto\n▸ `customer_profile_tool` → Analiza impacto por perfil\n\n**Reglas de Terminación** 🏁\n▸ Máximo 5 iteraciones\n▸ Si no hay más herramientas relevantes → termina\n▸ Si no hay evidencia clara → termina con hipótesis débil\n",
+      "metadata": {},
+      "timestamp": "10:55:57"
+    },
+    {
+      "iteration": 0,
+      "type": "USER",
+      "content": "**INVESTIGACIÓN DE ANOMALÍA NPS - MODO SINGLE**\n\n📊 **CONTEXTO NPS:**\n• **Segmento**: Global/LH/Business\n• **Período de Análisis**: 2025-09-25 00:00:00 a 2025-09-25 00:00:00\n• **Tipo de Anomalía**: +\n• **Magnitud**: 18.624149659863942 pts\n• **NPS del Día**: 44.44444444444444\n• **NPS Baseline**: 25.8202947845805\n• **Modo de Detección**: mean\n• **Días por Período**: 1\n• **Períodos de Baseline**: 7\n\n📈 **CONTEXTO DE COMPARACIÓN:**\n• **Comparación**: vs media de los últimos 7 días\n\n🎯 **OBJETIVO**: Entender qué factores influyeron en el NPS de este día específico.\n\n**DECIDE QUÉ HERRAMIENTA EJECUTAR PRIMERO** basándote en el contexto NPS y la metodología del flujo de trabajo.\n",
+      "metadata": {},
+      "timestamp": "10:55:57"
+    },
+    {
+      "iteration": 1,
+      "type": "AI",
+      "content": "REFLECTION: La llamada a operative_data_tool falló con un error de tipo (TypeError) y no se obtuvieron métricas operativas para el período. Por tanto, no se cumplió el objetivo de identificar y validar las métricas operativas frente a los drivers SHAP. No disponemos de datos operativos para seguir profundizando en esta iteración, pero aún es posible avanzar revisando los incidentes NCS para buscar correlaciones o pistas adicionales.",
+      "metadata": {},
+      "timestamp": "10:56:04"
+    },
+    {
+      "iteration": 2,
+      "type": "AI",
+      "content": "REFLECTION: Los resultados de ncs_tool muestran que no hay datos de incidentes reportados para Global/LH/Business el 2025-09-25. Por tanto:\n- No se cumplió el objetivo de identificar posibles correlaciones entre incidentes operativos y la variación del NPS en ese día.\n- La falta de datos de NCS impide validar hipótesis relacionadas con problemas de servicio o calidad.\n\nDado que aún necesitamos entender el feedback cualitativo de los clientes para completar la visión operativa, es apropiado continuar con la siguiente herramienta.",
+      "metadata": {},
+      "timestamp": "10:56:07"
+    },
+    {
+      "iteration": 3,
+      "type": "AI",
+      "content": "REFLECTION: La herramienta verbatims_tool no proporcionó feedback cualitativo para Global/LH/Business el 2025-09-25, por lo que no se cumplió el objetivo de entender la percepción de los clientes ese día. Sin evidencia cualitativa ni operativa disponible, el siguiente paso es identificar rutas específicas con potencial impacto operativo para completar el análisis.",
+      "metadata": {},
+      "timestamp": "10:56:10"
+    },
+    {
+      "iteration": 4,
+      "type": "AI",
+      "content": "REFLECTION: La herramienta routes_tool ha identificado una única ruta (JFK-MAD) con un NPS de 100.0 basado en 3 respuestas y sin ningún incidente operacional (NCS) reportado. \nObjetivos de esta iteración:\n- Identificar rutas con mayor impacto: cumplido, aunque la ruta muestra un NPS perfecto y 0 incidencias.\n- Encontrar evidencia de problemas operativos en rutas clave: no se detectaron incidencias para analizar.\n\nDado que no hay rutas con anomalías negativas ni problemas operativos reportados, la información está completa según esta herramienta. Sin embargo, para profundizar en el comportamiento de los clientes en la única ruta observada, es útil analizar el perfil de los mismos.",
+      "metadata": {},
+      "timestamp": "10:56:18"
+    },
+    {
+      "iteration": 5,
+      "type": "AI",
+      "content": "REFLECTION: La análisis del perfil de clientes muestra una alta dispersión en la dimensión Fleet (rango 0.0 a 100.0) y Residence Region (rango 14.3 a 100.0), lo que evidencia que la experiencia varió significativamente según el tipo de avión y la región de residencia. Los puntos clave son:\n- El A350 y sus variantes presentaron los NPS más bajos (9.1 y 0.0), mientras que el A333 y América Sur alcanzaron NPS perfectos de 100.0, identificando claramente los activos con mayor y menor desempeño.\n- La diferencia entre Leisure (52.9) y Business/Work (36.8) indica que el segmento de negocios tuvo una percepción menos satisfactoria.\n- CodeShare muestra menor dispersión, pero AA (33.3) quedó por debajo de IB (50.0).\n\nObjetivos de la iteración:\n1. Impacto por perfil: cumplido, con insights claros sobre flotas y regiones.\n2. Cumplimiento de metas de análisis de clientes: cumplido, al identificar grupos con NPS extremos.\n3. Bases para acciones correctivas: cumplido, al señalar flotas y segmentos a priorizar.\n\nCon esta evidencia, se han cubierto los tres objetivos principales y no hay herramientas adicionales que aporten nuevo valor para este día.",
+      "metadata": {},
+      "timestamp": "10:56:42"
+    }
+  ],
+  "clean_explanations": [
+    "La llamada a operative_data_tool falló con un error de tipo (TypeError) y no se obtuvieron métricas operativas para el período. Por tanto, no se cumplió el objetivo de identificar y validar las métricas operativas frente a los drivers SHAP. No disponemos de datos operativos para seguir profundizando en esta iteración, pero aún es posible avanzar revisando los incidentes NCS para buscar correlaciones o pistas adicionales.",
+    "Los resultados de ncs_tool muestran que no hay datos de incidentes reportados para Global/LH/Business el 2025-09-25. Por tanto:\n- No se cumplió el objetivo de identificar posibles correlaciones entre incidentes operativos y la variación del NPS en ese día.\n- La falta de datos de NCS impide validar hipótesis relacionadas con problemas de servicio o calidad.\n\nDado que aún necesitamos entender el feedback cualitativo de los clientes para completar la visión operativa, es apropiado continuar con la siguiente herramienta.",
+    "La herramienta verbatims_tool no proporcionó feedback cualitativo para Global/LH/Business el 2025-09-25, por lo que no se cumplió el objetivo de entender la percepción de los clientes ese día. Sin evidencia cualitativa ni operativa disponible, el siguiente paso es identificar rutas específicas con potencial impacto operativo para completar el análisis.",
+    "La herramienta routes_tool ha identificado una única ruta (JFK-MAD) con un NPS de 100.0 basado en 3 respuestas y sin ningún incidente operacional (NCS) reportado. \nObjetivos de esta iteración:\n- Identificar rutas con mayor impacto: cumplido, aunque la ruta muestra un NPS perfecto y 0 incidencias.\n- Encontrar evidencia de problemas operativos en rutas clave: no se detectaron incidencias para analizar.\n\nDado que no hay rutas con anomalías negativas ni problemas operativos reportados, la información está completa según esta herramienta. Sin embargo, para profundizar en el comportamiento de los clientes en la única ruta observada, es útil analizar el perfil de los mismos.",
+    "La análisis del perfil de clientes muestra una alta dispersión en la dimensión Fleet (rango 0.0 a 100.0) y Residence Region (rango 14.3 a 100.0), lo que evidencia que la experiencia varió significativamente según el tipo de avión y la región de residencia. Los puntos clave son:\n- El A350 y sus variantes presentaron los NPS más bajos (9.1 y 0.0), mientras que el A333 y América Sur alcanzaron NPS perfectos de 100.0, identificando claramente los activos con mayor y menor desempeño.\n- La diferencia entre Leisure (52.9) y Business/Work (36.8) indica que el segmento de negocios tuvo una percepción menos satisfactoria.\n- CodeShare muestra menor dispersión, pero AA (33.3) quedó por debajo de IB (50.0).\n\nObjetivos de la iteración:\n1. Impacto por perfil: cumplido, con insights claros sobre flotas y regiones.\n2. Cumplimiento de metas de análisis de clientes: cumplido, al identificar grupos con NPS extremos.\n3. Bases para acciones correctivas: cumplido, al señalar flotas y segmentos a priorizar.\n\nCon esta evidencia, se han cubierto los tres objetivos principales y no hay herramientas adicionales que aporten nuevo valor para este día."
+  ],
+  "collected_data_summary": "👥 **CUSTOMER PROFILE EJECUTADO:**\n   {'analysis_summary': '👥 CUSTOMER PROFILE - ABSOLUTE NPS VALUES:\\n📅 Period: 2025-09-25 00:00:00 to 2025-09-25 00:00:00\\n🎯 Segment: Global/LH/Business\\n📊 Dimensions analyzed: 4/4\\n\\n📊 Business/Leisure: 2 segments analyzed\\n   • Leisure: NPS 52.9 (17 surveys)\\n   • Business/Work: NPS 36.8 (19 surveys)\\n📊 Fleet: 6 segments analyzed\\n   • A333: NPS 100.0 (7 surveys)\\n   • A332: NPS 71.4 (7 surveys)\\n  ...",
+  "conversation_summary": {
+    "SYSTEM": 1,
+    "USER": 1,
+    "AI": 5
+  },
+  "dax_queries": [
+    {
+      "tool_name": "routes_tool",
+      "query": "DEFINE\n    VAR __DS0FilterTable9 =\n        FILTER(\n            KEEPFILTERS(VALUES('Route_Master'[route])),\n            NOT(ISBLANK('Route_Master'[route]))\n        )\n\n     VAR __DS0FilterTable =\n        TREATAS({\"Business\"}, 'Cabin_Master'[Cabin_Show])\n\n    VAR __DS0FilterTable2 =\n        TREATAS({\"IB\", \"YW\"}, 'Company_Master'[Company])\n\n    VAR __DS0FilterTable3 =\n        TREATAS({\"LH\"}, 'Haul_Master'[Haul_Aggr])\n\n    VAR __DS0FilterTable4 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),   \n            AND(\n                'Date_Master'[Date] >= DATE(2025, 9, 25),\n                'Date_Master'[Date] <= DATE(2025, 9, 25)\n            )\n        )\n\n    VAR __DS0FilterTable8 =\n        TREATAS({\"'surveys_maritz'[issue_category]\"}, 'Categories'[Categories Campos])\n\n    VAR __DS0FilterTable7 =\n        TREATAS({\"\"}, 'Filtro_Comparativa'[Filtro_Comparativa])\n\n\n\n    VAR __ValueFilterDM2 =\n        FILTER(\n            KEEPFILTERS(\n                SUMMARIZECOLUMNS(\n                    'Route_Master'[route],\n                    'Company_Master'[Company],\n                    __DS0FilterTable,\n                    __DS0FilterTable2,\n                    __DS0FilterTable3,\n                    __DS0FilterTable4,\n                    __DS0FilterTable8,\n                    __DS0FilterTable9,\n                    __DS0FilterTable7,\n                    \"Count_total\", IGNORE('Measure'[Count_total])\n                )\n            ),\n            [Count_total] >= 1\n        )\n\n    VAR __DS0Core =\n        CALCULATETABLE(\n            SUMMARIZECOLUMNS(\n                'Route_Master'[route],\n                'Company_Master'[Company],\n                __DS0FilterTable,\n                __DS0FilterTable2,\n                __DS0FilterTable3,\n                __DS0FilterTable4,\n                __DS0FilterTable8,\n                __DS0FilterTable9,\n                __DS0FilterTable7,\n                    \"NPS\", 'Measure'[NPS (Route)],\n                \"NPS_diff\", [Switch_NPS_Raw_diff],\n                \"Pax\", 'Measure'[n (Route)],\n                \"CodeShare\", 'Measure'[CodeShare (Route)]*100,\n                \"Check_in\", 'Measure'[Check-in (Route)],\n                \"Lounge\", 'Measure'[Lounge (Route)],\n                \"Boarding\", 'Measure'[Boarding (Route)],\n                \"Aircraft_interior\", 'Measure'[Aircraft interior (Route)],\n                \"Wi-Fi\", 'Measure'[Wi-Fi (Route)],\n                \"IFE\", 'Measure'[IFE (Route)],\n                \"F&B\", 'Measure'[F&B (Route)],\n                \"Crew\", 'Measure'[Crew (Route)],\n                \"Arrivals\", 'Measure'[Arrivals (Route)],\n                \"Connections\", 'Measure'[Connections (Route)],\n                \"Operative\", 'Measure'[Operative (Route)],\n                \"NonOperative\", 'Measure'[NonOperative (Route)],\n                \"Check_in_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Check-in\"),\n                \"Lounge_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Lounge\"),\n                \"Boarding_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Boarding\"),\n                \"Aircraft_interior_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Aircraft interior\"),\n                \"Wi-Fi_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Wi-Fi\"),\n                \"IFE_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"IFE\"),\n                \"F&B_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"In flight food and beverage\"),\n                \"Crew_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Cabin Crew\"),\n                \"Arrivals_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Arrivals experience\"),\n                \"Connections_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Connections experience\"),\n                \"Operative_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Punctuality\")\n            ),\n            __ValueFilterDM2\n        )\n       \n\nEVALUATE\n    __DS0Core ",
+      "parameters": {
+        "node_path": "Global/LH/Business",
+        "start_date": "2025-09-25",
+        "end_date": "2025-09-25",
+        "comparison_filter": null,
+        "comparison_start_date": null,
+        "comparison_end_date": null,
+        "cabins": [
+          "Business"
+        ],
+        "companies": [
+          "IB",
+          "YW"
+        ],
+        "hauls": [
+          "LH"
+        ]
+      },
+      "timestamp": "10:56:10",
+      "iteration": 4
+    },
+    {
+      "tool_name": "customer_profile_tool",
+      "query": "// DAX Query - Customer Profile Analysis\nDEFINE\n    VAR __DS0FilterTable9 = \n        TREATAS({\"Business/Leisure\"}, 'Customer_Profile_Dinamic_Legend'[Name])\n    \n    VAR __DS0FilterTable =\n        TREATAS({\"Business\"}, 'Cabin_Master'[Cabin_Show])\n \n    VAR __DS0FilterTable2 =\n        TREATAS({\"IB\", \"YW\"}, 'Company_Master'[Company])\n \n    VAR __DS0FilterTable3 =\n        TREATAS({\"LH\"}, 'Haul_Master'[Haul_Aggr])\n \n    VAR __DS0FilterTable4 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),   \n            AND(\n                'Date_Master'[Date] >= DATE(2025, 9, 25),\n                'Date_Master'[Date] <= DATE(2025, 9, 25)\n            )\n        )\n \n    VAR __DS0FilterTable8 =\n        TREATAS({\"'surveys_maritz'[issue_category]\"}, 'Categories'[Categories Campos])\n \n    VAR __DS0FilterTable7 =\n        TREATAS({\"\"}, 'Filtro_Comparativa'[Filtro_Comparativa])\n\n\n \n    VAR __ValueFilterDM2 =\n        FILTER(\n            KEEPFILTERS(\n                SUMMARIZECOLUMNS(\n                    'Customer_Profile'[Category],\n                    __DS0FilterTable,\n                    __DS0FilterTable2,\n                    __DS0FilterTable3,\n                    __DS0FilterTable4,\n                    __DS0FilterTable7,\n                    __DS0FilterTable8,\n                    __DS0FilterTable9,\n                    \"Count_total\", IGNORE('Measure'[Count_total])\n                )\n            ),\n            [Count_total] >= 1\n        ) \n \n    VAR __DS0Core =\n        CALCULATETABLE(\n            ADDCOLUMNS(\n                values('Customer_Profile'[Category]),\n                \"NPS\", 'Measure'[NPS (Route)],\n                \"NPS diff\", [Switch_NPS_Raw_diff],\n                \"Pax\", 'Measure'[n (Route)],\n                \"CodeShare\", 'Measure'[CodeShare (Route)]*100,\n                \"Check_in\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Check-in\"),\n                \"Lounge\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Lounge\"),\n                \"Boarding\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Boarding\"),\n                \"Aircraft interior\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Aircraft interior\"),\n                \"Wi-Fi\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Wi-Fi\"),\n                \"IFE\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"IFE\"),\n                \"F&B\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"In flight food and beverage\"),\n                \"Crew\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Cabin Crew\"),\n                \"Arrivals\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Arrivals experience\"),\n                \"Connections\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Connections experience\"),\n                \"Journey preparation support\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Journey preparation support\"),   \n                \"Airport security\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Airport security\"),\n                \"Punctuality\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Punctuality\"),\n                \"Pilot's announcements\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Pilot's announcements\"),\n                \"IB Plus loyalty program\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"IB Plus loyalty program\"), \n                \"Ticket Price\", CALCULATE([S_client_Satisfaction], TouchPoint_Master[filtered_name]=\"Ticket Price\"),\n                \"Load Factor\", CALCULATE([S_client_Satisfaction], TouchPoint_Master[filtered_name]=\"Load Factor\"),\n                \"OTP_surveyed\", [OTP_surveyed]\n            ),\n            __ValueFilterDM2,\n            __DS0FilterTable,\n            __DS0FilterTable2,\n            __DS0FilterTable3,\n            __DS0FilterTable4,\n            __DS0FilterTable7,\n            __DS0FilterTable8,\n            __DS0FilterTable9\n        )\n       \nEVALUATE\n    __DS0Core ",
+      "parameters": {
+        "node_path": "Global/LH/Business",
+        "start_date": "2025-09-25",
+        "end_date": "2025-09-25",
+        "dimension": "Business/Leisure",
+        "comparison_filter": null,
+        "comparison_start_date": null,
+        "comparison_end_date": null,
+        "route_filter": null,
+        "cabins": [
+          "Business"
+        ],
+        "companies": [
+          "IB",
+          "YW"
+        ],
+        "hauls": [
+          "LH"
+        ]
+      },
+      "timestamp": "10:56:18",
+      "iteration": 5
+    },
+    {
+      "tool_name": "customer_profile_tool",
+      "query": "// DAX Query - Customer Profile Analysis\nDEFINE\n    VAR __DS0FilterTable9 = \n        TREATAS({\"Fleet\"}, 'Customer_Profile_Dinamic_Legend'[Name])\n    \n    VAR __DS0FilterTable =\n        TREATAS({\"Business\"}, 'Cabin_Master'[Cabin_Show])\n \n    VAR __DS0FilterTable2 =\n        TREATAS({\"IB\", \"YW\"}, 'Company_Master'[Company])\n \n    VAR __DS0FilterTable3 =\n        TREATAS({\"LH\"}, 'Haul_Master'[Haul_Aggr])\n \n    VAR __DS0FilterTable4 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),   \n            AND(\n                'Date_Master'[Date] >= DATE(2025, 9, 25),\n                'Date_Master'[Date] <= DATE(2025, 9, 25)\n            )\n        )\n \n    VAR __DS0FilterTable8 =\n        TREATAS({\"'surveys_maritz'[issue_category]\"}, 'Categories'[Categories Campos])\n \n    VAR __DS0FilterTable7 =\n        TREATAS({\"\"}, 'Filtro_Comparativa'[Filtro_Comparativa])\n\n\n \n    VAR __ValueFilterDM2 =\n        FILTER(\n            KEEPFILTERS(\n                SUMMARIZECOLUMNS(\n                    'Customer_Profile'[Category],\n                    __DS0FilterTable,\n                    __DS0FilterTable2,\n                    __DS0FilterTable3,\n                    __DS0FilterTable4,\n                    __DS0FilterTable7,\n                    __DS0FilterTable8,\n                    __DS0FilterTable9,\n                    \"Count_total\", IGNORE('Measure'[Count_total])\n                )\n            ),\n            [Count_total] >= 1\n        ) \n \n    VAR __DS0Core =\n        CALCULATETABLE(\n            ADDCOLUMNS(\n                values('Customer_Profile'[Category]),\n                \"NPS\", 'Measure'[NPS (Route)],\n                \"NPS diff\", [Switch_NPS_Raw_diff],\n                \"Pax\", 'Measure'[n (Route)],\n                \"CodeShare\", 'Measure'[CodeShare (Route)]*100,\n                \"Check_in\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Check-in\"),\n                \"Lounge\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Lounge\"),\n                \"Boarding\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Boarding\"),\n                \"Aircraft interior\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Aircraft interior\"),\n                \"Wi-Fi\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Wi-Fi\"),\n                \"IFE\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"IFE\"),\n                \"F&B\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"In flight food and beverage\"),\n                \"Crew\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Cabin Crew\"),\n                \"Arrivals\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Arrivals experience\"),\n                \"Connections\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Connections experience\"),\n                \"Journey preparation support\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Journey preparation support\"),   \n                \"Airport security\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Airport security\"),\n                \"Punctuality\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Punctuality\"),\n                \"Pilot's announcements\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Pilot's announcements\"),\n                \"IB Plus loyalty program\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"IB Plus loyalty program\"), \n                \"Ticket Price\", CALCULATE([S_client_Satisfaction], TouchPoint_Master[filtered_name]=\"Ticket Price\"),\n                \"Load Factor\", CALCULATE([S_client_Satisfaction], TouchPoint_Master[filtered_name]=\"Load Factor\"),\n                \"OTP_surveyed\", [OTP_surveyed]\n            ),\n            __ValueFilterDM2,\n            __DS0FilterTable,\n            __DS0FilterTable2,\n            __DS0FilterTable3,\n            __DS0FilterTable4,\n            __DS0FilterTable7,\n            __DS0FilterTable8,\n            __DS0FilterTable9\n        )\n       \nEVALUATE\n    __DS0Core ",
+      "parameters": {
+        "node_path": "Global/LH/Business",
+        "start_date": "2025-09-25",
+        "end_date": "2025-09-25",
+        "dimension": "Fleet",
+        "comparison_filter": null,
+        "comparison_start_date": null,
+        "comparison_end_date": null,
+        "route_filter": null,
+        "cabins": [
+          "Business"
+        ],
+        "companies": [
+          "IB",
+          "YW"
+        ],
+        "hauls": [
+          "LH"
+        ]
+      },
+      "timestamp": "10:56:23",
+      "iteration": 5
+    },
+    {
+      "tool_name": "customer_profile_tool",
+      "query": "// DAX Query - Customer Profile Analysis\nDEFINE\n    VAR __DS0FilterTable9 = \n        TREATAS({\"Residence Region\"}, 'Customer_Profile_Dinamic_Legend'[Name])\n    \n    VAR __DS0FilterTable =\n        TREATAS({\"Business\"}, 'Cabin_Master'[Cabin_Show])\n \n    VAR __DS0FilterTable2 =\n        TREATAS({\"IB\", \"YW\"}, 'Company_Master'[Company])\n \n    VAR __DS0FilterTable3 =\n        TREATAS({\"LH\"}, 'Haul_Master'[Haul_Aggr])\n \n    VAR __DS0FilterTable4 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),   \n            AND(\n                'Date_Master'[Date] >= DATE(2025, 9, 25),\n                'Date_Master'[Date] <= DATE(2025, 9, 25)\n            )\n        )\n \n    VAR __DS0FilterTable8 =\n        TREATAS({\"'surveys_maritz'[issue_category]\"}, 'Categories'[Categories Campos])\n \n    VAR __DS0FilterTable7 =\n        TREATAS({\"\"}, 'Filtro_Comparativa'[Filtro_Comparativa])\n\n\n \n    VAR __ValueFilterDM2 =\n        FILTER(\n            KEEPFILTERS(\n                SUMMARIZECOLUMNS(\n                    'Customer_Profile'[Category],\n                    __DS0FilterTable,\n                    __DS0FilterTable2,\n                    __DS0FilterTable3,\n                    __DS0FilterTable4,\n                    __DS0FilterTable7,\n                    __DS0FilterTable8,\n                    __DS0FilterTable9,\n                    \"Count_total\", IGNORE('Measure'[Count_total])\n                )\n            ),\n            [Count_total] >= 1\n        ) \n \n    VAR __DS0Core =\n        CALCULATETABLE(\n            ADDCOLUMNS(\n                values('Customer_Profile'[Category]),\n                \"NPS\", 'Measure'[NPS (Route)],\n                \"NPS diff\", [Switch_NPS_Raw_diff],\n                \"Pax\", 'Measure'[n (Route)],\n                \"CodeShare\", 'Measure'[CodeShare (Route)]*100,\n                \"Check_in\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Check-in\"),\n                \"Lounge\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Lounge\"),\n                \"Boarding\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Boarding\"),\n                \"Aircraft interior\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Aircraft interior\"),\n                \"Wi-Fi\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Wi-Fi\"),\n                \"IFE\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"IFE\"),\n                \"F&B\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"In flight food and beverage\"),\n                \"Crew\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Cabin Crew\"),\n                \"Arrivals\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Arrivals experience\"),\n                \"Connections\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Connections experience\"),\n                \"Journey preparation support\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Journey preparation support\"),   \n                \"Airport security\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Airport security\"),\n                \"Punctuality\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Punctuality\"),\n                \"Pilot's announcements\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Pilot's announcements\"),\n                \"IB Plus loyalty program\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"IB Plus loyalty program\"), \n                \"Ticket Price\", CALCULATE([S_client_Satisfaction], TouchPoint_Master[filtered_name]=\"Ticket Price\"),\n                \"Load Factor\", CALCULATE([S_client_Satisfaction], TouchPoint_Master[filtered_name]=\"Load Factor\"),\n                \"OTP_surveyed\", [OTP_surveyed]\n            ),\n            __ValueFilterDM2,\n            __DS0FilterTable,\n            __DS0FilterTable2,\n            __DS0FilterTable3,\n            __DS0FilterTable4,\n            __DS0FilterTable7,\n            __DS0FilterTable8,\n            __DS0FilterTable9\n        )\n       \nEVALUATE\n    __DS0Core ",
+      "parameters": {
+        "node_path": "Global/LH/Business",
+        "start_date": "2025-09-25",
+        "end_date": "2025-09-25",
+        "dimension": "Residence Region",
+        "comparison_filter": null,
+        "comparison_start_date": null,
+        "comparison_end_date": null,
+        "route_filter": null,
+        "cabins": [
+          "Business"
+        ],
+        "companies": [
+          "IB",
+          "YW"
+        ],
+        "hauls": [
+          "LH"
+        ]
+      },
+      "timestamp": "10:56:27",
+      "iteration": 5
+    },
+    {
+      "tool_name": "customer_profile_tool",
+      "query": "// DAX Query - Customer Profile Analysis\nDEFINE\n    VAR __DS0FilterTable9 = \n        TREATAS({\"CodeShare\"}, 'Customer_Profile_Dinamic_Legend'[Name])\n    \n    VAR __DS0FilterTable =\n        TREATAS({\"Business\"}, 'Cabin_Master'[Cabin_Show])\n \n    VAR __DS0FilterTable2 =\n        TREATAS({\"IB\", \"YW\"}, 'Company_Master'[Company])\n \n    VAR __DS0FilterTable3 =\n        TREATAS({\"LH\"}, 'Haul_Master'[Haul_Aggr])\n \n    VAR __DS0FilterTable4 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),   \n            AND(\n                'Date_Master'[Date] >= DATE(2025, 9, 25),\n                'Date_Master'[Date] <= DATE(2025, 9, 25)\n            )\n        )\n \n    VAR __DS0FilterTable8 =\n        TREATAS({\"'surveys_maritz'[issue_category]\"}, 'Categories'[Categories Campos])\n \n    VAR __DS0FilterTable7 =\n        TREATAS({\"\"}, 'Filtro_Comparativa'[Filtro_Comparativa])\n\n\n \n    VAR __ValueFilterDM2 =\n        FILTER(\n            KEEPFILTERS(\n                SUMMARIZECOLUMNS(\n                    'Customer_Profile'[Category],\n                    __DS0FilterTable,\n                    __DS0FilterTable2,\n                    __DS0FilterTable3,\n                    __DS0FilterTable4,\n                    __DS0FilterTable7,\n                    __DS0FilterTable8,\n                    __DS0FilterTable9,\n                    \"Count_total\", IGNORE('Measure'[Count_total])\n                )\n            ),\n            [Count_total] >= 1\n        ) \n \n    VAR __DS0Core =\n        CALCULATETABLE(\n            ADDCOLUMNS(\n                values('Customer_Profile'[Category]),\n                \"NPS\", 'Measure'[NPS (Route)],\n                \"NPS diff\", [Switch_NPS_Raw_diff],\n                \"Pax\", 'Measure'[n (Route)],\n                \"CodeShare\", 'Measure'[CodeShare (Route)]*100,\n                \"Check_in\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Check-in\"),\n                \"Lounge\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Lounge\"),\n                \"Boarding\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Boarding\"),\n                \"Aircraft interior\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Aircraft interior\"),\n                \"Wi-Fi\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Wi-Fi\"),\n                \"IFE\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"IFE\"),\n                \"F&B\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"In flight food and beverage\"),\n                \"Crew\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Cabin Crew\"),\n                \"Arrivals\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Arrivals experience\"),\n                \"Connections\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Connections experience\"),\n                \"Journey preparation support\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Journey preparation support\"),   \n                \"Airport security\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Airport security\"),\n                \"Punctuality\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Punctuality\"),\n                \"Pilot's announcements\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"Pilot's announcements\"),\n                \"IB Plus loyalty program\", CALCULATE([Monthly_Satisfaction], TouchPoint_Master[filtered_name]=\"IB Plus loyalty program\"), \n                \"Ticket Price\", CALCULATE([S_client_Satisfaction], TouchPoint_Master[filtered_name]=\"Ticket Price\"),\n                \"Load Factor\", CALCULATE([S_client_Satisfaction], TouchPoint_Master[filtered_name]=\"Load Factor\"),\n                \"OTP_surveyed\", [OTP_surveyed]\n            ),\n            __ValueFilterDM2,\n            __DS0FilterTable,\n            __DS0FilterTable2,\n            __DS0FilterTable3,\n            __DS0FilterTable4,\n            __DS0FilterTable7,\n            __DS0FilterTable8,\n            __DS0FilterTable9\n        )\n       \nEVALUATE\n    __DS0Core ",
+      "parameters": {
+        "node_path": "Global/LH/Business",
+        "start_date": "2025-09-25",
+        "end_date": "2025-09-25",
+        "dimension": "CodeShare",
+        "comparison_filter": null,
+        "comparison_start_date": null,
+        "comparison_end_date": null,
+        "route_filter": null,
+        "cabins": [
+          "Business"
+        ],
+        "companies": [
+          "IB",
+          "YW"
+        ],
+        "hauls": [
+          "LH"
+        ]
+      },
+      "timestamp": "10:56:30",
+      "iteration": 5
+    }
+  ]
+}

@@ -1,0 +1,1055 @@
+===== SYSTEM =====
+
+Eres un experto analista ejecutivo especializado en completar análisis de NPS comprehensivos.
+
+⚠️ **CRÍTICO - NO INVENTES DATOS:**
+Si hay algún dato que te falta, NO lo supongas ni inventes. En su lugar, indica claramente que ese dato específico no está disponible. Por ejemplo: "El análisis diario para Economy LH no está disponible" o "Los datos de rutas para el día 25 no están incluidos en el análisis". 
+
+⚠️ **CRÍTICO - NO USES %:** Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.
+
+⚠️ **CRÍTICO - NO CALCULES COSAS QUE NO SE TE PIDEN:**
+
+⚠️ **IMPORTANTE - SI HAY DATOS DIARIOS, ÚSALOS:**
+Si se te proporciona análisis diario en la sección "ANÁLISIS DIARIO SINGLE", DEBES usarlo e integrarlo en el resumen. NO digas que "no está disponible" si los datos están presentes en el input.
+
+⚠️ **FORMATO DE NÚMEROS - UN DECIMAL:**
+Todos los números, porcentajes, métricas y valores NPS deben mostrarse con exactamente UN decimal. Por ejemplo: 19.8 (no 19.75), -4.4 (no -4.39), 93.5% (no 93.53%), etc.
+
+TU FUNCIÓN:
+- Tomar la síntesis ejecutiva del interpreter semanal TAL COMO ESTÁ. ES VITAL QUE NO CAMBIES NI UNA LETRA.
+- INTEGRAR el detalle diario del interpreter DENTRO de cada sección correspondiente de la síntesis semanal
+- Identificar días especialmente reseñables en el detalle diario
+- Crear un resumen fluido y ejecutivo
+
+IMPORTANTE:
+- NO incluyas recomendaciones adicionales
+- NO uses títulos como "Integración del análisis diario" o similares
+- El análisis diario debe fluir naturalmente como un párrafo adicional
+- Identifica días especialmente reseñables en el detalle diario
+- Haz el texto fluido y ejecutivo, no técnico
+- Solo incluye días que tengan análisis relevantes (con caídas/subidas o datos significativos)
+- Para cabinas/radio sin incidencias: comenta solo su NPS del período y el del período de comparación
+- NO hables de "anomalias". Habla de "caídas" o "subidas" de NPS.
+- SI hay datos diarios en el input, ÚSALOS. NO digas que "no están disponibles" si están presentes.
+
+ANCLAJE DE SECCIONES (case-insensitive):
+- Global (los 2 primeros párrafos de la síntesis)
+- Economy SH
+- Business SH
+- Economy LH
+- Business LH
+- Premium LH
+
+INTEGRACIÓN POR SECCIÓN:
+- Tras cada bloque semanal anterior, añade exactamente un párrafo narrativo con los días reseñables en orden cronológico (28-jul → 03-ago si existen).
+- Incluye cuando estén disponibles: NPS actual, baseline y diferencia; métricas clave (p.ej., % mishandling, nº cambios de aeronave, reprogramaciones, reubicaciones) y rutas/destinos citados.
+- Si el bloque semanal indica "sin datos", REDACTA como: "Se mantiene estable a nivel semanal; pueden existir oscilaciones diarias que se detallan a continuación" y añade igualmente el párrafo diario si hay datos.
+- No modifiques, no reordenes ni resumas el texto semanal. No alteres sus cifras ni redondeos.
+
+ESTILO Y LÉXICO:
+- Estilo ejecutivo, fluido y conciso. No técnico.
+- Usa "subidas/bajadas", "mejoras/deterioros". Evita "anomalía/s".
+- Máximo 1-2 frases por día; prioriza 28, 29, 30, 31 de julio; 1, 2, 3 de agosto.
+- No inventes cifras. Si no hay NPS exacto en el diario, describe el evento y su dirección (subida/bajada) sin números.
+- Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.
+
+
+===== USER =====
+
+Completa el análisis comprehensivo:
+
+**ANÁLISIS SEMANAL COMPARATIVO:**
+
+
+**ANÁLISIS DIARIO SINGLE:**
+📅 2025-10-01 to 2025-10-01:
+📊 **ANÁLISIS JERÁRQUICO COMPLETO DE ANOMALÍAS NPS**
+
+**Nodos analizados:** 0 ()
+
+---
+
+## 📊 DIAGNÓSTICO A NIVEL DE EMPRESA
+
+A. Economy Short Haul  
+  • Existen ambos nodos:  
+    – IB (anomalía positiva +10.0) impulsado por flota A332, región Europa y ruta DUS–MAD  
+    – YW (anomalía negativa –17.3) sin datos operativos, muestra muy reducida y sin rutas clave que expliquen la caída  
+  → Diagnóstico: causa específica de compañía (IB y YW divergen en drivers y evidencia)
+
+B. Business Short Haul  
+  • Solo existe el nodo IB (anomalía positiva +26.3); no hay SH/Business/YW porque no alcanzó muestra mínima  
+  → Diagnóstico: único subsegmento afectado (IB), no se puede evaluar YW; la anomalía se asocia al segmento IB sin evidencia de un driver común de cabina
+
+---
+
+## 💺 DIAGNÓSTICO A NIVEL DE CABINA
+
+Short Haul (SH): causa específica de cabina  
+  • Economy SH y Business SH divergen claramente.  
+    – Economy SH muestra IB con subida (+10 pts) y YW con caída (–17.3 pts).  
+    – Business SH empuja hacia arriba (+31.8 pts) sin contraparte YW.  
+  • No hay convergencia en drivers u operación común: cada cabina (y dentro de Economy cada compañía) responde de forma distinta.
+
+Long Haul (LH): causa específica de cabina con reactividad diferencial  
+  • Economy LH se mantiene estable (normal), Business LH cae (–6.8 pts) y Premium LH sube (+34 pts).  
+  • La Economy actúa de amortiguador ante oscilaciones, mientras que Premium y Business reaccionan en sentidos opuestos.  
+  • No hay un factor único que explique todo el radio LH; el impacto varía según la cabina.
+
+---
+
+## 🌎 DIAGNÓSTICO GLOBAL POR RADIO
+
+Causas mixtas y compensatorias entre radios:  
+Ambos radios presentan anomalías de signo opuesto y con drivers distintos (SH impulsado al alza por Business/IB y penalizado en Economy/YW; LH al alza en Premium y a la baja en Business), de modo que en Global se observa solo una leve anomalía positiva (+3.6 pts) que refleja la suma de efectos locales y no un único factor común.
+
+---
+
+## 📋 ANÁLISIS DE CAUSAS DETALLADO
+
+1. Causa: Configuración de flota impacta negativamente en Business Long Haul  
+A. Naturaleza de la causa  
+   • Discrepancia de experiencia entre aviones A350 “estándar” y A350 next, sin que incidencias operativas ni feedback cualitativo expliquen la caída.  
+B. Evidencia consolidada y alcance  
+   • Segmento más grande: Global / LH / Business (NPS 19.05 vs baseline 25.82, anomalía –6.77 pts)  
+   • Drivers: flota A350 estándar NPS –10.0 vs A350 next NPS 100.0 (dispersión 110.0 pts)  
+   • Ruta analizada: EZE–MAD (n=3, NPS 100.0), NCS=0  
+   • Datos operativos: no disponibles; verbatims: ninguno  
+   • Afecta a todos los subsegmentos bajo Global / LH / Business  
+
+2. Causa: Predominio de A350 next y región América Sur en Premium Long Haul  
+A. Naturaleza de la causa  
+   • Sobrerrepresentación de pasajeros en A350 next y residentes en América Sur, sin incidencias operativas ni quejas textuales.  
+B. Evidencia consolidada y alcance  
+   • Segmento más grande: Global / LH / Premium (NPS 44.44 vs baseline 10.48, anomalía +33.96 pts)  
+   • Drivers: A350 next NPS 100.0 vs A350 estándar NPS 0.0 (disp. 100.0 pts); América Sur NPS 66.7 vs América Norte NPS 0.0 (disp. 66.7 pts)  
+   • Rutas: ninguna con muestra suficiente  
+   • Datos operativos: no disponibles; verbatims: ninguno  
+   • Afecta a todos los subsegmentos bajo Global / LH / Premium  
+
+3. Causa: Sesgo de muestra en Business Short Haul  
+A. Naturaleza de la causa  
+   • Tamaño de muestra muy reducido en ruta LHR–MAD, generando un pico de satisfacción no respaldado por datos operativos ni feedback.  
+B. Evidencia consolidada y alcance  
+   • Segmento más grande: Global / SH / Business (NPS 76.19 vs baseline 44.38, anomalía +31.81 pts)  
+   • Drivers: LHR–MAD (n=3, NPS 100.0), fleet A320neo NPS 100.0 vs A320 NPS 50.0; regiones Europa/Centroamérica NPS 100.0 vs América Norte NPS 25.0 (disp. 75.0 pts)  
+   • Incidentes (NCS): 0; datos operativos y verbatims: no disponibles  
+   • Afecta a todos los subsegmentos bajo Global / SH / Business (incluido IB)  
+
+4. Causa: Concentración de flota A332 y región Europa en Economy Short Haul IB  
+A. Naturaleza de la causa  
+   • Elevada proporción de pasajeros en flota A332 y residentes en Europa en un día sin incidentes operativos detectados.  
+B. Evidencia consolidada y alcance  
+   • Segmento más grande: Global / SH / Economy / IB (NPS 33.88 vs baseline 23.89, anomalía +9.99 pts)  
+   • Drivers: A332 NPS 100.0 vs 32S NPS –40.0 (disp. 140.0 pts); Europa NPS 58.3 vs Asia NPS –66.7 y LATAM NPS –50.0  
+   • Ruta clave: DUS–MAD (n=6, NPS 33.3); NCS=0; datos operativos y verbatims: no disponibles  
+   • Afecta a todos los subsegmentos bajo Global / SH / Economy / IB  
+
+5. Causa: Insuficiencia de datos y posible sesgo muestral en Economy Short Haul YW  
+A. Naturaleza de la causa  
+   • Muestra muy reducida y carencia de datos operativos o cualitativos que permitan identificar un driver real.  
+B. Evidencia consolidada y alcance  
+   • Segmento más grande: Global / SH / Economy / YW (NPS 16.67 vs baseline 33.93, anomalía –17.27 pts)  
+   • Ruta disponible: BIO–SCQ (n=3, NPS 100.0); NCS=0  
+   • Datos operativos y verbatims: no disponibles  
+   • Afecta a todos los subsegmentos bajo Global / SH / Economy / YW
+
+---
+
+## 📋 SÍNTESIS EJECUTIVA FINAL
+
+📈 SÍNTESIS EJECUTIVA:
+
+La compañía registró anomalías contrapuestas de NPS el 2025-10-01. A nivel agregado, el Global pasó de 24.99 a 28.61 pts (+3.62). En Long Haul Business, el NPS cayó de 25.82 a 19.05 pts (–6.77), mientras que en Premium LH subió de 10.48 a 44.44 pts (+33.96). En Short Haul Business, el NPS ascendió de 44.38 a 76.19 pts (+31.81). Dentro de Economy SH, IB mejoró de 23.89 a 33.88 pts (+9.99) y YW descendió de 33.93 a 16.67 pts (–17.27). Estas subidas y bajadas se explican por cinco drivers clave: la gran dispersión entre A350 estándar (–10.0) y A350 next (100.0) en Business LH; el predominio de A350 next y pasajeros de América Sur en Premium LH; el sesgo de muestra en LHR–MAD para Business SH; la concentración de flota A332 y clientes europeos en Economy SH IB; y la muestra reducida sin datos operativos en Economy SH YW.
+
+Las rutas más impactadas fueron LHR–MAD (SH Business, n=3, NPS 100.0), EZE–MAD (LH Business, n=3, NPS 100.0), DUS–MAD (SH Economy IB, n=6, NPS 33.3) y MAD–PRG (Global, n=6, NPS 16.7), junto con BIO–SCQ (SH Economy YW, n=3, NPS 100.0). Los grupos más reactivos incluyen pasajeros en flotas A350 next y A350 estándar, flota A332 vs 32S, residentes en América Sur y Asia, y codeshares LATAM y Others.
+
+ECONOMY SH: Divergencia IB vs YW  
+La cabina Economy SH IB experimentó una mejora de 9.99 puntos, pasando de 23.89 pts (L7d) a 33.88 pts el 2025-10-01, mientras que Economy SH YW sufrió un deterioro de 17.27 puntos, cayendo de 33.93 pts (L7d) a 16.67 pts. La causa principal en IB fue la alta satisfacción de pasajeros en flota A332 (NPS 100.0) y residentes en Europa (58.3), reforzada por la ruta DUS–MAD (n=6, NPS 33.3). Por el contrario, YW no alcanzó muestra suficiente ni datos operativos ni verbatims para identificar drivers, reflejando un posible sesgo muestral.
+
+BUSINESS SH: Sesgo de muestra en IB  
+La cabina Business SH IB registró un alza de 26.34 puntos, subiendo de 51.44 pts (L7d) a 77.78 pts, mientras que Business SH YW mantuvo desempeño estable. Esta mejora se explica principalmente por un sesgo de muestra en la ruta LHR–MAD (n=3, NPS 100.0) y la elevada valoración en flota A320neo (100.0) y regiones Europa/Centroamérica (100.0).
+
+ECONOMY LH: Desempeño estable  
+La cabina Economy de LH mantuvo desempeño estable durante la jornada del 2025-10-01, con un NPS de 20.56 pts (L7d) y una variación de +3.52 pts. No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción.
+
+BUSINESS LH: Impacto de la flota A350  
+La cabina Business de LH sufrió una caída de 6.77 puntos, pasando de 25.82 pts (L7d) a 19.05 pts. Los drivers principales fueron las bajas calificaciones en vuelos operados con A350 estándar (NPS –10.0) frente a las muy altas en A350 next (100.0), con dispersión de 110 pts; la ruta EZE–MAD (n=3, NPS 100.0) no presentó incidentes ni verbatims.
+
+PREMIUM LH: Sobrerrepresentación de A350 next  
+El segmento Premium de LH experimentó un alza de 33.96 puntos, subiendo de 10.48 pts (L7d) a 44.44 pts. El efecto dominante fue la mayor proporción de pasajeros en A350 next (NPS 100.0) y residentes en América Sur (66.7), con una dispersión de 100 y 66.7 pts respectivamente, sin rutas con muestra suficiente ni incidencias reportadas.
+
+---
+
+✅ **ANÁLISIS COMPLETADO**
+
+- **Nodos procesados:** 0
+- **Pasos de análisis:** 5
+- **Metodología:** Análisis conversacional paso a paso
+- **Resultado:** Interpretación jerárquica completa con razonamiento estructurado
+
+*Este análisis utiliza metodología conversacional para simular el razonamiento paso a paso de un analista experto, similar al proceso de investigación causal.*
+🚨 Anomalías detectadas: daily_analysis
+
+📅 2025-09-30 to 2025-09-30:
+📊 **ANÁLISIS JERÁRQUICO COMPLETO DE ANOMALÍAS NPS**
+
+**Nodos analizados:** 0 ()
+
+---
+
+## 📊 DIAGNÓSTICO A NIVEL DE EMPRESA
+
+A. Economy Short Haul  
+• Existen ambos nodos SH/Economy/IB y SH/Economy/YW, y ambos muestran anomalías positivas de magnitud similar (+16.7 pts y +17.5 pts).  
+• Los drivers principales convergen: predominio de viajeros Leisure, fuerte aporte de code-share “Others” e IB con alta valoración, sin incidencias operativas ni datos negativos.  
+• Diagnóstico: causa común a la cabina Economy SH, no específica de compañía.
+
+B. Business Short Haul  
+• Existen ambos nodos SH/Business/IB (+16.3 pts) y SH/Business/YW (–29.6 pts).  
+• Los patrones divergen radicalmente: IB eleva el NPS gracias a muestras pequeñas con calificaciones perfectas en A319/A321 y regiones con Leisure destacado; YW cae bruscamente por probables gaps de muestreo o errores en captura de feedback.  
+• Diagnóstico: causas específicas por compañía en la cabina Business SH.
+
+---
+
+## 💺 DIAGNÓSTICO A NIVEL DE CABINA
+
+Short Haul – diagnóstico de cabinas  
+Economy SH y Business SH divergen: Economy registra una anomalía muy positiva (+16.4 pts) mientras que el nodo Business SH se mantiene dentro del rango normal (+5.6 pts), aunque internamente oculta una alza en IB y una caída en YW. Esto indica causas específicas por cabina dentro de Short Haul, con Economy altamente reactiva y Business mostrando un patrón mixto.
+
+Long Haul – diagnóstico de cabinas  
+Economy LH, Business LH y Premium LH presentan tres reacciones distintas (Economy +9.9 pts, Business –9.8 pts, Premium estable +6.2 pts). No hay convergencia: cada cabina responde de forma independiente a los drivers operativos y de perfil. Premium actúa como amortiguador ante las variaciones de Economy y Business, pero no existe un patrón común al radio Long Haul.
+
+---
+
+## 🌎 DIAGNÓSTICO GLOBAL POR RADIO
+
+Ambos radios muestran anomalías positivas pero con orígenes diferentes, y el Global consolida ambos efectos sin cancelaciones. Short Haul (+15.3) se impulsó sobre todo por Economy (viajeros Leisure, code-share “Others”, residencias en España) mientras que Long Haul (+7.0) lo hizo por la mejoría en Economy (A321XLR/A332, América Centro/Norte) pese a la caída en Business. El nodo Global (+12.4) simplemente agrega estos dos impactos, amplificando la tendencia al alza sin neutralizaciones.
+
+---
+
+## 📋 ANÁLISIS DE CAUSAS DETALLADO
+
+1. Causa: Desplazamiento del mix hacia pasajeros Leisure  
+A. Naturaleza de la causa  
+   • Hipótesis: Un mayor peso relativo de viajeros de ocio, cuyo NPS medio supera sistemáticamente al de business, elevó el promedio general sin cambios operativos detectables.  
+
+B. Evidencia consolidada y alcance  
+   • Segmento más grande afectado: Global / Short Haul / Economy  
+   • Output causal detallado (SH / Economy):  
+     – NPS del día: 43.77 vs baseline 27.35 (+16.42 pts)  
+     – Business: NPS 37.9 (muestra menor) vs Leisure: NPS 45.9 (n=288)  
+     – Rutas: MAD–NCE NPS 16.7 (n=6), sin incidentes NCS  
+     – Verbatims: ninguno registrado  
+   • Alcance: afecta a todos los subsegmentos bajo Short Haul / Economy (incluye IB y YW)  
+
+2. Causa: Alto scoring en vuelos code-share “Others”  
+A. Naturaleza de la causa  
+   • Hipótesis: Las operaciones compartidas con aerolíneas fuera de alianzas tradicionales obtuvieron calificaciones superiores, sesgando al alza el NPS de Economy en ambos radios.  
+
+B. Evidencia consolidada y alcance  
+   • Segmento más grande afectado: Global / Short Haul / Economy  
+   • Output causal detallado (SH / Economy):  
+     – CodeShare “Others”: NPS = 80.0 vs AA/BA = 20.0 (variabilidad 60 pts)  
+     – NPS general del nodo: 43.77 vs baseline 27.35  
+     – Sin métricas operativas ni incidentes NCS reportados  
+   • Alcance: comprensivo de todos los subsegmentos bajo Short Haul / Economy (incluye IB y YW)  
+
+3. Causa: Experiencia diferencial por tipo de flota (A332 / A321XLR)  
+A. Naturaleza de la causa  
+   • Hipótesis: La oferta de aeronaves con configuración y servicio percibidos como superiores (A321XLR en LH; A332 en SH) elevó sustancialmente la satisfacción en Economy.  
+
+B. Evidencia consolidada y alcance  
+   • Segmento más grande afectado: Global / Short Haul / Economy  
+   • Output causal detallado (SH / Economy):  
+     – Fleet: A332 NPS = 66.7 vs A350 C NPS = 25.0 (variabilidad 41.7 pts)  
+     – NPS general nodo: 43.77 vs baseline 27.35  
+     – Rutas sin incidentes NCS; operativa no disponible  
+   • Alcance: todos los subsegmentos bajo Short Haul / Economy (incluye IB y YW)  
+
+4. Causa: Gap de muestreo y captura de feedback en Business SH / YW  
+A. Naturaleza de la causa  
+   • Hipótesis: Volumen de encuestas insuficiente o fallos en la recolección generaron un NPS cero atípico, no atribuible a calidad real de servicio.  
+
+B. Evidencia consolidada y alcance  
+   • Segmento afectado: Global / Short Haul / Business / YW  
+   • Output causal detallado (SH / Business / YW):  
+     – NPS: 0.0 vs baseline 29.58 (–29.58 pts)  
+     – Operativa: sin datos; incidentes NCS: 0; verbatims: 0  
+     – Rutas: ninguna alcanzó el mínimo de encuestas  
+   • Alcance: limita-miento exclusivo de este subsegmento (no afecta a IB)  
+
+5. Causa: Mala valoración de A350 next en Business Long Haul  
+A. Naturaleza de la causa  
+   • Hipótesis: Problemas de experiencia a bordo o configuración en A350 next deterioraron la satisfacción de clientes Business en LH, arrastrando el NPS de ese segmento.  
+
+B. Evidencia consolidada y alcance  
+   • Segmento afectado: Global / Long Haul / Business  
+   • Output causal detallado (LH / Business):  
+     – NPS: 16.0 vs baseline 25.82 (–9.82 pts)  
+     – Flota: A350 next NPS = –75.0 (4 encuestas) vs A332 NPS = 60.0 (5 encuestas)  
+     – Ruta EZE–MAD: NPS = 100.0 (3 encuestas)  
+     – Operativa e incidentes: no disponibles; verbatims: ninguno  
+   • Alcance: extensión a todo Long Haul / Business (incluye todos los trayectos en A350 next)
+
+---
+
+## 📋 SÍNTESIS EJECUTIVA FINAL
+
+📈 SÍNTESIS EJECUTIVA:  
+El NPS global del 30-sep-2025 subió de 24.99 a 37.42 (+12.43 pts) gracias al empuje combinado de Short Haul (+15.28 pts, de 29.14 a 44.42) y Long Haul (+7.02 pts, de 17.87 a 24.89). En Short Haul, Economy fue el principal motor con un salto de 27.35 a 43.77 (+16.42 pts) fruto de un mayor peso de viajeros Leisure (45.9 vs 37.9 en Business), code-shares “Others” con NPS 80.0 y flotas A332 con 66.7 pts. Business SH aportó un alza moderada de 44.38 a 50.00 (+5.62 pts) pero ocultó diferencias extremas: IB subió de 51.44 a 67.74 (+16.30 pts) mientras que YW cayó de 29.58 a 0.00 (-29.58 pts) por un probable gap de muestreo sin rutas ni verbatims. En Long Haul, Economy avanzó de 17.04 a 26.92 (+9.88 pts) impulsada por Leisure (26.6 vs 11.5 en Business), flotas A321XLR/A332 y code-share “Others” (75.0), mientras que Business retrocedió de 25.82 a 16.00 (-9.82 pts) por la mala valoración del A350 next (-75.0), pese a la ruta EZE-MAD (100.0). Premium LH se mantuvo estable con un alza de 10.48 a 16.67 (+6.18 pts), dentro de la variación esperada.  
+
+Las rutas más afectadas incluyen MAD–NCE en Economy SH (16.7, n=6) que no explica el alza global, BCN–MAD en Business SH IB con NPS 100.0 (n=4), DFW–MAD en Economy LH (25.0, n=8) de impacto neutral y EZE–MAD en Business LH (100.0, n=3) insuficiente para contrarrestar la caída del A350 next. Los grupos más reactivos fueron los viajeros Leisure, los vuelos code-share “Others” y los pasajeros en flotas A332/A321XLR, mientras que los business travelers en A350 next (LH) y el subsegmento YW (SH) mostraron retrocesos atribuibles a problemas de experiencia y muestreo.
+
+ECONOMY SH: Motor de alza  
+La cabina Economy SH durante la semana del 30-sep-2025 registró un NPS de 43.77 (30-sep-2025) con una variación de +16.42 puntos vs L7d. IB pasó de 23.89 a 40.55 (+16.66 pts vs L7d) y YW de 33.93 a 51.40 (+17.47 pts vs L7d). La causa principal fue el mayor peso de viajeros Leisure (45.9 vs 37.9 en Business), complementada por el alto scoring de code-shares “Others” (80.0) y la excelente valoración de la flota A332 (66.7 pts). Rutas como MAD–NCE (16.7, n=6) no reportaron incidentes NCS ni verbatims y no explican por sí solas el alza, mientras que los perfiles más reactivos incluyen pasajeros Leisure y residentes en España.
+
+BUSINESS SH: Patronaje mixto  
+El segmento Business SH durante la semana del 30-sep-2025 registró un NPS de 50.00 (30-sep-2025) con una variación de +5.62 puntos vs L7d. IB saltó de 51.44 a 67.74 (+16.30 pts vs L7d) gracias a valoraciones perfectas en rutas como BCN–MAD (100.0, n=4) y flotas A319/A321 (100.0), mientras que YW cayó de 29.58 a 0.00 (-29.58 pts vs L7d) por un probable gap de muestreo sin rutas con encuestas ni verbatims. Esta evolución refleja focos de alta satisfacción en IB y problemas de captura de feedback en YW.
+
+ECONOMY LH: Mejora sostenida  
+La cabina Economy LH durante la semana del 30-sep-2025 registró un NPS de 26.92 (30-sep-2025) con una variación de +9.88 puntos vs L7d. La causa principal fue el mejor desempeño de viajeros Leisure (26.6 vs 11.5 en Business), reforzada por flotas A321XLR (50.0) y A332 (42.6), así como por code-shares “Others” (75.0). La ruta DFW–MAD (25.0, n=8) tuvo un impacto neutral, sin incidentes NCS ni verbatims, mientras que residentes en América Centro y Norte mostraron los puntajes más elevados.
+
+BUSINESS LH: Retroceso puntual  
+La cabina Business LH durante la semana del 30-sep-2025 registró un NPS de 16.00 (30-sep-2025) con una variación de ‑9.82 puntos vs L7d. Los drivers principales fueron la mala valoración de la experiencia en el A350 next (-75.0, n=4 encuestas) y la dispersión positiva en A332 (60.0, n=5). La ruta EZE–MAD (100.0, n=3) y el segmento Leisure (19.0) no compensaron la caída. No se disponen de datos operativos ni verbatims para matizar.
+
+PREMIUM LH: Rendimiento estable  
+El segmento Premium LH durante la semana del 30-sep-2025 mantuvo desempeño estable, registrando un NPS de 16.67 (30-sep-2025) con una variación de +6.18 puntos vs L7d, dentro del rango normal. No se detectaron cambios significativos ni drivers operativos o cualitativos adicionales.
+
+---
+
+✅ **ANÁLISIS COMPLETADO**
+
+- **Nodos procesados:** 0
+- **Pasos de análisis:** 5
+- **Metodología:** Análisis conversacional paso a paso
+- **Resultado:** Interpretación jerárquica completa con razonamiento estructurado
+
+*Este análisis utiliza metodología conversacional para simular el razonamiento paso a paso de un analista experto, similar al proceso de investigación causal.*
+🚨 Anomalías detectadas: daily_analysis
+
+📅 2025-09-29 to 2025-09-29:
+📊 **ANÁLISIS JERÁRQUICO COMPLETO DE ANOMALÍAS NPS**
+
+**Nodos analizados:** 0 ()
+
+---
+
+## 📊 DIAGNÓSTICO A NIVEL DE EMPRESA
+
+Economy Short Haul – Causa específica de compañía  
+• Existen ambos nodos SH/Economy/IB (–1.1 pts) y SH/Economy/YW (–11.3 pts).  
+• IB refleja un impacto menor ligado a la flota A33ACMI y residencia en América Centro, sin evidencia operativa.  
+• YW sufre una caída pronunciada centrada en la ruta BOD–MAD y en pasajeros de codeshare AA/VY residentes en América Sur.  
+
+Business Short Haul – Causa específica de compañía  
+• Existen ambos nodos SH/Business/IB (+7.8 pts) y SH/Business/YW (–24.6 pts).  
+• IB muestra una subida por sesgo de muestra (predominio de A320/A321 y clientes europeos).  
+• YW presenta una fuerte caída atribuible a pasajeros Leisure y residentes en España, sin incidentes operativos.
+
+---
+
+## 💺 DIAGNÓSTICO A NIVEL DE CABINA
+
+Short Haul – Patrón específico de cabina con reactividad diferencial  
+• Economy SH (–4.6 pts) y Business SH (–8.2 pts) ambos caen, pero muestran drivers distintos y signos opuestos en IB (Economy IB –1.1 vs Business IB +7.8).  
+• YW amplifica la caída en ambas (–11.3 vs –24.6), pero las rutas y perfiles afectados divergen entre Economy (BOD–MAD, codeshares AA/VY) y Business (pasajeros Leisure, España).  
+→ La causa no es común a todo SH: cada cabina reacciona de forma diferente y requiere análisis y acciones específicas.
+
+Long Haul – Patrón específico de cabina con roles distintos  
+• Economy LH sufre una caída moderada (–2.6 pts) centrada en MAD–NRT,  
+• Business LH se desploma (–30.8 pts) por MAD–MEX y flota A332 en Business,  
+• Premium LH baja también fuerte (–22.2 pts) por un nicho reducido (España-A350 next-AA).  
+→ No hay un driver único para todo LH: cada cabina muestra un nivel de reactividad propio (Economy actúa como amortiguador parcial, Business es la más impactada) y debe abordarse con planes de acción diferenciados.
+
+---
+
+## 🌎 DIAGNÓSTICO GLOBAL POR RADIO
+
+Ambos radios están afectados por anomalías negativas con drivers distintos (SH: flota A33ACMI y rutas regionales; LH: rutas intercontinentales y producto Business/Premium), y el Global consolida estos impactos en –5,5 pts, atenuando los extremos de cada radio pero reflejando coherentemente un deterioro general.
+
+---
+
+## 📋 ANÁLISIS DE CAUSAS DETALLADO
+
+A continuación, presento las cinco causas raíz identificadas, el segmento “más grande” afectado por cada una y la explicación consolidada con la evidencia disponible. En cada caso se indica que la causa impacta a todos los subsegmentos bajo el nodo correspondiente.
+
+1) Causa: Deficiencias en operación con socios en la ruta DOH–MAD  
+   A. Naturaleza  
+     • Hipótesis: Fallos en la coordinación y ejecución de servicio con partners (QR y “Others”) en la ruta DOH–MAD, que han derivado en una percepción muy negativa sin incidentes formales reportados.  
+   B. Evidencia consolidada y alcance  
+     • Segmento más grande: Global (todas las cabinas y radios)  
+     • Output causal original (Global):  
+       – NPS día: 19,53 vs baseline 24,99 → –5,46 pts  
+       – Única ruta anómala: DOH–MAD con NPS –37,5 (n=8)  
+       – CodeShare QR: NPS –50,0; Others: NPS –75,0  
+     • Impacto: Afecta a todos los subsegmentos Global/LH y Global/SH, explicando gran parte de la desviación negativa global.  
+
+2) Causa: Experiencia insatisfactoria en Business Long Haul – ruta MAD–MEX (flota A332)  
+   A. Naturaleza  
+     • Hipótesis: Producto Business en aeronaves A332 bajo estándares inferiores (confort, catering o servicio) en MAD–MEX, sin incidentes formales registrados.  
+   B. Evidencia consolidada y alcance  
+     • Segmento más grande: Global/LH/Business (abarca Business/Work y Leisure)  
+     • Output causal original (Global/LH/Business):  
+       – NPS día: –5,0 vs baseline 25,82 → –30,82 pts  
+       – Ruta crítica: MAD–MEX con NPS 25,0 (n=4)  
+       – Subperfiles: Business/Work NPS –33,3 (n=3); Leisure NPS 0,0 (n=17)  
+       – Flota A332: NPS –50,0 (n=8)  
+       – Residencia América Norte: NPS –100,0 (n=3)  
+     • Impacto: Afecta a todos los subsegmentos bajo Global/LH/Business, siendo el driver principal de la gran caída en la cabina Business LH.  
+
+3) Causa: Deficiencias en Economy Long Haul – ruta MAD–NRT (codeshare QR)  
+   A. Naturaleza  
+     • Hipótesis: Problemas de experiencia (conexiones, servicio a bordo) en Economy LH de la ruta MAD–NRT, sin registros de demoras o incidencias formales.  
+   B. Evidencia consolidada y alcance  
+     • Segmento más grande: Global/LH/Economy  
+     • Output causal original (Global/LH/Economy):  
+       – NPS día: 14,43 vs baseline 17,04 → –2,62 pts  
+       – Ruta crítica: MAD–NRT con NPS 0,0 (n=5)  
+       – Business/Work en Economy: NPS –4,8 (n=21)  
+       – CodeShare QR: NPS –44,4 (n=9); Others: NPS –66,7 (n=3)  
+     • Impacto: Afecta por igual a Economy IB y Economy YW en Long Haul, explicando la caída moderada de este nodo.  
+
+4) Causa: Configuración y servicio en flota A33ACMI en Short Haul/Economy  
+   A. Naturaleza  
+     • Hipótesis: Configuración de cabina A33ACMI (asientos, limpieza, amenities) en rutas cortas deficiente, afectando la percepción de confort sin incidentes formales.  
+   B. Evidencia consolidada y alcance  
+     • Segmento más grande: Global/SH/Economy  
+     • Output causal original (Global/SH/Economy):  
+       – NPS día: 22,73 vs baseline 27,35 → –4,62 pts  
+       – Ruta crítica: MAD–MUC con NPS –28,6 (n=7)  
+       – Flota A33ACMI: NPS –61,1 (n=18)  
+       – CodeShare VY: NPS –33,3; Región Asia: NPS –12,5  
+     • Impacto: Afecta a todos los subsegmentos SH/Economy (IB y YW), siendo el principal driver de la caída en Economy SH.  
+
+5) Causa: Insatisfacción de pasajeros Leisure y residentes en España en Short Haul/Business/YW  
+   A. Naturaleza  
+     • Hipótesis: Servicio y comunicación insuficientes para viajeros Leisure y residentes en España en rutas domésticas/corto radio (posible brecha en expectativas de ocio).  
+   B. Evidencia consolidada y alcance  
+     • Segmento más grande: Global/SH/Business/YW  
+     • Output causal original (Global/SH/Business/YW):  
+       – NPS día: 5,0 vs baseline 29,58 → –24,58 pts  
+       – Ruta con datos: BOD–MAD NPS 66,7 (n=3)  
+       – Business/Work: NPS 22,2 (n=9); Leisure: NPS –9,1 (n=11)  
+       – Residencia España: NPS 0,0 (n=9)  
+       – Flota CRJ: NPS 5,0 (n=20); CodeShare IB: NPS 10,5 (n=19)  
+     • Impacto: Afecta exclusivamente a YW dentro de SH/Business, generando la mayor caída de ese subnodo.
+
+---
+
+## 📋 SÍNTESIS EJECUTIVA FINAL
+
+📈 SÍNTESIS EJECUTIVA:
+
+Durante el día 2025-09-29 se registraron bajadas de NPS en casi todos los nodos del árbol: el NPS global cayó a 19,53 (–5,46 pts vs L7d), mientras que en Short Haul bajó a 24,15 (–4,98 pts vs L7d) y en Long Haul descendió a 10,92 (–6,94 pts vs L7d). Los impactos más severos se localizaron en Business LH (–30,82 pts, NPS –5,00 vs 25,82 vs L7d) y Premium LH (–22,25 pts, NPS –11,76 vs 10,48 vs L7d), así como en Business SH/YW (–24,58 pts, NPS 5,00 vs 29,58 vs L7d), compensado parcialmente por la subida en Business SH/IB (+7,82 pts, NPS 59,26 vs 51,44 vs L7d). Entre las causas identificadas destacan: deficiencias en la operación codeshare en DOH–MAD (Global), problemas de producto y confort en Business LH MAD–MEX (flota A332), insatisfacción en Economy LH MAD–NRT (codeshare QR), configuración inadecuada de cabina A33ACMI en Economy SH MAD–MUC, y brechas en servicio a pasajeros Leisure y residentes en España en Business SH/YW.
+
+Las rutas más afectadas fueron DOH–MAD con un NPS de –37,5 (n=8), MAD–MEX con 25,0 (n=4), MAD–NRT con 0,0 (n=5), MAD–MUC con –28,6 (n=7) y BOD–MAD con 0,0 (n=4). Los perfiles más reactivos incluyen clientes en codeshare QR y Others, viajeros Business/Work de Norteamérica y Asia, y pasajeros Leisure residentes en España, así como usuarios de flotas A332 y A33ACMI.
+
+ECONOMY SH: Caída moderada por flota A33ACMI  
+La cabina Global/SH/Economy IB registró un NPS de 22,78 (–1,11 pts vs L7d), mientras que YW cayó a 22,63 (–11,31 pts vs L7d), resultando en un NPS consolidado de 22,73 (–4,62 pts vs L7d). La principal causa fue la experiencia deficiente en aviones A33ACMI en la ruta MAD–MUC (NPS –28,6; n=7) y el impacto más grave en flota A33ACMI (NPS –61,1; n=18). Los perfiles más afectados son pasajeros en codeshare VY y viajeros procedentes de Asia.
+
+BUSINESS SH: Divergencia marcada entre IB y YW  
+En Global/SH/Business IB el NPS subió hasta 59,26 (+7,82 pts vs L7d) por un sesgo de muestra positiva de flotas A320/A321 y respuesta de clientes europeos, mientras que YW desplomó su NPS a 5,00 (–24,58 pts vs L7d) principalmente por insatisfacción de pasajeros Leisure y residentes en España. El NPS neto del segmento se situó en 36,17 (–8,21 pts vs L7d). Destacan las rutas FCO–MAD (NPS 100, n=3) para IB y BOD–MAD (NPS 66,7, n=3) para YW, y los modelos CRJ y A320neo concentraron las quejas más intensas.
+
+ECONOMY LH: Impacto asociado a ruta MAD–NRT  
+La cabina Global/LH/Economy presentó un NPS de 14,43 (–2,62 pts vs L7d) focalizado en la ruta MAD–NRT (NPS 0,0; n=5). Los pasajeros Business/Work en Economy mostraron un NPS de –4,8 (n=21) y los vuelos en codeshare QR cayeron a –44,4 (n=9), evidenciando problemas de conexión y servicio a bordo sin incidentes formales.
+
+BUSINESS LH: Caída severa por producto Business en A332  
+Global/LH/Business experimentó un NPS de –5,00 (–30,82 pts vs L7d), centrado en vuelos MAD–MEX (NPS 25,0; n=4) operados con A332, donde clientes Business/Work cayeron a –33,3 (n=3) y residentes en América Norte a –100,0 (n=3). No se reportaron incidentes formales, apuntando a deficiencias de confort y servicio a bordo.
+
+PREMIUM LH: Insatisfacción en nicho reducido España-A350 next  
+En Global/LH/Premium el NPS bajó a –11,76 (–22,25 pts vs L7d), a pesar del buen desempeño de la ruta MAD-PTY (NPS 75,0; n=4). La peor valoración vino de clientes residentes en España (NPS –40,0; n=5) volando en A350 next y en codeshare AA (NPS –66,7; n=3), indicando brechas en el producto y coordinación con AA.
+
+---
+
+✅ **ANÁLISIS COMPLETADO**
+
+- **Nodos procesados:** 0
+- **Pasos de análisis:** 5
+- **Metodología:** Análisis conversacional paso a paso
+- **Resultado:** Interpretación jerárquica completa con razonamiento estructurado
+
+*Este análisis utiliza metodología conversacional para simular el razonamiento paso a paso de un analista experto, similar al proceso de investigación causal.*
+🚨 Anomalías detectadas: daily_analysis
+
+📅 2025-09-28 to 2025-09-28:
+📊 **ANÁLISIS JERÁRQUICO COMPLETO DE ANOMALÍAS NPS**
+
+**Nodos analizados:** 0 ()
+
+---
+
+## 📊 DIAGNÓSTICO A NIVEL DE EMPRESA
+
+A. Economy Short Haul  
+– Existen ambos nodos: SH/Economy/IB y SH/Economy/YW.  
+– Patrón divergente: IB muestra un descenso de –17.9 pts (anomalía) ligado a flota A33ACMI y clientes de Asia/América Sur en DUS–MAD; YW se mantiene estable (+5.7 pts).  
+Diagnóstico: la causa es específica de IB, no compartida con YW.  
+
+B. Business Short Haul  
+– Existen ambos nodos: SH/Business/IB y SH/Business/YW.  
+– Ambos están dentro de variación normal (IB +0.3 pts; YW +3.7 pts) y comparten un comportamiento convergente.  
+Diagnóstico: no hay anomalía en Business SH; IB y YW convergen en su performance, por lo que no aplica causa localizada.
+
+---
+
+## 💺 DIAGNÓSTICO A NIVEL DE CABINA
+
+Short Haul: Economy SH cae –9.8 pts mientras Business SH permanece dentro de variación normal, por lo que la causa es específica de Economy y no compartida por toda la cabina.  
+Long Haul: Economy (–11.6 pts), Business (–0.8 pts) y Premium (–24.1 pts) muestran todos anomalía negativa, indicando una causa común al radio LH; sin embargo, Business actúa como “amortiguador” con la menor caída y Premium es la más sensible.
+
+---
+
+## 🌎 DIAGNÓSTICO GLOBAL POR RADIO
+
+Ambos radios registran anomalías negativas pero con drivers parcialmente distintos: Short Haul se ve impactado por problemas localizados en Economy IB (ruta AGP–MLN, flota A33ACMI, CodeShare Others) mientras que Long Haul sufre un descenso generalizado en todas las cabinas ligado a flotas y socios de código. El nodo Global refleja de forma coherente el impacto agregado de ambas radios, sin que sus efectos se cancelen.
+
+---
+
+## 📋 ANÁLISIS DE CAUSAS DETALLADO
+
+1. Causa A: Problemas de confort y servicio en vuelos IB/A33ACMI (Short Haul Economy IB)  
+A. NATURALEZA DE LA CAUSA  
+   • Hipótesis: Deficiencias de confort y atención a bordo en aviones A33ACMI operados por IB en código compartido “Others” generan fuerte insatisfacción.  
+
+B. EVIDENCIA CONSOLIDADA Y ALCANCE  
+   • Segmento más grande: Global / SH / Economy / IB  
+   • NPS actual: 6.01 pts vs baseline 23.89 pts (–17.89 pts)  
+   • Ruta crítica: DUS–MAD (NPS 0.0, n=11)  
+   • Flota:  
+     – A33ACMI: NPS –83.3 (n no disponible)  
+     – A321: NPS –14.8  
+   • Región de residencia:  
+     – Asia: NPS –80.0  
+     – América Sur: NPS –21.4  
+   • Incidentes operativos: ninguno registrado  
+   • Verbatims: no disponibles  
+   • Alcance: Afecta a todos los subsegmentos bajo SH/Economy/IB (toda la cabina Economy en IB Short Haul).  
+
+2. Causa B: Disparidad de experiencia por flota y CodeShare en Economy Long Haul  
+A. NATURALEZA DE LA CAUSA  
+   • Hipótesis: Variaciones de confort y estándares de servicio en A350-C y A333, junto a inconsistencias con partners BA y AA, arrastran la satisfacción.  
+
+B. EVIDENCIA CONSOLIDADA Y ALCANCE  
+   • Segmento más grande: Global / LH / Economy (Leisure, n=205)  
+   • NPS actual: 5.46 pts vs baseline 17.04 pts (–11.58 pts)  
+   • Ruta crítica: MAD–UIO (NPS 7.7, n=13)  
+   • Perfiles de cliente:  
+     – Leisure: NPS 5.9 (n=205)  
+     – Business: NPS 3.0 (n=33)  
+   • Flota:  
+     – A350-C: NPS –35.3 (n=17)  
+     – A333   : NPS –30.8 (n=39)  
+   • Región de residencia:  
+     – Europa: NPS –50.0 (n=6)  
+     – Norteamérica: NPS –14.6 (n=48)  
+   • CodeShare:  
+     – BA: NPS –66.7 (n=3)  
+     – AA: NPS –38.5 (n=26)  
+   • Incidentes operativos: ninguno registrado  
+   • Verbatims: no disponibles  
+   • Alcance: Afecta a todos los subsegmentos bajo LH/Economy (toda la cabina Economy en Long Haul).  
+
+3. Causa C: Inconsistencias de CodeShare y flota en Premium Long Haul  
+A. NATURALEZA DE LA CAUSA  
+   • Hipótesis: Experiencia muy dispar en la cabina Premium debido a vuelos BOG–MAD operados mayoritariamente por AA y flota A333, afectando especialmente a clientes de Norteamérica.  
+
+B. EVIDENCIA CONSOLIDADA Y ALCANCE  
+   • Segmento más grande: Global / LH / Premium (flota A333, n=8)  
+   • NPS actual: –13.64 pts vs baseline 10.48 pts (–24.12 pts)  
+   • Ruta crítica: BOG–MAD (NPS 33.3, n=3)  
+   • CodeShare:  
+     – AA: NPS –100.0 (n=4)  
+     – IB: NPS +18.8 (n=4)  
+   • Flota:  
+     – A333: NPS –50.0 (n=8)  
+     – A350 next: NPS +60.0 (n=5)  
+   • Región de residencia:  
+     – Norteamérica: NPS –66.7 (n=6)  
+   • Incidentes operativos: ninguno registrado  
+   • Verbatims: no disponibles  
+   • Alcance: Afecta a todos los subsegmentos bajo LH/Premium (toda la cabina Premium en Long Haul).
+
+---
+
+## 📋 SÍNTESIS EJECUTIVA FINAL
+
+📈 SÍNTESIS EJECUTIVA:
+
+El 28-sep-2025 se registraron ocho bajadas de NPS en los 12 segmentos analizados. A nivel Global, el NPS descendió de 24.99 a 14.76 (−10.23 pts vs L7d), reflejo de un deterioro tanto en Long Haul (de 17.87 a 5.36, −12.51 pts) como en Short Haul (de 29.14 a 20.25, −8.89 pts). La cabina Economy SH/IB sufrió la caída más aguda, con un NPS que pasó de 23.89 a 6.01 (−17.89 pts vs L7d) por valoraciones muy bajas en la ruta DUS–MAD operada en A33ACMI y code-share “Others”, mientras que Economy SH/YW mejoró de 33.93 a 39.60 (+5.66 pts vs L7d). En Economy LH el NPS retrocedió de 17.04 a 5.46 (−11.58 pts vs L7d) debido a problemas de confort en flotas A350-C (NPS –35.3) y A333 (NPS –30.8) y a inconsistencias con socios BA (NPS –66.7) y AA (NPS –38.5) en MAD–UIO. Premium LH registró la mayor bajada, de 10.48 a –13.64 (−24.12 pts vs L7d) en vuelos BOG–MAD con AA y A333. Business LH experimentó un suave descenso de 25.82 a 25.00 (−0.82 pts vs L7d), vinculado a la insatisfacción de viajeros de negocio (NPS 0.0) y al desempeño de la flota A333 en EZE–MAD, mientras Business SH se mantuvo estable (44.38 a 44.68, +0.30 pts vs L7d).
+
+Las rutas más afectadas fueron DUS–MAD (SH/Economy IB, NPS 0.0, n=11), MAD–UIO (LH/Economy, NPS 7.7, n=13), BOG–MAD (LH/Premium, NPS 33.3, n=3) y EZE–MAD (LH/Business, NPS 100.0, n=3). Los clientes más reactivos incluyen pasajeros de Asia (NPS –80.0) y América Sur (NPS –21.4) en SH/Economy IB, residentes en Europa (NPS –50.0) y Norteamérica (NPS –14.6) en LH/Economy, y viajeros de Norteamérica (NPS –66.7) en LH/Premium.
+
+ECONOMY SH: Desempeño divergente por compañía  
+La cabina Economy SH mostró un comportamiento divergente durante la semana del 28-sep-2025, con IB en 6.01 pts (bajada de 17.89 pts vs L7d) y YW en 39.60 pts (subida de 5.66 pts vs L7d), resultando en un NPS consolidado de 17.59 pts (−9.76 pts vs L7d). La causa principal fue la experiencia muy negativa en la ruta DUS–MAD operada en flota A33ACMI y bajo code-share “Others”, que afectó especialmente a pasajeros de Asia (NPS –80.0) y América Sur (NPS –21.4). No se registraron incidentes formales, lo que sugiere problemas de confort y servicio a bordo en A33ACMI para IB.
+
+BUSINESS SH: Desempeño estable en ambas compañías  
+La cabina Business SH mantuvo desempeño estable durante la semana del 28-sep-2025, con IB en 51.72 pts (subida de 0.29 pts vs L7d) y YW en 33.33 pts (subida de 3.75 pts vs L7d), sumando un NPS de 44.68 pts (+0.30 pts vs L7d). No se detectaron cambios significativos ni incidentes operativos que alteraran la satisfacción; los niveles de servicio y confort permanecieron consistentes en las rutas monitorizadas.
+
+ECONOMY LH: Deterioro generalizado por flota y CodeShare  
+La cabina Economy LH experimentó un deterioro de 11.58 pts durante la semana del 28-sep-2025, pasando de 17.04 a 5.46 pts (−11.58 pts vs L7d). Este retroceso se explica principalmente por bajas valoraciones en flota A350-C (NPS –35.3) y A333 (NPS –30.8), junto a inconsistencias en la experiencia con socios BA (NPS –66.7) y AA (NPS –38.5) en la ruta MAD–UIO (NPS 7.7). Los residentes en Europa (–50.0) y Norteamérica (–14.6) fueron los más sensibles, apuntando a deficiencias de confort y servicio a bordo.
+
+BUSINESS LH: Ligero descenso atribuible a perfiles de negocio y flota  
+La cabina Business LH registró un ligero descenso de 0.82 pts durante la semana del 28-sep-2025, pasando de 25.82 a 25.00 pts (−0.82 pts vs L7d). Esta bajada se vinculó a la insatisfacción de viajeros de negocio (NPS 0.0) frente a ocio (NPS 50.0) y al desempeño de la flota A333 (NPS –50.0) en la ruta EZE–MAD (NPS 100.0). Los residentes en España (NPS –25.0) mostraron mayor reactividad, sin incidentes operativos reportados.
+
+PREMIUM LH: Caída pronunciada impulsada por AA y flota A333  
+La cabina Premium LH sufrió un deterioro de 24.12 pts durante la semana del 28-sep-2025, descendiendo de 10.48 a –13.64 pts (−24.12 pts vs L7d). El principal driver fue la experiencia en vuelos BOG–MAD con code-share AA (NPS –100.0) operados en flota A333 (NPS –50.0), especialmente entre pasajeros de Norteamérica (NPS –66.7). La ausencia de incidentes formales indica problemas de servicio y equipamiento en A333 bajo AA.
+
+---
+
+✅ **ANÁLISIS COMPLETADO**
+
+- **Nodos procesados:** 0
+- **Pasos de análisis:** 5
+- **Metodología:** Análisis conversacional paso a paso
+- **Resultado:** Interpretación jerárquica completa con razonamiento estructurado
+
+*Este análisis utiliza metodología conversacional para simular el razonamiento paso a paso de un analista experto, similar al proceso de investigación causal.*
+🚨 Anomalías detectadas: daily_analysis
+
+📅 2025-09-27 to 2025-09-27:
+📊 **ANÁLISIS JERÁRQUICO COMPLETO DE ANOMALÍAS NPS**
+
+**Nodos analizados:** 0 ()
+
+---
+
+## 📊 DIAGNÓSTICO A NIVEL DE EMPRESA
+
+PASO 1 – DIAGNÓSTICO A NIVEL COMPAÑÍA (IB vs YW) EN SHORT HAUL
+
+A. Economy Short Haul  
+• Existen ambos nodos:  
+  – IB: anomalía positiva (+8,0 pts)  
+  – YW: anomalía negativa (–6,7 pts)  
+• Patrones y drivers distintos:  
+  – IB (+8 pts) adolece de falta de datos operativos y su mejora se infiere de rutas o flotas no registradas.  
+  – YW (–6,7 pts) principalmente arrastrada por la composición de clientes (Business/Work, CRJ, NA, codeshare AA).  
+Diagnóstico: Causa específica de compañía (IB vs YW divergen en drivers y evidencia).
+
+B. Business Short Haul  
+• Existen ambos nodos:  
+  – IB: anomalía negativa (–8,1 pts)  
+  – YW: anomalía positiva (+20,4 pts)  
+• Patrones y drivers distintos:  
+  – IB (–8,1 pts) impulsada por respuestas bajas de Leisure y residentes en América Norte.  
+  – YW (+20,4 pts) potenciada por perfiles Leisure y residentes en España.  
+Diagnóstico: Causa específica de compañía (IB vs YW divergen claramente en causas).
+
+---
+
+## 💺 DIAGNÓSTICO A NIVEL DE CABINA
+
+PASO 2 – DIAGNÓSTICO A NIVEL DE CABINA
+
+A. Short Haul  
+• Economy SH y Business SH muestran patrones divergentes en ambos casos (IB vs YW tienen anomalías opuestas).  
+• Esta divergencia es consistente en las dos cabinas: tanto Economy SH como Business SH presentan causas y drivers diferentes según la compañía.  
+• No hay cabina con menor reactividad: ambas reaccionan fuertemente y en sentido opuesto por aerolínea.  
+
+Diagnóstico SH: no hay un patrón común al radio; las causas son específicas por compañía dentro de cada cabina.
+
+B. Long Haul  
+• Economy LH, Business LH y Premium LH convergen en el mismo signo de anomalía (todas negativas).  
+• Existe una progresión lógica de reactividad: Premium (–6.1 pts) es la más sensible, Business (–0.8 pts) intermedia y Economy (–0.5 pts) la menos reactiva.  
+• Ninguna cabina amortigua totalmente el impacto; todas reflejan la misma causa subyacente.  
+
+Diagnóstico LH: existe una causa común al radio (impacto general en todas las clases), con respuesta diferencial según la cabina (Premium amplifica más la caída).
+
+---
+
+## 🌎 DIAGNÓSTICO GLOBAL POR RADIO
+
+Diagnóstico: causas mixtas/compensatorias – solo Long Haul muestra un deterioro uniforme en todas sus cabinas, mientras que en Short Haul las anomalías opuestas de IB (+) y YW (–) se anulan, dejando SH en rango normal y generando un leve efecto positivo en el Global.
+
+---
+
+## 📋 ANÁLISIS DE CAUSAS DETALLADO
+
+PASO 4 – ANÁLISIS PROFUNDO DE CAUSAS IDENTIFICADAS
+
+1. Causa A: Deterioro de la experiencia en Long Haul por inconsistencias de servicio en flotas y operaciones code-share  
+A. Naturaleza  
+  • Hipótesis: Problemas de coordinación y calidad de servicio en vuelos code-share (AY, AA, LATAM) y configuración de flota (A333, A350 next) que impactan uniformemente a todos los pasajeros de LH.  
+B. Evidencia consolidada y alcance  
+  • Segmento mayor: Global/LH/Economy (n=37, ruta EZE–MAD).  
+  • Output causal (Global/LH/Economy):  
+    – NPS día: 16.53 vs baseline 17.04 (–0.51 pts)  
+    – Ruta EZE–MAD con NPS 10.8 (n=37) sin incidentes NCS.  
+    – CodeShare AY: NPS –100 a +25; Fleet A350 next: –7.5; A333: –2.6; Región Europa: –27.8; Asia: –33.3; reactividad 65.9.  
+  • Afecta a todos los subsegmentos bajo Global/LH (Economy, Business, Premium).
+
+2. Causa B: Alza puntual en Short Haul/Economy/IB por mejoras no capturadas en datos operativos  
+A. Naturaleza  
+  • Hipótesis: Mejorías en rutas o servicio de flota IB no registradas en las fuentes (equipamiento, tripulación) que impulsan la satisfacción.  
+B. Evidencia consolidada y alcance  
+  • Segmento mayor: Global/SH/Economy/IB (n=9, ruta MAD–PRG).  
+  • Output causal (Global/SH/Economy/IB):  
+    – NPS día: 31.90 vs baseline 23.89 (+8.01 pts)  
+    – Ruta MAD–PRG: NPS 22.2 (n=9) sin incidentes NCS.  
+    – Fleet A33ACMI en MAD–PRG: NPS –22.2.  
+    – Ausencia de métricas operativas e incidentes documentados.  
+  • Afecta a todos los subsegmentos bajo Global/SH/Economy/IB.
+
+3. Causa C: Caída en Short Haul/Economy/YW por composición desfavorable de clientes  
+A. Naturaleza  
+  • Hipótesis: Predominio de pasajeros Business/Work, flota CRJ, residentes en NA y vuelos code-share AA con baja satisfacción lleva al descenso.  
+B. Evidencia consolidada y alcance  
+  • Segmento mayor: Global/SH/Economy/YW (n total ≈158).  
+  • Output causal (Global/SH/Economy/YW):  
+    – NPS día: 27.22 vs baseline 33.93 (–6.72 pts)  
+    – Ruta ALC–MAD: NPS 25.0 (n=4) sin incidencias.  
+    – User Type Leisure: 31.8; Business/Work: 6.9.  
+    – Fleet ATR: 58.8; CRJ: 23.4.  
+    – Region América Centro: 100.0; América Norte: –6.2.  
+    – CodeShare VY: 60.0; AA: –20.0.  
+  • Afecta a todos los subsegmentos bajo Global/SH/Economy/YW.
+
+4. Causa D: Caída en Short Haul/Business/IB por sobrerrepresentación de ocio y residentes en América Norte  
+A. Naturaleza  
+  • Hipótesis: Elevada proporción de pasajeros Leisure y de América Norte con puntuaciones bajas arrastra al segmento.  
+B. Evidencia consolidada y alcance  
+  • Segmento mayor: Global/SH/Business/IB (n=3–5 por ruta).  
+  • Output causal (Global/SH/Business/IB):  
+    – NPS día: 43.33 vs baseline 51.44 (–8.10 pts)  
+    – Ruta LHR–MAD: NPS 66.7 (n=3) sin incidentes.  
+    – Region Europa: 80.0; América Norte: 20.0.  
+    – Trip Purpose Business: 75.0; Leisure: 31.8.  
+  • Afecta a todos los subsegmentos bajo Global/SH/Business/IB.
+
+5. Causa E: Alza en Short Haul/Business/YW por predominio de Leisure y residentes en España  
+A. Naturaleza  
+  • Hipótesis: Sobrerrepresentación de perfiles Leisure y de residentes españoles con altas valoraciones impulsa el alza.  
+B. Evidencia consolidada y alcance  
+  • Segmento mayor: Global/SH/Business/YW (n=16 totales).  
+  • Output causal (Global/SH/Business/YW):  
+    – NPS día: 50.0 vs baseline 29.58 (+20.42 pts)  
+    – Ruta DUS–MAD: NPS 33.3 (n=3) sin incidencias.  
+    – Leisure: 66.7 (n=9); Business: 28.6 (n=7).  
+    – Residence España: 100.0 (n=6); Europa ex-España: 28.6 (n=7).  
+  • Afecta a todos los subsegmentos bajo Global/SH/Business/YW.
+
+---
+
+## 📋 SÍNTESIS EJECUTIVA FINAL
+
+📈 SÍNTESIS EJECUTIVA:
+
+En Long Haul se observó un deterioro generalizado: Economy pasó de 17.04 a 16.53 pts (–0.51 pts vs L7d), Business bajó de 25.82 a 25.00 pts (–0.82 pts vs L7d) y Premium cayó de 10.48 a 4.35 pts (–6.14 pts vs L7d). Estas subidas y bajadas de NPS se explican por inconsistencias en la calidad de servicio de flotas A333/A350 next y operaciones en code-share (AY, AA, LATAM), que afectaron a todos los subsegmentos de LH. En Short Haul, la cabina Economy de IB mejoró de 23.89 a 31.90 pts (+8.01 pts vs L7d) mientras que en YW cayó de 33.93 a 27.22 pts (–6.72 pts vs L7d), y en Business IB bajó de 51.44 a 43.33 pts (–8.10 pts vs L7d) en tanto que YW subió de 29.58 a 50.00 pts (+20.42 pts vs L7d). Estas divergencias por aerolínea reflejan drivers distintos: mejoras operativas no capturadas impulsan la subida de IB, y la composición de pasajeros (Business/Work, residentes NA y vuelos codeshare AA en Economy YW; Leisure y residentes España en Business YW) explica las caídas y subidas antagónicas.
+
+Entre las rutas más afectadas, CDG–MAD registró un NPS de –14.3 en Global Fleet, EZE–MAD fue la más baja en Economy LH con 10.8 pts (n=37), ALC–MAD cayó a 25.0 pts en Economy SH/YW, y DUS–MAD mostró 33.3 pts en Business SH/YW. Los grupos de clientes más reactivos fueron los pasajeros en flotas A333 y CRJ, los residentes en Norteamérica y Europa, y los usuarios de código compartido con AA y AY.
+
+**ECONOMY SH: Comportamientos divergentes en IB vs YW**  
+La cabina Economy de SH presentó un desempeño mixto durante la semana del 2025-09-27, registrando en IB un NPS de 31.90 pts (subida de 8.01 pts vs L7d) mientras que en YW cayó a 27.22 pts (bajada de 6.72 pts vs L7d). Esta polarización generó un NPS consolidado de 30.21 pts (+2.85 pts vs L7d). El alza en IB se atribuye a mejoras puntuales no capturadas en datos operativos, con una operación MAD–PRG que, pese a un NPS de ruta de 22.2 pts (n=9), impulsó el indicador. El descenso en YW responde a la preponderancia de pasajeros Business/Work (NPS 6.9 pts), el uso de flota CRJ (23.4 pts) y residentes en Norteamérica (–6.2 pts) en vuelos codeshare AA.
+
+**BUSINESS SH: Disparidad marcada entre IB y YW**  
+La cabina Business de SH experimentó una caída a 43.33 pts en IB (–8.10 pts vs L7d) y un alza a 50.00 pts en YW (+20.42 pts vs L7d), resultando en un NPS global de 45.65 pts (+1.27 pts vs L7d). En IB, la reducción se explica por la sobrerrepresentación de viajeros Leisure (31.8 pts) y residentes en América Norte (20.0 pts). En YW, el fuerte ascenso proviene del predominio de pasajeros Leisure (66.7 pts) y residentes en España (100.0 pts), pese a un desempeño modesto en la ruta DUS–MAD (33.3 pts, n=3).
+
+**ECONOMY LH: Deterioro por código compartido y flotas**  
+La cabina Economy de LH cayó de 17.04 a 16.53 pts (–0.51 pts vs L7d) el 27-sep, arrastrada por EZE–MAD, donde el NPS fue de 10.8 pts (n=37) sin incidentes formales. Las puntuaciones negativas de code-share AY (desde –100 hasta +25 pts), junto a flotas A350 next (–7.5 pts) y A333 (–2.6 pts) y la insatisfacción de residentes en Europa (–27.8 pts) y Asia (–33.3 pts), explican el descenso.
+
+**BUSINESS LH: Baja ligera por variabilidad regional**  
+La cabina Business de LH registró un NPS de 25.00 pts el 27-sep, disminuyendo 0.82 pts desde 25.82 pts en L7d. La ausencia de incidentes sugiere que la variabilidad regional fue el factor clave: Europa y América Norte mostraron valoraciones muy bajas (–50.0 y –4.5 pts), mientras que América Centro (100.0 pts) y América Sur (71.4 pts) mantuvieron el indicador.
+
+**PREMIUM LH: Fuerte caída por dispersiones extremas**  
+La cabina Premium de LH se desplomó de 10.48 a 4.35 pts (–6.14 pts vs L7d) el 27-sep, reflejando la mayor sensibilidad. A pesar de un NPS de ruta MAD–MEX de 100.0 pts (n=6), la alta dispersión de valoraciones –con flotas A333 dando puntuaciones muy negativas y residentes en Norteamérica por debajo de la media– explica la drástica bajada.
+
+---
+
+✅ **ANÁLISIS COMPLETADO**
+
+- **Nodos procesados:** 0
+- **Pasos de análisis:** 5
+- **Metodología:** Análisis conversacional paso a paso
+- **Resultado:** Interpretación jerárquica completa con razonamiento estructurado
+
+*Este análisis utiliza metodología conversacional para simular el razonamiento paso a paso de un analista experto, similar al proceso de investigación causal.*
+🚨 Anomalías detectadas: daily_analysis
+
+📅 2025-09-26 to 2025-09-26:
+📊 **ANÁLISIS JERÁRQUICO COMPLETO DE ANOMALÍAS NPS**
+
+**Nodos analizados:** 0 ()
+
+---
+
+## 📊 DIAGNÓSTICO A NIVEL DE EMPRESA
+
+Economy Short Haul (SH/Economy)  
+Los nodos SH/Economy/IB (-10.6 pts) y SH/Economy/YW (+9.6 pts) muestran patrones y drivers opuestos (IB penalizado por FCO–MAD, flota A33ACMI y clientes de Asia; YW beneficiado por un mix de perfiles más satisfechos), por lo que la anomalía es específica de cada compañía.
+
+Business Short Haul (SH/Business)  
+Tanto SH/Business/IB (-32.5 pts) como SH/Business/YW (-23.3 pts) coinciden en la insatisfacción de viajeros Business/Work y de clientes de América del Norte como principales drivers, indicando una causa común a la cabina.
+
+---
+
+## 💺 DIAGNÓSTICO A NIVEL DE CABINA
+
+Short Haul (SH)  
+No existe un patrón único para todo el radio: la caída del NPS en Business SH es común a IB y YW (insatisfacción de viajeros Business/Work y América Norte), mientras que en Economy SH las causas divergen claramente entre compañías (IB muy afectada por FCO–MAD, flota A33ACMI y Asia vs. YW beneficiada por un mix de perfiles más satisfechos).
+
+Long Haul (LH)  
+Las cabinas reaccionan de modo diferencial: Economy LH se mantiene estable (actúa como amortiguador), mientras que Business LH y Premium LH presentan anomalías positivas con drivers distintos (rutas y mix de flota/región propios de cada clase), por lo que las causas son específicas de cada cabina.
+
+---
+
+## 🌎 DIAGNÓSTICO GLOBAL POR RADIO
+
+Solo Short Haul y Long Haul están afectados, pero con drivers opuestos: SH cae por la insatisfacción de viajeros Business (y Economy/IB) en rutas como FCO–MAD y en flota A33ACMI, mientras LH sube impulsada por picos en Business y Premium en rutas y flotas específicas. Estos efectos divergentes se compensan a nivel Global, atenuando el impacto hasta una ligera anomalía negativa de –1,0 pts.
+
+---
+
+## 📋 ANÁLISIS DE CAUSAS DETALLADO
+
+Causa 1  
+A. Naturaleza de la causa  
+• Deficiente experiencia de los viajeros de negocio y de los clientes con residencia en América del Norte en Short Haul / Business, probablemente vinculada a aspectos de servicio a bordo y ground handling no reflejados en los sistemas de incidentes ni en las métricas operativas disponibles.  
+
+B. Evidencia consolidada y alcance  
+• Segmento principal: Global / SH / Business (NPS 15,09 vs baseline 44,38)  
+• Afecta a todos los subsegmentos bajo SH / Business (IB y YW).  
+• Métricas clave:  
+  – Tipo de viaje: Business/Work NPS –21,4 (14 encuestas) vs Leisure 28,2 (39 encuestas)  
+  – Región de residencia: América Norte NPS –23,1 vs América Sur 40,0  
+  – CodeShare AA (3 encuestas): NPS –33,3  
+• No se registraron incidentes NCS ni verbatims; no hay datos operativos disponibles.  
+
+Causa 2  
+A. Naturaleza de la causa  
+• Experiencia muy negativa en Economy / IB derivada de la combinación de la flota A33ACMI y clientes procedentes de Asia en la ruta FCO–MAD.  
+
+B. Evidencia consolidada y alcance  
+• Segmento principal: Global / SH / Economy / IB (NPS 13,31 vs baseline 23,89)  
+• Afecta a todos los subsegmentos bajo SH / Economy / IB.  
+• Métricas clave:  
+  – Ruta FCO–MAD: NPS 4,3 (23 respuestas)  
+  – Flota A33ACMI: NPS –56,2  
+  – Región Asia: NPS –60,0  
+• No se registraron incidentes NCS ni verbatims; no hay datos operativos disponibles.  
+
+Causa 3  
+A. Naturaleza de la causa  
+• Mix de perfiles de cliente más satisfechos (régiones, flota y code–share) en Economy / YW, que eleva el NPS sin relación con mejoras operativas formales.  
+
+B. Evidencia consolidada y alcance  
+• Segmento principal: Global / SH / Economy / YW (NPS 43,50 vs baseline 33,93)  
+• Afecta a todos los subsegmentos bajo SH / Economy / YW.  
+• Métricas clave:  
+  – Ruta MAD–MUC: NPS 20,0 (5 respuestas)  
+  – Spread de NPS por code–share y región: variación hasta 80,9 pts  
+• No se registraron incidentes NCS ni verbatims; no hay datos operativos disponibles.  
+
+Causa 4  
+A. Naturaleza de la causa  
+• Incremento de NPS en Business Long Haul provocado por un pequeño grupo de vuelos con satisfacción extrema (MAD–SDQ) y mejores puntuaciones en flota A333.  
+
+B. Evidencia consolidada y alcance  
+• Segmento principal: Global / LH / Business (NPS 56,25 vs baseline 25,82)  
+• Afecta a todos los subsegmentos bajo LH / Business.  
+• Métricas clave:  
+  – Ruta MAD–SDQ: NPS 100,0 (4 respuestas)  
+  – Flota A333: NPS 77,8 vs A332 23,1  
+  – CodeShare IB: NPS 71,1  
+• No se registraron incidentes NCS ni verbatims; no hay datos operativos disponibles.  
+
+Causa 5  
+A. Naturaleza de la causa  
+• Salto de NPS en Premium Long Haul impulsado por clientes de América del Sur y vuelos en A333 en la ruta BOG–MAD.  
+
+B. Evidencia consolidada y alcance  
+• Segmento principal: Global / LH / Premium (NPS 33,33 vs baseline 10,48)  
+• Afecta a todos los subsegmentos bajo LH / Premium.  
+• Métricas clave:  
+  – Ruta BOG–MAD: NPS 66,7 (3 respuestas)  
+  – Región América Sur: NPS 60,0  
+  – Flota A333: NPS 50,0 vs A350 16,7  
+• No se registraron incidentes NCS ni verbatims; no hay datos operativos disponibles.
+
+---
+
+## 📋 SÍNTESIS EJECUTIVA FINAL
+
+📈 SÍNTESIS EJECUTIVA:  
+El 26-sep-2025 mostró movimientos divergentes en la satisfacción de los clientes. En Short Haul el NPS cayó de 29.14 a 23.42 (-5.72 pts vs L7d), con una fuerte bajada en Business SH (de 44.38 a 15.09, –29.28 pts) y un descenso moderado en Economy SH (de 27.35 a 24.33, –3.02 pts). Este deterioro se explicó por la insatisfacción general de viajeros Business/Work y residentes en América del Norte (Business SH IB: 18.92 vs 51.44, –32.52 pts; YW: 6.25 vs 29.58, –23.33 pts), y por la mala experiencia en Economy SH IB (13.31 vs 23.89, –10.58 pts) en la ruta FCO–MAD operada con A33ACMI. En contraste, Long Haul mejoró de 17.87 a 25.09 (+7.22 pts vs L7d), impulsado por Business LH (de 25.82 a 56.25, +30.43 pts), gracias a la ruta MAD–SDQ con NPS 100 (4 encuestas) y flota A333 (77.8 vs 23.1 pts de A332), y por Premium LH (de 10.48 a 33.33, +22.85 pts) donde BOG–MAD alcanzó 66.7 pts (3 encuestas) con alta valoración de clientes de América Sur.
+
+Las rutas más afectadas en SH fueron FCO–MAD (4.3 pts en Economy/IB) y FRA–MAD (–20.0 pts en Business/YW), mientras que en LH destacaron MAD–SDQ (100.0 pts en Business) y BOG–MAD (66.7 pts en Premium). Los colectivos más reactivos incluyen los viajeros de negocio y residentes en Norteamérica y Asia, que arrastraron la caída en Short Haul, frente a los pasajeros de América Sur y los clientes de codeshare IB, que lideraron las subidas en Long Haul.
+
+ECONOMY SH: Rendimiento Mixto  
+La cabina Economy de SH registró un NPS agregado de 24.33 (26-sep-2025), con una bajada de 3.02 pts vs L7d. En detalle, IB obtuvo 13.31 (–10.58 pts vs L7d) y YW logró 43.50 (+9.57 pts vs L7d). La causa principal fue el mal desempeño de IB en la ruta FCO–MAD (NPS 4.3, 23 respuestas) y la flota A33ACMI, afectando especialmente a pasajeros de Asia. En paralelo, YW mejoró por un mix de perfiles más satisfechos (mayor proporción de clientes de Europa y code-share con alta valoración), lo que atenuó parcialmente la caída general.
+
+BUSINESS SH: Fuerte Caída  
+El segmento Business de SH sufrió un desplome hasta 15.09 (26-sep-2025), –29.28 pts vs L7d, tras descender desde 44.38. IB cayó a 18.92 (–32.52 pts) y YW a 6.25 (–23.33 pts). Esta evolución se explica principalmente por la insatisfacción de viajeros Business/Work (NPS –21.4) y de residentes en América del Norte (NPS –23.1), sin incidentes reportados, lo que sugiere fallos en la experiencia a bordo y en tierra.
+
+ECONOMY LH: Desempeño Estable  
+La cabina Economy de LH mantuvo desempeño estable con un NPS de 17.22 (26-sep-2025), +0.18 pts vs L7d. No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción.
+
+BUSINESS LH: Alza Destacada  
+La cabina Business de LH escaló a 56.25 (26-sep-2025), +30.43 pts vs L7d. Los drivers fueron el NPS perfecto de 100 en la ruta MAD–SDQ (4 respuestas), junto al sobresaliente desempeño de la flota A333 (77.8 vs 23.1 pts de A332) y la alta valoración de pasajeros en codeshare IB (71.1).
+
+PREMIUM LH: Subida Relevante  
+El segmento Premium de LH alcanzó 33.33 (26-sep-2025), +22.85 pts vs L7d. Las causas dominantes fueron el NPS 66.7 en BOG–MAD (3 respuestas), la satisfacción de clientes de América Sur (60.0 pts) y la mejor experiencia en la flota A333 (50.0 vs 16.7 pts de A350).
+
+---
+
+✅ **ANÁLISIS COMPLETADO**
+
+- **Nodos procesados:** 0
+- **Pasos de análisis:** 5
+- **Metodología:** Análisis conversacional paso a paso
+- **Resultado:** Interpretación jerárquica completa con razonamiento estructurado
+
+*Este análisis utiliza metodología conversacional para simular el razonamiento paso a paso de un analista experto, similar al proceso de investigación causal.*
+🚨 Anomalías detectadas: daily_analysis
+
+📅 2025-09-25 to 2025-09-25:
+📊 **ANÁLISIS JERÁRQUICO COMPLETO DE ANOMALÍAS NPS**
+
+**Nodos analizados:** 0 ()
+
+---
+
+## 📊 DIAGNÓSTICO A NIVEL DE EMPRESA
+
+Economy Short Haul: causa específica de compañía  
+• Global/SH/Economy/IB muestra una anomalía negativa de –5.1 pts, impulsada por la ruta CTA-MAD (NPS 0, n=4) y valoraciones muy bajas en A320 y CodeShares LATAM, mientras que Global/SH/Economy/YW es normal (+2.6 pts).  
+• Conclusión: el deterioro de Economy SH responde a factores propios de Iberia (IB), no a un problema general de cabina.  
+
+Business Short Haul: causas específicas de compañía  
+• Global/SH/Business/IB presenta una caída de –10.1 pts con fuerte disconformidad en A320 y pasajeros de América Sur, mientras que Global/SH/Business/YW exhibe una subida de +16.2 pts ligada a un mayor peso de clientes Leisure y vuelos en CRJ.  
+• Conclusión: el desempeño divergente de IB y YW apunta a drivers distintos por compañía, no a un factor común de cabina.
+
+---
+
+## 💺 DIAGNÓSTICO A NIVEL DE CABINA
+
+Short Haul – patrón específico de cabina (no común al radio)  
+• Economy SH cae (–2.7 pts) impulsada por IB, mientras que YW se mantiene normal.  
+• Business SH presenta IB muy a la baja (–10.1 pts) y YW al alza (+16.2 pts).  
+⇒ Las dos cabinas reaccionan de forma distinta y con señales opuestas según compañía, por lo que no hay un único driver de radio sino comportamientos específicos por cabina.  
+
+Long Haul – patrón específico de cabina  
+• Economy LH es normal (+1.1 pts), Business LH anómalo positivo (+18.6 pts) y Premium LH anómalo negativo (–10.5 pts).  
+⇒ Cada clase responde de forma independiente (la Premium penalizada, la Business muy favorecida, la Economy estable), confirmando causas específicas a nivel de cabina y no a todo el radio.
+
+---
+
+## 🌎 DIAGNÓSTICO GLOBAL POR RADIO
+
+Solo Short Haul está afectado a nivel de radio (–2.3 pts), mientras Long Haul, pese a sus anomalías internas (Business +, Premium –), se mantiene dentro del rango normal; a nivel Global estas dinámicas compensatorias se atenúan y se traducen en una ligera bajada de –0.2 pts.
+
+---
+
+## 📋 ANÁLISIS DE CAUSAS DETALLADO
+
+A continuación presento las causas profundas identificadas en Short Haul, el segmento afectado más grande para cada una y la explicación causal consolidada.
+
+1.  Causa: Servicio y confort en Economy SH (Iberia / IB)  
+    A. Naturaleza de la causa  
+       • Hipótesis: Problemas de experiencia a bordo (comodidad de A320) y coordinación en vuelos code-share (LATAM) en la cabina Economy operada por IB.  
+    B. Evidencia consolidada y alcance  
+       • Segmento más grande: Global/SH/Economy/IB (Iberia)  
+         – NPS día: 18.82 vs Baseline: 23.89 (–5.07 pts)  
+         – Afecta a todos los subsegmentos bajo Global/SH/Economy/IB (Fleet, CodeShare, Rutas).  
+         – Fleet: A320 NPS 2.5 (n=81) vs A350 C NPS 80.0 (n=5)  
+         – CodeShare: IB NPS 22.6 (n=305) vs LATAM NPS –33.3 (n=3)  
+         – Ruta clave: CTA–MAD NPS 0.0 (n=4)  
+       • Indicadores operativos: no disponibles  
+       • Verbatims: ninguno  
+       • Conclusión: la caída del NPS Economy SH se explica por la baja comodidad en A320 y la mala experiencia en vuelos code-share LATAM, especialmente en la ruta CTA–MAD.  
+
+2.  Causa: Disconformidad por flota y región en Business SH (Iberia / IB)  
+    A. Naturaleza de la causa  
+       • Hipótesis: Pasajeros Business de IB penalizan vuelos en A320 y mercados de América Sur.  
+    B. Evidencia consolidada y alcance  
+       • Segmento más grande: Global/SH/Business/IB (Iberia)  
+         – NPS día: 41.30 vs Baseline: 51.44 (–10.13 pts)  
+         – Afecta a todos los subsegmentos bajo Global/SH/Business/IB (Fleet, Región, Ruta).  
+         – Fleet: A320 NPS –33.3 (n=9) vs A321 NPS 100.0 (n=5)  
+         – Región: América Sur NPS –33.3 (n=3) vs América Norte NPS 100.0 (n=3)  
+         – Ruta: MAD–ORY NPS 100.0 (n=3)  
+       • Indicadores operativos: no disponibles  
+       • Verbatims: ninguno  
+       • Conclusión: en Business SH de IB, la insatisfacción se concentra en flota A320 y viajeros de América Sur, aun cuando la muestra por ruta es pequeña.  
+
+3.  Causa: Efecto “mix de clientes” en Business SH (Vueling / YW)  
+    A. Naturaleza de la causa  
+       • Hipótesis: Predominio de pasajeros Leisure y volumen mayor en aviones CRJ impulsa artificialmente el NPS.  
+    B. Evidencia consolidada y alcance  
+       • Segmento más grande: Global/SH/Business/YW (Vueling)  
+         – NPS día: 45.83 vs Baseline: 29.58 (+16.25 pts)  
+         – Afecta a todos los subsegmentos bajo Global/SH/Business/YW (Customer Type, Fleet, Región, Ruta).  
+         – Tipo de pasajero: Leisure NPS 61.5 (n=13) vs Business NPS 27.3 (n=11)  
+         – Fleet: CRJ NPS 47.6 (n=21) vs ATR NPS 33.3 (n=3)  
+         – Región: América Sur NPS 100.0 (n=3) vs España NPS 36.4 (n=11)  
+         – Ruta: MAD–MLN NPS 33.3 (n=3)  
+       • Indicadores operativos: no disponibles  
+       • Verbatims: ninguno  
+       • Conclusión: la fuerte subida del NPS Business SH en YW responde a un sesgo de muestra (más Leisure, vuelos CRJ, regiones con alta satisfacción), no a cambios operativos.  
+
+4.  Causa: Variabilidad de CodeShare y rutas en Short Haul  
+    A. Naturaleza de la causa  
+       • Hipótesis: Inconsistencias de servicio y procesos en operadores code-share alternativos y en la ruta MAD–NCE.  
+    B. Evidencia consolidada y alcance  
+       • Segmento más grande: Global/SH (Short Haul)  
+         – NPS día: 26.86 vs Baseline: 29.14 (–2.27 pts)  
+         – Afecta a todos los subsegmentos bajo Global/SH (Economy, Business).  
+         – Ruta crítica: MAD–NCE NPS 0.0 (n=3)  
+         – CodeShare: I2 NPS –66.7 (n=3) vs AA NPS –16.7 (n=?)  
+         – Fleet premium: A350 C NPS 80.0 (n=?)  
+       • Indicadores operativos: no disponibles  
+       • Verbatims: ninguno  
+       • Conclusión: la caída general de SH proviene de fallos de consistencia en code-share (I2, AA) y de la experiencia en la ruta MAD–NCE, impactando economía y business por igual.
+
+---
+
+## 📋 SÍNTESIS EJECUTIVA FINAL
+
+📈 SÍNTESIS EJECUTIVA:
+
+El NPS global del 25 de septiembre mostró una ligera caída de 24.99 a 24.79 (–0.20 pts), reflejo de efectos compensatorios entre radios. En Long Haul, Business escaló de 25.82 a 44.44 (+18.62 pts) mientras Premium se hundió de 10.48 a 0.00 (–10.48 pts). En Short Haul, Economy descendió de 27.35 a 24.65 (–2.70 pts) y Business repuntó marginalmente de 44.38 a 42.86 (–1.52 pts). Estas variaciones emanan de causas muy localizadas: el enfrentamiento de flota y code-share en Economy SH Iberia (Global/SH/Economy/IB cayó de 23.89 a 18.82, –5.07 pts) y la dispersión de valoraciones en Business SH, donde IB (Global/SH/Business/IB) bajó de 51.44 a 41.30 (–10.13 pts) por insatisfacción en A320 y América Sur, mientras YW (Global/SH/Business/YW) subió de 29.58 a 45.83 (+16.25 pts) gracias a un mix de pasajeros Leisure y vuelos CRJ. En Long Haul, el alza en Business LH no se sustenta en cambios operativos reales (solo 3 respuestas en JFK–MAD con NPS 100), y la caída en Premium LH obedece a clientes A350 next y residentes en España, sin incidentes ni verbatims.
+
+Las rutas más críticas incluyen CTA–MAD y MAD–NCE con NPS 0.0 en Economy SH IB, así como la ruta EZE–MAD en Premium LH (NPS 20.0) y JFK–MAD en Business LH (NPS 100.0). Los grupos de clientes más reactivos son los pasajeros de code-share I2 y LATAM en SH, los usuarios de flota A320 en Iberia, y los segmentos Leisure vs Business en Vueling, destacando regiones como América Sur y Europa Occidental/Central.
+
+ECONOMY SH IB vs YW  
+La cabina Economy SH IB registró un NPS de 18.82 (25-sep) cayendo 5.07 pts vs L7d (de 23.89 a 18.82), mientras que Economy SH YW mostró un ligero repunte de 33.93 a 36.53 (+2.59 pts). La caída en IB se atribuye a la baja comodidad en aviones A320 (NPS 2.5, n=81) y la mala experiencia en code-share LATAM (NPS –33.3), concentrada en la ruta CTA–MAD con NPS 0.0. Economy SH YW mantuvo desempeño estable sin cambios operativos ni verbatims.
+
+BUSINESS SH IB vs YW  
+En Business SH IB el NPS bajó de 51.44 a 41.30 (–10.13 pts) por valoraciones negativas en A320 (–33.3 pts) y pasajeros de América Sur (–33.3 pts), a pesar de un NPS 100 en MAD–ORY. Por el contrario, Business SH YW escaló de 29.58 a 45.83 (+16.25 pts) impulsado por un mayor peso de clientes Leisure (61.5 pts), mejor calificación en CRJ (47.6 pts) y residentes de América Sur (100 pts). Ambos nodos evidencian drivers opuestos y un impacto neto compensatorio en SH Business.
+
+ECONOMY LH  
+La cabina Economy LH mantuvo desempeño estable con un NPS de 18.18 el 25-sep, mejorando 1.14 pts vs L7d (de 17.04 a 18.18). No se detectaron cambios significativos en rutas ni feedback cualitativo, y la variación queda dentro de la normalidad esperada.
+
+BUSINESS LH  
+Business LH experimentó una subida notable de 25.82 a 44.44 (+18.62 pts) sin respaldo operativo: 3 respuestas en la ruta JFK–MAD con NPS 100 impulsaron el alza, mientras flotas A333 y A350 mostraron dispersión. Se sugiere revisar la representatividad de la muestra antes de atribuir mejoras reales.
+
+PREMIUM LH  
+Premium LH sufrió una caída de 10.48 a 0.00 (–10.48 pts) el 25-sep, principalmente por clientes de la flota A350 next (–16.7 pts) y residentes en España (–40.0 pts), a pesar de un NPS 20.0 en EZE–MAD. La ausencia de incidentes y verbatims indica un posible problema de muestreo o percepción no capturada en datos operativos.
+
+---
+
+✅ **ANÁLISIS COMPLETADO**
+
+- **Nodos procesados:** 0
+- **Pasos de análisis:** 5
+- **Metodología:** Análisis conversacional paso a paso
+- **Resultado:** Interpretación jerárquica completa con razonamiento estructurado
+
+*Este análisis utiliza metodología conversacional para simular el razonamiento paso a paso de un analista experto, similar al proceso de investigación causal.*
+🚨 Anomalías detectadas: daily_analysis
+
+TAREA:
+1. Copia la síntesis ejecutiva del interpreter semanal TAL COMO ESTÁ
+2. Para cada sección (Párrafo 1, Párrafo 2, y cada sección de cabina/radio):
+   - Mantén el contenido semanal TAL COMO ESTÁ
+   - Añade DESPUÉS un párrafo adicional con el detalle diario correspondiente
+   - Integra de forma fluida y natural, sin títulos ni separadores
+   - El análisis diario debe fluir naturalmente después del análisis semanal
+3. Orden de integración: Global (párrafos 1 y 2), luego Economy SH, Business SH, Economy LH, Business LH, Premium LH
+4. Identifica días especialmente reseñables en el detalle diario (en orden cronológico)
+5. NO cambies la síntesis ejecutiva del interpreter semanal (ni cifras ni redondeos)
+6. NO añadas recomendaciones adicionales
+7. Haz el texto fluido y ejecutivo, no técnico, evitando la palabra "anomalía"
+8. Solo incluye días que tengan análisis relevantes (con caídas/subidas o datos significativos)
+9. Para cabinas/radio con "sin datos": REDACTA como estabilidad semanal y añade, si existen, las oscilaciones diarias relevantes a continuación
+10. **CRÍTICO**: Si hay datos en "ANÁLISIS DIARIO SINGLE", DEBES usarlos. NO digas que "no están disponibles" si están presentes en el input.
+11. **FORMATO DE NÚMEROS**: Todos los números, porcentajes, métricas y valores NPS deben mostrarse con exactamente UN decimal (ej: 19.8, -4.4, 93.5%)
