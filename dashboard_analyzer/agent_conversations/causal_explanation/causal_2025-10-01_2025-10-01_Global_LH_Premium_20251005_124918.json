@@ -1,0 +1,98 @@
+{
+  "metadata": {
+    "agent_type": "causal_explanation",
+    "analysis_type": "separated_workflow_investigation",
+    "export_timestamp": "2025-10-05T12:49:18.614238",
+    "node_path": "Global/LH/Premium",
+    "start_date": "2025-10-01",
+    "end_date": "2025-10-01",
+    "total_iterations": 4,
+    "llm_type": "O4_MINI",
+    "anomaly_type": "+",
+    "total_messages": 6,
+    "tools_used": [],
+    "investigation_success": true
+  },
+  "conversation_log": [
+    {
+      "iteration": 0,
+      "type": "SYSTEM",
+      "content": "Eres un **analista sénior de NPS** especializado en investigación de anomalías para períodos únicos. Tu análisis se enfoca en entender qué pasó en un día específico.\n\n⚠️ **CRÍTICO - NO INVENTES DATOS:**\nSi hay algún dato que te falta, NO lo supongas ni inventes. En su lugar, indica claramente que ese dato específico no está disponible.\nPara las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.\nEN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.\n\n**MODO SINGLE:** Análisis de un período único sin comparación\n\n**OBJETIVOS:**\n1. **IDENTIFICAR FACTORES** que influyeron en el NPS del día\n2. **ANALIZAR MÉTRICAS OPERATIVAS** del período específico\n3. **ENTENDER FEEDBACK** de los clientes de ese día\n4. **IDENTIFICAR RUTAS** que tuvieron mayor impacto\n\n**Metodología**: Una herramienta por iteración, reflexiona y elige la siguiente. Máximo 5 iteraciones.\n\n**Flujo de Trabajo** (se ejecuta automáticamente):\n▸ `operative_data_tool` → Analiza métricas operativas del día\n▸ `ncs_tool` → Revisa incidentes reportados\n▸ `verbatims_tool` → Obtiene feedback cualitativo\n▸ `routes_tool` → Identifica rutas con mayor impacto\n▸ `customer_profile_tool` → Analiza impacto por perfil\n\n**Reglas de Terminación** 🏁\n▸ Máximo 5 iteraciones\n▸ Si no hay más herramientas relevantes → termina\n▸ Si no hay evidencia clara → termina con hipótesis débil\n",
+      "metadata": {},
+      "timestamp": "12:48:11"
+    },
+    {
+      "iteration": 0,
+      "type": "USER",
+      "content": "**INVESTIGACIÓN DE ANOMALÍA NPS - MODO SINGLE**\n\n📊 **CONTEXTO NPS:**\n• **Segmento**: Global/LH/Premium\n• **Período de Análisis**: 2025-10-01 00:00:00 a 2025-10-01 00:00:00\n• **Tipo de Anomalía**: +\n• **Magnitud**: 33.9599871569181 pts\n• **NPS del Día**: 44.44444444444444\n• **NPS Baseline**: 10.484457287526341\n• **Modo de Detección**: mean\n• **Días por Período**: 1\n• **Períodos de Baseline**: 7\n\n📈 **CONTEXTO DE COMPARACIÓN:**\n• **Comparación**: vs media de los últimos 7 días\n\n🎯 **OBJETIVO**: Entender qué factores influyeron en el NPS de este día específico.\n\n**DECIDE QUÉ HERRAMIENTA EJECUTAR PRIMERO** basándote en el contexto NPS y la metodología del flujo de trabajo.\n",
+      "metadata": {},
+      "timestamp": "12:48:11"
+    },
+    {
+      "iteration": 1,
+      "type": "AI",
+      "content": "REFLECTION: La herramienta operative_data_tool no pudo ejecutarse debido a un error de tipo (TypeError: strptime() argument 1 must be str, not datetime.datetime), por lo que no se obtuvieron las métricas operativas del día ni su validación frente a los drivers SHAP. Al no contar con estos datos, no se ha cumplido el objetivo de analizar las métricas operativas versus los drivers operativos. Sin embargo, dado que aún nos falta corroborar las tendencias de incidentes reportados, continuaremos con la siguiente herramienta para avanzar en la investigación de anomalías del día específico.",
+      "metadata": {},
+      "timestamp": "12:48:18"
+    },
+    {
+      "iteration": 2,
+      "type": "AI",
+      "content": "REFLECTION: La herramienta ncs_tool ha proporcionado un desglose claro de los 39 incidentes operativos del día, mostrando que los retrasos (11) y las “otras_incidencias” (12) fueron las principales categorías. Se identificaron temas recurrentes como aircraft_change (5) y technical_issues (4), con un impacto significativo en rutas clave, especialmente MAD-GIG, y en vuelos como IB271/272 y IB243/MADSJO. Con esta información hemos cumplido el objetivo de revisar los incidentes reportados y entender su distribución por tipo y ruta.\n\nSin embargo, aún no disponemos del feedback cualitativo de los clientes para comprender cómo estos incidentes afectaron la percepción del servicio. Para completar el análisis y acercarnos al objetivo de entender la experiencia del cliente, es necesario revisar los comentarios directos de los pasajeros.",
+      "metadata": {},
+      "timestamp": "12:48:25"
+    },
+    {
+      "iteration": 3,
+      "type": "AI",
+      "content": "REFLECTION: La herramienta verbatims_tool no retornó ningún feedback de clientes para el segmento Global/LH/Premium en la fecha especificada, por lo que no se ha cumplido el objetivo de entender la percepción del cliente a través de comentarios cualitativos. Dado que carecemos de esta información y no podemos inventar datos, la iteración actual finaliza sin nuevos hallazgos cualitativos.  \nAún quedan pendientes los objetivos de identificar rutas con mayor impacto de los incidentes operativos detectados.",
+      "metadata": {},
+      "timestamp": "12:48:29"
+    },
+    {
+      "iteration": 4,
+      "type": "AI",
+      "content": "REFLECTION: La herramienta routes_tool no encontró ninguna ruta con al menos 2 encuestas, y tampoco se identificaron rutas con incidentes NCS en el día analizado. Por tanto, no se disponen de rutas con suficiente información para profundizar en su impacto en el NPS. Se ha incumplido el objetivo de esta iteración (identificar rutas con mayor impacto) debido a la falta de datos.\n\nDado que no hay rutas relevantes que permitan continuar con el análisis de perfiles de cliente, concluyo que no hay más herramientas útiles en este flujo.",
+      "metadata": {},
+      "timestamp": "12:48:39"
+    }
+  ],
+  "clean_explanations": [
+    "La herramienta operative_data_tool no pudo ejecutarse debido a un error de tipo (TypeError: strptime() argument 1 must be str, not datetime.datetime), por lo que no se obtuvieron las métricas operativas del día ni su validación frente a los drivers SHAP. Al no contar con estos datos, no se ha cumplido el objetivo de analizar las métricas operativas versus los drivers operativos. Sin embargo, dado que aún nos falta corroborar las tendencias de incidentes reportados, continuaremos con la siguiente herramienta para avanzar en la investigación de anomalías del día específico.",
+    "La herramienta ncs_tool ha proporcionado un desglose claro de los 39 incidentes operativos del día, mostrando que los retrasos (11) y las “otras_incidencias” (12) fueron las principales categorías. Se identificaron temas recurrentes como aircraft_change (5) y technical_issues (4), con un impacto significativo en rutas clave, especialmente MAD-GIG, y en vuelos como IB271/272 y IB243/MADSJO. Con esta información hemos cumplido el objetivo de revisar los incidentes reportados y entender su distribución por tipo y ruta.\n\nSin embargo, aún no disponemos del feedback cualitativo de los clientes para comprender cómo estos incidentes afectaron la percepción del servicio. Para completar el análisis y acercarnos al objetivo de entender la experiencia del cliente, es necesario revisar los comentarios directos de los pasajeros.",
+    "La herramienta verbatims_tool no retornó ningún feedback de clientes para el segmento Global/LH/Premium en la fecha especificada, por lo que no se ha cumplido el objetivo de entender la percepción del cliente a través de comentarios cualitativos. Dado que carecemos de esta información y no podemos inventar datos, la iteración actual finaliza sin nuevos hallazgos cualitativos.  \nAún quedan pendientes los objetivos de identificar rutas con mayor impacto de los incidentes operativos detectados.",
+    "La herramienta routes_tool no encontró ninguna ruta con al menos 2 encuestas, y tampoco se identificaron rutas con incidentes NCS en el día analizado. Por tanto, no se disponen de rutas con suficiente información para profundizar en su impacto en el NPS. Se ha incumplido el objetivo de esta iteración (identificar rutas con mayor impacto) debido a la falta de datos.\n\nDado que no hay rutas relevantes que permitan continuar con el análisis de perfiles de cliente, concluyo que no hay más herramientas útiles en este flujo."
+  ],
+  "collected_data_summary": "❌ No se recolectaron datos durante la investigación",
+  "conversation_summary": {
+    "SYSTEM": 1,
+    "USER": 1,
+    "AI": 4
+  },
+  "dax_queries": [
+    {
+      "tool_name": "routes_tool",
+      "query": "DEFINE\n    VAR __DS0FilterTable9 =\n        FILTER(\n            KEEPFILTERS(VALUES('Route_Master'[route])),\n            NOT(ISBLANK('Route_Master'[route]))\n        )\n\n     VAR __DS0FilterTable =\n        TREATAS({\"Premium EC\"}, 'Cabin_Master'[Cabin_Show])\n\n    VAR __DS0FilterTable2 =\n        TREATAS({\"IB\", \"YW\"}, 'Company_Master'[Company])\n\n    VAR __DS0FilterTable3 =\n        TREATAS({\"LH\"}, 'Haul_Master'[Haul_Aggr])\n\n    VAR __DS0FilterTable4 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),   \n            AND(\n                'Date_Master'[Date] >= DATE(2025, 10, 1),\n                'Date_Master'[Date] <= DATE(2025, 10, 1)\n            )\n        )\n\n    VAR __DS0FilterTable8 =\n        TREATAS({\"'surveys_maritz'[issue_category]\"}, 'Categories'[Categories Campos])\n\n    VAR __DS0FilterTable7 =\n        TREATAS({\"\"}, 'Filtro_Comparativa'[Filtro_Comparativa])\n\n\n\n    VAR __ValueFilterDM2 =\n        FILTER(\n            KEEPFILTERS(\n                SUMMARIZECOLUMNS(\n                    'Route_Master'[route],\n                    'Company_Master'[Company],\n                    __DS0FilterTable,\n                    __DS0FilterTable2,\n                    __DS0FilterTable3,\n                    __DS0FilterTable4,\n                    __DS0FilterTable8,\n                    __DS0FilterTable9,\n                    __DS0FilterTable7,\n                    \"Count_total\", IGNORE('Measure'[Count_total])\n                )\n            ),\n            [Count_total] >= 1\n        )\n\n    VAR __DS0Core =\n        CALCULATETABLE(\n            SUMMARIZECOLUMNS(\n                'Route_Master'[route],\n                'Company_Master'[Company],\n                __DS0FilterTable,\n                __DS0FilterTable2,\n                __DS0FilterTable3,\n                __DS0FilterTable4,\n                __DS0FilterTable8,\n                __DS0FilterTable9,\n                __DS0FilterTable7,\n                    \"NPS\", 'Measure'[NPS (Route)],\n                \"NPS_diff\", [Switch_NPS_Raw_diff],\n                \"Pax\", 'Measure'[n (Route)],\n                \"CodeShare\", 'Measure'[CodeShare (Route)]*100,\n                \"Check_in\", 'Measure'[Check-in (Route)],\n                \"Lounge\", 'Measure'[Lounge (Route)],\n                \"Boarding\", 'Measure'[Boarding (Route)],\n                \"Aircraft_interior\", 'Measure'[Aircraft interior (Route)],\n                \"Wi-Fi\", 'Measure'[Wi-Fi (Route)],\n                \"IFE\", 'Measure'[IFE (Route)],\n                \"F&B\", 'Measure'[F&B (Route)],\n                \"Crew\", 'Measure'[Crew (Route)],\n                \"Arrivals\", 'Measure'[Arrivals (Route)],\n                \"Connections\", 'Measure'[Connections (Route)],\n                \"Operative\", 'Measure'[Operative (Route)],\n                \"NonOperative\", 'Measure'[NonOperative (Route)],\n                \"Check_in_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Check-in\"),\n                \"Lounge_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Lounge\"),\n                \"Boarding_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Boarding\"),\n                \"Aircraft_interior_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Aircraft interior\"),\n                \"Wi-Fi_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Wi-Fi\"),\n                \"IFE_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"IFE\"),\n                \"F&B_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"In flight food and beverage\"),\n                \"Crew_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Cabin Crew\"),\n                \"Arrivals_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Arrivals experience\"),\n                \"Connections_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Connections experience\"),\n                \"Operative_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Punctuality\")\n            ),\n            __ValueFilterDM2\n        )\n       \n\nEVALUATE\n    __DS0Core ",
+      "parameters": {
+        "node_path": "Global/LH/Premium",
+        "start_date": "2025-10-01",
+        "end_date": "2025-10-01",
+        "comparison_filter": null,
+        "comparison_start_date": null,
+        "comparison_end_date": null,
+        "cabins": [
+          "Premium EC"
+        ],
+        "companies": [
+          "IB",
+          "YW"
+        ],
+        "hauls": [
+          "LH"
+        ]
+      },
+      "timestamp": "12:48:29",
+      "iteration": 4
+    }
+  ]
+}
