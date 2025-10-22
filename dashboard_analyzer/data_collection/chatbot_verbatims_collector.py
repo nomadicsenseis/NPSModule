@@ -147,6 +147,12 @@ class ChatbotVerbatimsCollector:
             Expected keys: 'answer', 'toolOutput', 'jobId', 'sessionId', etc.
         """
         try:
+            # Ensure dates are strings (convert datetime objects if needed)
+            if hasattr(start_date, 'strftime'):
+                start_date = start_date.strftime('%Y-%m-%d')
+            if hasattr(end_date, 'strftime'):
+                end_date = end_date.strftime('%Y-%m-%d')
+            
             logger.info(f"🤖 Asking chatbot: {question}")
             logger.info(f"📅 Date range: {start_date} to {end_date}")
             
