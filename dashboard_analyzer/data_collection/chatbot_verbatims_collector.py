@@ -1,1221 +1,160 @@
 """
-Chatbot Verbatims Collector - Recopilación y análisis de verbatims de clientes
-Procesa comentarios de texto libre para extraer insights cualitativos sobre NPS
+Chatbot Verbatims Collector - Nueva implementación con API Key
+Recopilación y análisis de verbatims usando el chatbot de Iberia con autenticación por API Key
 """
 
 import pandas as pd
-import re
-import os
-import jwt
-from typing import Dict, List, Tuple, Optional, Any, Union
+import requests
+import time
 import logging
-from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
-
-# Simple token management without Selenium automation
 
 
 class ChatbotVerbatimsCollector:
     """
-    Recopilador y analizador de verbatims de chatbot y otras fuentes de feedback
+    Recopilador de verbatims usando el chatbot de Iberia (API Key authentication)
     """
     
-    def __init__(self, pbi_collector=None, token: str = None):
+    def __init__(self, pbi_collector=None, environment: str = "prod", proxy: str = None):
         """
-        Initialize the Chatbot Verbatims Collector
+        Initialize the Chatbot Verbatims Collector with API Key authentication
         
         Args:
             pbi_collector: Power BI data collector instance (fallback mode)
-            token: JWT token for user authentication (from frontend)
+            environment: "prod" or "pre" environment
+            proxy: Optional proxy URL (e.g., "http://proxy.iberia.es:8080")
+                   If None, will check environment variables HTTP_PROXY/HTTPS_PROXY
         """
         self.pbi_collector = pbi_collector
-        self.token = token
+        self.environment = environment.lower()
         
-        # Simple token management
-        self.token_file = "dashboard_analyzer/temp_aws_credentials.env"
-        self.token_expired = False
+        # Configure API endpoints and credentials based on environment
+        # Note: Must use X-API-Key header (not ApiKey) - confirmed working in tests
+        if self.environment == "prod":
+            self.endpoint = "https://nps.chatbot.iberia.es/ibdp/api/question"
+            self.api_key = "aUdQhwiCl75T4Jn39X0fa27MZlhHWNUQ57DFp3kY"
+        elif self.environment == "pre":
+            self.endpoint = "https://nps.chatbot.pre.iberia.es/ibdp/api/question"
+            self.api_key = "ZfmperiyNP2PXKw1zaN1f2oGJ3VcAOiG7kWNYQIh"
+            # Note: PRE environment requires Iberia proxy configuration
+        else:
+            raise ValueError(f"Invalid environment: {environment}. Must be 'prod' or 'pre'")
         
-        # Load token from file if not provided
-        if not self.token:
-            self.token = self._load_token_from_file()
-        
-        # Validate token on initialization
-        if self.token:
-            self._validate_token()
-        
-        # Diccionarios para análisis temático
-        self.route_patterns = [
-            r'\b[A-Z]{3}[- ]?[A-Z]{3}\b',  # MAD-BCN, MADBCN
-            r'\b[A-Z]{3}\s?-\s?[A-Z]{3}\b',  # MAD - BCN
-            r'\bvuelo\s+[A-Z0-9]+\b',  # vuelo IB1234
-            r'\bruta\s+[A-Z]{3}[- ]?[A-Z]{3}\b'  # ruta MAD-BCN
-        ]
-        
-        self.theme_keywords = {
-            'equipaje': [
-                'maleta', 'equipaje', 'baggage', 'perdido', 'dañado', 
-                'retraso equipaje', 'facturación', 'peso equipaje'
-            ],
-            'puntualidad': [
-                'retraso', 'delay', 'tarde', 'puntual', 'cancelado', 
-                'cambio horario', 'salida', 'llegada', 'conexión'
-            ],
-            'servicio_abordo': [
-                'azafata', 'tripulación', 'comida', 'bebida', 'asiento',
-                'entretenimiento', 'wifi', 'servicio', 'atención', 'cortesía'
-            ],
-            'reservas': [
-                'reserva', 'booking', 'web', 'app', 'cambio vuelo',
-                'cancelación', 'precio', 'tarifa', 'clase'
-            ],
-            'check_in': [
-                'check-in', 'facturación', 'embarque', 'puerta',
-                'boarding', 'mostrador', 'online check-in'
-            ],
-            'aeropuerto': [
-                'terminal', 'puerta', 'mostrador', 'sala', 'espera',
-                'seguridad', 'migración', 'aduana'
-            ]
-        }
-        
-        # Palabras indicadoras de sentimiento
-        self.sentiment_positive = [
-            'excelente', 'perfecto', 'fantástico', 'genial', 'bueno',
-            'satisfecho', 'contento', 'recomiendo', 'gracias', 'amable'
-        ]
-        
-        self.sentiment_negative = [
-            'horrible', 'terrible', 'malo', 'pésimo', 'desastroso',
-            'molesto', 'furioso', 'decepcionado', 'nunca más', 'awful'
-        ]
-
-    def _load_token_from_file(self) -> str:
-        """Load token from temp_aws_credentials.env file"""
-        try:
-            if os.path.exists(self.token_file):
-                with open(self.token_file, 'r') as f:
-                    for line in f:
-                        if 'chatbot_jwt_token' in line and '=' in line:
-                            token = line.split('=', 1)[1].strip()
-                            logger.info("✅ Token loaded from file")
-                            return token
-            logger.warning("⚠️ No token found in file")
-            return None
-        except Exception as e:
-            logger.error(f"❌ Error loading token from file: {e}")
-            return None
-    
-    def _validate_token(self) -> bool:
-        """
-        Validates the current JWT token and checks if it's expired
-        Returns True if token is valid, False if expired
-        """
-        try:
-            if not self.token:
-                return False
-            
-            # Decode JWT to check expiry (without signature verification)
-            decoded = jwt.decode(self.token, options={"verify_signature": False})
-            exp_timestamp = decoded.get('exp')
-            
-            if not exp_timestamp:
-                logger.warning("Token has no expiration time")
-                return False
-            
-            # Check if token is expired
-            current_time = datetime.utcnow().timestamp()
-            time_until_expiry = exp_timestamp - current_time
-            
-            if time_until_expiry <= 0:
-                logger.warning("Token has expired - will use PBI fallback")
-                self.token_expired = True
-                return False
-            
-            # Token is still valid
-            self.token_expired = False
-            logger.info(f"✅ Token valid for {time_until_expiry:.0f} more seconds")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error validating token: {e}")
-            self.token_expired = True
-            return False
-    
-    # No token reloading - simple approach: use token until expired, then PBI fallback
-    
-
-    
-
-    
-    def ensure_valid_token(self) -> bool:
-        """
-        Public method to ensure token is valid before operations
-        Returns True if token is valid, False if expired
-        """
-        return self._validate_token()
-    
-    def get_token_status(self) -> Dict[str, Any]:
-        """
-        Returns current token status information
-        """
-        try:
-            if not self.token:
-                return {
-                    'status': 'no_token',
-                    'message': 'No token available',
-                    'expires_in': None,
-                    'expired': True
-                }
-            
-            decoded = jwt.decode(self.token, options={"verify_signature": False})
-            exp_timestamp = decoded.get('exp')
-            
-            if not exp_timestamp:
-                return {
-                    'status': 'invalid_token',
-                    'message': 'Token has no expiration time',
-                    'expires_in': None,
-                    'expired': True
-                }
-            
-            current_time = datetime.utcnow().timestamp()
-            time_until_expiry = exp_timestamp - current_time
-            
-            if time_until_expiry <= 0:
-                return {
-                    'status': 'expired',
-                    'message': 'Token has expired',
-                    'expires_in': 0,
-                    'expired': True
-                }
-            
-            return {
-                'status': 'valid',
-                'message': 'Token is valid',
-                'expires_in': int(time_until_expiry),
-                'expired': False,
-                'expires_at': datetime.fromtimestamp(exp_timestamp).isoformat()
+        # Configure proxy
+        self.proxy = proxy
+        self.proxies = None
+        if proxy:
+            self.proxies = {
+                'http': proxy,
+                'https': proxy
             }
-            
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': f'Error checking token: {str(e)}',
-                'expires_in': None,
-                'expired': True
-            }
+            logger.info(f"🔌 Proxy configured: {proxy}")
+        else:
+            # Check environment variables
+            import os
+            http_proxy = os.getenv('HTTP_PROXY') or os.getenv('http_proxy')
+            https_proxy = os.getenv('HTTPS_PROXY') or os.getenv('https_proxy')
+            if http_proxy or https_proxy:
+                self.proxies = {}
+                if http_proxy:
+                    self.proxies['http'] = http_proxy
+                if https_proxy:
+                    self.proxies['https'] = https_proxy
+                logger.info(f"🔌 Proxy from environment: {self.proxies}")
+        
+        # Required User-Agent header (to avoid WAF blocking)
+        self.user_agent = "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0"
+        
+        logger.info(f"✅ ChatbotVerbatimsCollector initialized ({self.environment.upper()} environment)")
+        logger.info(f"🌐 Endpoint: {self.endpoint}")
     
-    def _make_api_request(self, endpoint: str, params: Dict = None) -> Optional[Dict]:
-        """
-        Placeholder method for API requests - not used in current implementation
-        This method exists for future API integration if needed
-        """
-        logger.warning("API requests not implemented - using PBI collector fallback")
-        return None
-    
-    def _ask_chatbot_question(self, question: str, date_range: Tuple[str, str], 
-                             node_path: str, filters: Optional[Dict] = None) -> Optional[str]:
-        """
-        Ask a question to the chatbot API and get a jobId for async processing
-        
-        Args:
-            question: The question to ask
-            date_range: Tuple with (start_date, end_date)
-            node_path: Node path for filtering
-            filters: Additional filters
-            
-        Returns:
-            jobId if successful, None otherwise
-        """
-        try:
-            if not self.token:
-                logger.warning("No JWT token available for chatbot question API")
-                return None
-            
-            # Validate token before making API call
-            if not self.ensure_valid_token():
-                logger.warning("JWT token is invalid or expired")
-                return None
-            
-            # Extract date range
-            start_date, end_date = date_range
-            
-            # Prepare question payload according to the new format
-            question_payload = {
-                "value": question,
-                "verbatimCol": "iag_mod_501_t_scrubbed",
-                "sessionId": f"session-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
-                "filters": {
-                    "date_flight_local": [start_date, end_date]
-                }
-            }
-            
-            # Add additional filters if provided
-            if filters:
-                if 'haul' in filters:
-                    question_payload["filters"]["haul"] = filters['haul']
-                if 'cabin' in filters:
-                    question_payload["filters"]["cabin_in_surveyed_flight"] = filters['cabin']
-            
-            # Use the question endpoint
-            question_endpoint = "https://b8fktdca38.execute-api.eu-west-1.amazonaws.com/api/transformation/api/nps-chatbot/question"
-            
-            headers = {
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json",
-                "User-Agent": "CausalExplanationAgent/1.0"
-            }
-            
-            logger.info(f"🤖 Asking chatbot question: {question}")
-            logger.info(f"🌐 Making POST request to: {question_endpoint}")
-            
-            response = requests.post(
-                question_endpoint,
-                json=question_payload,
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 201:
-                try:
-                    data = response.json()
-                    job_id = data.get('jobId')
-                    if job_id:
-                        logger.info(f"✅ Question submitted successfully, jobId: {job_id}")
-                        return job_id
-                    else:
-                        logger.warning("Question API response missing jobId")
-                        return None
-                except Exception as e:
-                    logger.error(f"Error parsing question API response: {e}")
-                    return None
-            else:
-                logger.warning(f"Question API returned status {response.status_code}: {response.text}")
-                return None
-                
-        except Exception as e:
-            logger.error(f"Error asking chatbot question: {e}")
-            return None
-    
-    def _get_chatbot_answer(self, job_id: str) -> Optional[Dict]:
-        """
-        Get the answer for a chatbot question using the jobId
-        
-        Args:
-            job_id: The jobId from the question submission
-            
-        Returns:
-            Answer data if available, None otherwise
-        """
-        try:
-            if not self.token:
-                logger.warning("No JWT token available for chatbot answer API")
-                return None
-            
-            # Validate token before making API call
-            if not self.ensure_valid_token():
-                logger.warning("JWT token is invalid or expired")
-                return None
-            
-            # Use the answer endpoint
-            answer_endpoint = f"https://b8fktdca38.execute-api.eu-west-1.amazonaws.com/api/transformation/api/nps-chatbot/question/{job_id}"
-            
-            headers = {
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json",
-                "User-Agent": "CausalExplanationAgent/1.0"
-            }
-            
-            logger.info(f"🔍 Getting chatbot answer for jobId: {job_id}")
-            
-            response = requests.get(
-                answer_endpoint,
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    
-                    # Check if we have a real answer
-                    answer = data.get('answer')
-                    error = data.get('error')
-                    
-                    if answer and answer != "null" and answer != None and str(answer).strip():
-                        logger.info(f"✅ Got chatbot answer for jobId: {job_id}")
-                        return data
-                    elif error and error != "null" and error != None:
-                        logger.error(f"❌ Chatbot error: {error}")
-                        return None
-                    else:
-                        logger.info(f"⏳ Still processing...")
-                        return None
-                        
-                except Exception as e:
-                    logger.error(f"Error parsing answer API response: {e}")
-                    return None
-            else:
-                logger.warning(f"Answer API returned status {response.status_code}: {response.text}")
-                return None
-                
-        except Exception as e:
-            logger.error(f"Error getting chatbot answer: {e}")
-            return None
-    
-    def _collect_from_chatbot_api(self, date_range: Tuple[str, str], node_path: str, 
-                                 filters: Optional[Dict] = None) -> pd.DataFrame:
-        """
-        Collect verbatims from the chatbot API using JWT token authentication
-        
-        Args:
-            date_range: Tuple with (start_date, end_date)
-            node_path: Node path for filtering
-            filters: Additional filters (sentiment, themes, etc.)
-            
-        Returns:
-            DataFrame with verbatims data from chatbot API
-        """
-        try:
-            if not self.token:
-                logger.warning("No JWT token available for chatbot API")
-                return pd.DataFrame()
-            
-            # Validate token before making API call
-            if not self.ensure_valid_token():
-                logger.warning("JWT token is invalid or expired")
-                return pd.DataFrame()
-            
-            # Extract date range
-            start_date, end_date = date_range
-            
-            # Prepare API request payload for verbatim endpoint
-            api_payload = {
-                "start_date": start_date,
-                "end_date": end_date,
-                "node_path": node_path,
-                "filters": json.dumps(filters or {})
-            }
-            
-            # Make API call to Iberia chatbot endpoint
-            logger.info(f"🔗 Attempting chatbot API call for {node_path} from {start_date} to {end_date}")
-            
-            # Use the configured chatbot endpoint
-            chatbot_endpoint = os.getenv('CHATBOT_API_ENDPOINT', 'https://b8fktdca38.execute-api.eu-west-1.amazonaws.com/api/transformation/api/nps-chatbot/verbatim')
-            
-            # Make HTTP request to the real chatbot
-            import requests
-            import pandas as pd
-            import json
-            
-            headers = {
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json",
-                "User-Agent": "CausalExplanationAgent/1.0"
-            }
-            
-            logger.info(f"🌐 Making HTTP request to: {chatbot_endpoint}")
-            logger.info(f"📋 Headers: {headers}")
-            logger.info(f"📦 Payload: {api_payload}")
-            
-            response = requests.get(
-                chatbot_endpoint,
-                params=api_payload,
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                try:
-                    # Check if response has content
-                    if not response.text.strip():
-                        logger.warning("Chatbot API returned empty response - this is normal, will use PBI fallback")
-                        return pd.DataFrame()
-                    
-                    data = response.json()
-                    logger.info(f"✅ Chatbot API response received: {len(data)} records")
-                    
-                    # Convert response to DataFrame
-                    if isinstance(data, list) and len(data) > 0:
-                        df = pd.DataFrame(data)
-                        logger.info(f"✅ Successfully converted to DataFrame: {df.shape}")
-                        return df
-                    else:
-                        logger.warning("Chatbot API returned empty or invalid data")
-                        return pd.DataFrame()
-                        
-                except Exception as e:
-                    logger.warning(f"Error parsing chatbot API response: {e} - this is normal, will use PBI fallback")
-                    logger.debug(f"Raw response: {response.text[:200]}...")
-                    return pd.DataFrame()
-                    
-            else:
-                logger.warning(f"Chatbot API returned status {response.status_code}: {response.text}")
-                return pd.DataFrame()
-                
-        except requests.exceptions.ConnectionError:
-            logger.warning("⚠️ Connection error: Cannot connect to chatbot API - will use PBI fallback")
-            return pd.DataFrame()
-        except requests.exceptions.Timeout:
-            logger.warning("⚠️ Timeout error: Chatbot API request timed out - will use PBI fallback")
-            return pd.DataFrame()
-        except Exception as e:
-            logger.warning(f"⚠️ Error calling chatbot API: {e} - will use PBI fallback")
-            return pd.DataFrame()
-    
-    def _ask_chatbot_question_with_filters(self, question: str, date_range: Tuple[str, str], 
-                                          node_path: str, filters: Optional[Dict] = None) -> Optional[Dict]:
-        """
-        Ask a question to the chatbot API with proper filters and get the full answer
-        
-        Args:
-            question: The question to ask
-            date_range: Tuple with (start_date, end_date)
-            node_path: Node path for filtering
-            filters: Additional filters (cabin, haul, route, etc.)
-            
-        Returns:
-            Full answer data if successful, None otherwise
-        """
-        try:
-            if not self.token:
-                logger.warning("No JWT token available for chatbot question API")
-                return None
-            
-            # Validate token before making API call
-            if not self.ensure_valid_token():
-                logger.warning("JWT token is invalid or expired")
-                return None
-            
-            # Extract date range
-            start_date, end_date = date_range
-            
-            # Prepare question payload with proper filters
-            question_payload = {
-                "value": question,
-                "verbatimCol": "iag_mod_501_t_scrubbed",
-                "sessionId": f"session-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
-                "filters": {
-                    "date_flight_local": [start_date, end_date]
-                }
-            }
-            
-            # Add additional filters if provided
-            if filters:
-                # Map our filters to chatbot filter names
-                if 'cabin' in filters:
-                    question_payload["filters"]["cabin_in_surveyed_flight"] = filters['cabin']
-                if 'haul' in filters:
-                    question_payload["filters"]["haul"] = filters['haul']
-                if 'route' in filters:
-                    question_payload["filters"]["route"] = filters['route']
-                if 'fleet' in filters:
-                    question_payload["filters"]["fleet"] = filters['fleet']
-                if 'nps_category' in filters:
-                    question_payload["filters"]["nps_category"] = filters['nps_category']
-            
-            # Use the question endpoint
-            question_endpoint = "https://b8fktdca38.execute-api.eu-west-1.amazonaws.com/api/transformation/api/nps-chatbot/question"
-            
-            headers = {
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json",
-                "User-Agent": "CausalExplanationAgent/1.0"
-            }
-            
-            logger.info(f"🤖 Asking chatbot question: {question}")
-            logger.info(f"🌐 Making POST request to: {question_endpoint}")
-            logger.info(f"📦 Filters: {question_payload['filters']}")
-            
-            response = requests.post(
-                question_endpoint,
-                json=question_payload,
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 201:
-                try:
-                    data = response.json()
-                    job_id = data.get('jobId')
-                    if job_id:
-                        logger.info(f"✅ Question submitted successfully, jobId: {job_id}")
-                        
-                        # Wait for the answer
-                        return self._wait_for_chatbot_answer(job_id, headers)
-                    else:
-                        logger.warning("Question API response missing jobId")
-                        return None
-                except Exception as e:
-                    logger.error(f"Error parsing question API response: {e}")
-                    return None
-            else:
-                logger.warning(f"Question API returned status {response.status_code}: {response.text}")
-                return None
-                
-        except Exception as e:
-            logger.error(f"Error asking chatbot question: {e}")
-            return None
-    
-    def _wait_for_chatbot_answer(self, job_id: str, headers: Dict, max_wait_time: int = 300) -> Optional[Dict]:
-        """
-        Wait for chatbot answer with polling
-        
-        Args:
-            job_id: The jobId from the question submission
-            headers: HTTP headers for the request
-            max_wait_time: Maximum time to wait in seconds
-            
-        Returns:
-            Answer data if available, None otherwise
-        """
-        import time
-        
-        answer_endpoint = f"https://b8fktdca38.execute-api.eu-west-1.amazonaws.com/api/transformation/api/nps-chatbot/question/{job_id}"
-        
-        start_time = time.time()
-        attempt = 0
-        
-        while time.time() - start_time < max_wait_time:
-            attempt += 1
-            logger.info(f"🔍 Getting chatbot answer for jobId: {job_id} (attempt {attempt})")
-            
-            try:
-                response = requests.get(
-                    answer_endpoint,
-                    headers=headers,
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    
-                    # Check if we have an answer
-                    answer = data.get('answer')
-                    tool_output = data.get('toolOutput')
-                    error = data.get('error')
-                    
-                    if answer and answer != "null" and answer != None and str(answer).strip():
-                        logger.info(f"✅ Got chatbot answer for jobId: {job_id}")
-                        return data
-                    elif error and error != "null" and error != None:
-                        logger.error(f"❌ Chatbot error: {error}")
-                        return None
-                    else:
-                        logger.info(f"⏳ Still processing... (attempt {attempt})")
-                        
-                else:
-                    logger.warning(f"Answer API returned status {response.status_code}: {response.text}")
-                    
-            except Exception as e:
-                logger.error(f"Error getting chatbot answer: {e}")
-            
-            # Wait before next attempt - longer delays for chatbot processing
-            wait_time = min(10 + attempt * 5, 30)  # Increasing delay: 10, 15, 20, 25, 30, 30, 30...
-            logger.info(f"⏳ Waiting {wait_time} seconds...")
-            time.sleep(wait_time)
-        
-        logger.warning(f"⏰ Timeout after {max_wait_time} seconds waiting for answer")
-        return None
-    
-    def _wait_for_chatbot_answer_working(self, job_id: str, headers: Dict, max_wait_time: int = 120) -> Optional[Dict]:
-        """
-        Wait for chatbot answer with the working polling method
-        
-        Args:
-            job_id: The jobId from the question submission
-            headers: HTTP headers for the request
-            max_wait_time: Maximum time to wait in seconds
-            
-        Returns:
-            Answer data if available, None otherwise
-        """
-        import time
-        
-        answer_endpoint = f"https://b8fktdca38.execute-api.eu-west-1.amazonaws.com/api/transformation/api/nps-chatbot/question/{job_id}"
-        
-        start_time = time.time()
-        attempt = 0
-        
-        while time.time() - start_time < max_wait_time:
-            attempt += 1
-            logger.info(f"🔍 Getting chatbot answer for jobId: {job_id} (attempt {attempt})")
-            
-            try:
-                import requests
-                
-                response = requests.get(
-                    answer_endpoint,
-                    headers=headers,
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    
-                    # Check if we have an answer
-                    answer = data.get('answer')
-                    tool_output = data.get('toolOutput')
-                    error = data.get('error')
-                    
-                    # Check if we have a real answer (not None and not "null")
-                    if answer is not None and answer != "null" and str(answer).strip():
-                        logger.info(f"✅ Got chatbot answer for jobId: {job_id}")
-                        return data
-                    elif error is not None and error != "null":
-                        logger.error(f"❌ Chatbot error: {error}")
-                        return None
-                    else:
-                        logger.info(f"⏳ Still processing... (attempt {attempt})")
-                        
-                else:
-                    logger.warning(f"Answer API returned status {response.status_code}: {response.text}")
-                    
-            except Exception as e:
-                logger.error(f"Error getting chatbot answer: {e}")
-            
-            # Wait before next attempt - very short delays for fast response
-            wait_time = min(3 + attempt * 2, 8)  # Increasing delay: 3, 5, 7, 8, 8, 8...
-            logger.info(f"⏳ Waiting {wait_time} seconds...")
-            time.sleep(wait_time)
-        
-        logger.warning(f"⏰ Timeout after {max_wait_time} seconds waiting for answer")
-        return None
-    
-    def collect_verbatims_for_period(self, date_range: Tuple[str, str], node_path: str,
-                                   filters: Optional[Dict] = None) -> pd.DataFrame:
-        """
-        Recopila verbatims para el período especificado
-        
-        Args:
-            date_range: Tupla con (start_date, end_date)
-            node_path: Ruta del nodo en el árbol jerárquico
-            filters: Filtros adicionales (sentiment, themes, etc.)
-        
-        Returns:
-            DataFrame con verbatims procesados
-        """
-        try:
-            # Intentar obtener verbatims de la API del chatbot primero
-            if self.ensure_valid_token(): # Use ensure_valid_token here
-                logger.info("🔗 Attempting to collect verbatims from chatbot API...")
-                verbatims_data = self._collect_from_chatbot_api(date_range, node_path, filters)
-                if not verbatims_data.empty:
-                    logger.info(f"✅ Successfully collected {len(verbatims_data)} verbatims from chatbot API")
-                    return verbatims_data
-                else:
-                    logger.info("ℹ️ Chatbot API returned no data, using PBI collector fallback")
-            
-            # Fallback al Power BI collector
-            if self.pbi_collector:
-                logger.info("🔄 Using PBI collector fallback for verbatims data...")
-                from datetime import datetime
-                start_dt = datetime.strptime(date_range[0], '%Y-%m-%d')
-                end_dt = datetime.strptime(date_range[1], '%Y-%m-%d')
-                
-                verbatims_data = self.pbi_collector.collect_verbatims_for_date_range(
-                    node_path=node_path,
-                    start_date=start_dt,
-                    end_date=end_dt
-                )
-                
-                if verbatims_data.empty:
-                    logger.warning(f"No verbatims data found for period {date_range}")
-                    return pd.DataFrame()
-                
-                # Procesar verbatims
-                logger.info(f"🔧 Processing {len(verbatims_data)} verbatims with sentiment analysis and theme categorization...")
-                processed_verbatims = self._process_verbatims(verbatims_data)
-                
-                # Aplicar filtros si se especifican
-                if filters:
-                    logger.info(f"🔍 Applying filters: {filters}")
-                    processed_verbatims = self._apply_filters(processed_verbatims, filters)
-                
-                logger.info(f"✅ Successfully processed {len(processed_verbatims)} verbatims")
-                return processed_verbatims
-            else:
-                logger.error("No data source available (neither chatbot API nor PBI collector)")
-                return pd.DataFrame()
-            
-        except Exception as e:
-            logger.error(f"Error collecting verbatims for period {date_range}: {e}")
-            return pd.DataFrame()
-    
-    def analyze_sentiment(self, verbatim_text: str) -> Dict[str, Any]:
-        """
-        Analiza el sentimiento de un verbatim individual
-        
-        Args:
-            verbatim_text: Texto del verbatim
-        
-        Returns:
-            Dict con análisis de sentimiento
-        """
-        try:
-            if not verbatim_text or pd.isna(verbatim_text):
-                return {'score': 0.0, 'category': 'neutral', 'confidence': 0.0}
-            
-            text_lower = verbatim_text.lower()
-            
-            # Contar palabras positivas y negativas
-            positive_count = sum(1 for word in self.sentiment_positive if word in text_lower)
-            negative_count = sum(1 for word in self.sentiment_negative if word in text_lower)
-            
-            # Calcular score simple (-1 a 1)
-            total_sentiment_words = positive_count + negative_count
-            if total_sentiment_words == 0:
-                sentiment_score = 0.0
-                category = 'neutral'
-                confidence = 0.0
-            else:
-                sentiment_score = (positive_count - negative_count) / len(text_lower.split())
-                confidence = min(total_sentiment_words / len(text_lower.split()) * 2, 1.0)
-                
-                if sentiment_score > 0.01:
-                    category = 'positive'
-                elif sentiment_score < -0.01:
-                    category = 'negative'
-                else:
-                    category = 'neutral'
-            
-            return {
-                'score': round(sentiment_score, 3),
-                'category': category,
-                'confidence': round(confidence, 3),
-                'positive_words': positive_count,
-                'negative_words': negative_count
-            }
-            
-        except Exception as e:
-            logger.error(f"Error analyzing sentiment: {e}")
-            return {'score': 0.0, 'category': 'neutral', 'confidence': 0.0}
-    
-    def extract_routes_mentions(self, verbatims_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Extrae menciones de rutas en los verbatims
-        
-        Args:
-            verbatims_df: DataFrame con verbatims
-        
-        Returns:
-            DataFrame con rutas mencionadas
-        """
-        try:
-            routes_mentioned = []
-            
-            for _, verbatim in verbatims_df.iterrows():
-                text = str(verbatim.get('verbatim_text', ''))
-                verbatim_id = verbatim.get('verbatim_id', '')
-                
-                # Buscar patrones de rutas
-                found_routes = []
-                for pattern in self.route_patterns:
-                    matches = re.findall(pattern, text.upper())
-                    found_routes.extend(matches)
-                
-                # Limpiar y normalizar rutas encontradas
-                for route in found_routes:
-                    clean_route = self._normalize_route(route)
-                    if clean_route:
-                        routes_mentioned.append({
-                            'verbatim_id': verbatim_id,
-                            'route_mentioned': clean_route,
-                            'original_text': route,
-                            'verbatim_text': text[:200],  # Primeros 200 caracteres
-                            'sentiment_score': verbatim.get('sentiment_score', 0),
-                            'date': verbatim.get('date', None),
-                            'nps_score': verbatim.get('nps_score', None)
-                        })
-            
-            if routes_mentioned:
-                return pd.DataFrame(routes_mentioned)
-            else:
-                return pd.DataFrame()
-                
-        except Exception as e:
-            logger.error(f"Error extracting route mentions: {e}")
-            return pd.DataFrame()
-    
-    def categorize_themes(self, verbatims_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Categoriza verbatims por temas
-        
-        Args:
-            verbatims_df: DataFrame con verbatims
-        
-        Returns:
-            DataFrame con categorías temáticas
-        """
-        try:
-            verbatims_with_themes = verbatims_df.copy()
-            
-            # Inicializar columnas de temas
-            for theme in self.theme_keywords.keys():
-                verbatims_with_themes[f'theme_{theme}'] = False
-                verbatims_with_themes[f'theme_{theme}_count'] = 0
-            
-            verbatims_with_themes['primary_theme'] = 'otros'
-            verbatims_with_themes['theme_confidence'] = 0.0
-            
-            for idx, verbatim in verbatims_with_themes.iterrows():
-                text = str(verbatim.get('verbatim_text', '')).lower()
-                
-                theme_scores = {}
-                
-                # Contar menciones por tema
-                for theme, keywords in self.theme_keywords.items():
-                    count = sum(1 for keyword in keywords if keyword in text)
-                    verbatims_with_themes.loc[idx, f'theme_{theme}'] = count > 0
-                    verbatims_with_themes.loc[idx, f'theme_{theme}_count'] = count
-                    
-                    if count > 0:
-                        theme_scores[theme] = count
-                
-                # Determinar tema principal
-                if theme_scores:
-                    primary_theme = max(theme_scores, key=theme_scores.get)
-                    verbatims_with_themes.loc[idx, 'primary_theme'] = primary_theme
-                    
-                    # Calcular confianza (normalizada por longitud del texto)
-                    max_score = theme_scores[primary_theme]
-                    text_length = len(text.split())
-                    confidence = min(max_score / max(text_length, 1) * 10, 1.0)
-                    verbatims_with_themes.loc[idx, 'theme_confidence'] = round(confidence, 3)
-            
-            return verbatims_with_themes
-            
-        except Exception as e:
-            logger.error(f"Error categorizing themes: {e}")
-            return verbatims_df
-    
-    def filter_by_sentiment(self, verbatims_df: pd.DataFrame, 
-                          sentiment_threshold: float = 0.0,
-                          sentiment_type: str = 'all') -> pd.DataFrame:
-        """
-        Filtra verbatims por sentimiento
-        
-        Args:
-            verbatims_df: DataFrame con verbatims
-            sentiment_threshold: Umbral de sentimiento (-1 a 1)
-            sentiment_type: 'positive', 'negative', 'neutral', 'all'
-        
-        Returns:
-            DataFrame filtrado
-        """
-        try:
-            if verbatims_df.empty:
-                return verbatims_df
-            
-            filtered_df = verbatims_df.copy()
-            
-            if sentiment_type == 'positive':
-                filtered_df = filtered_df[filtered_df['sentiment_score'] > sentiment_threshold]
-            elif sentiment_type == 'negative':
-                filtered_df = filtered_df[filtered_df['sentiment_score'] < -abs(sentiment_threshold)]
-            elif sentiment_type == 'neutral':
-                filtered_df = filtered_df[
-                    (filtered_df['sentiment_score'] >= -abs(sentiment_threshold)) &
-                    (filtered_df['sentiment_score'] <= abs(sentiment_threshold))
-                ]
-            # 'all' no aplica filtro
-            
-            return filtered_df
-            
-        except Exception as e:
-            logger.error(f"Error filtering by sentiment: {e}")
-            return verbatims_df
-    
-    def get_verbatims_summary(self, verbatims_df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Genera resumen estadístico de verbatims
-        
-        Args:
-            verbatims_df: DataFrame con verbatims procesados
-        
-        Returns:
-            Dict con resumen estadístico
-        """
-        try:
-            if verbatims_df.empty:
-                return {
-                    'total_verbatims': 0,
-                    'summary': 'No hay verbatims disponibles'
-                }
-            
-            total_verbatims = len(verbatims_df)
-            
-            # Análisis de sentimiento
-            sentiment_counts = verbatims_df['sentiment_category'].value_counts().to_dict()
-            avg_sentiment = verbatims_df['sentiment_score'].mean()
-            
-            # Análisis temático
-            theme_columns = [col for col in verbatims_df.columns if col.startswith('theme_') and col.endswith('_count')]
-            theme_summary = {}
-            
-            for col in theme_columns:
-                theme_name = col.replace('theme_', '').replace('_count', '')
-                mentions = verbatims_df[verbatims_df[col] > 0]
-                if len(mentions) > 0:
-                    theme_summary[theme_name] = {
-                        'verbatims_count': len(mentions),
-                        'avg_sentiment': mentions['sentiment_score'].mean()
-                    }
-            
-            # Rutas más mencionadas
-            routes_mentioned = []
-            if 'routes_mentioned' in verbatims_df.columns:
-                route_mentions = verbatims_df['routes_mentioned'].value_counts().head(5)
-                routes_mentioned = route_mentions.to_dict()
-            
-            summary_text = f"Total: {total_verbatims} verbatims. "
-            summary_text += f"Sentimiento promedio: {round(avg_sentiment, 2)}. "
-            
-            if sentiment_counts:
-                sentiment_desc = []
-                for category, count in sentiment_counts.items():
-                    pct = round(count / total_verbatims * 100, 1)
-                    sentiment_desc.append(f"{category}: {count} ({pct}%)")
-                summary_text += "Distribución: " + ", ".join(sentiment_desc) + ". "
-            
-            if theme_summary:
-                top_theme = max(theme_summary.items(), key=lambda x: x[1]['verbatims_count'])
-                summary_text += f"Tema principal: {top_theme[0]} ({top_theme[1]['verbatims_count']} menciones)."
-            
-            return {
-                'total_verbatims': total_verbatims,
-                'sentiment_distribution': sentiment_counts,
-                'average_sentiment': round(avg_sentiment, 3),
-                'themes_summary': theme_summary,
-                'top_routes_mentioned': routes_mentioned,
-                'summary': summary_text
-            }
-            
-        except Exception as e:
-            logger.error(f"Error generating verbatims summary: {e}")
-            return {
-                'total_verbatims': 0,
-                'summary': f'Error generando resumen: {str(e)}'
-            }
-    
-    def _process_verbatims(self, verbatims_df: pd.DataFrame) -> pd.DataFrame:
-        """Procesa verbatims aplicando análisis de sentimiento y limpieza"""
-        try:
-            processed_df = verbatims_df.copy()
-            
-            # Get the correct text column name
-            text_col = self._get_text_column(processed_df)
-            if not text_col:
-                logger.warning("No text column found for processing verbatims")
-                return processed_df
-            
-            # Limpiar texto
-            processed_df['verbatim_text_clean'] = processed_df[text_col].apply(self._clean_text)
-            
-            # Análisis de sentimiento
-            sentiment_results = processed_df['verbatim_text_clean'].apply(self.analyze_sentiment)
-            
-            # Expandir resultados de sentimiento
-            processed_df['sentiment_score'] = [result['score'] for result in sentiment_results]
-            processed_df['sentiment_category'] = [result['category'] for result in sentiment_results]
-            processed_df['sentiment_confidence'] = [result['confidence'] for result in sentiment_results]
-            
-            # Categorizar por temas
-            processed_df = self.categorize_themes(processed_df)
-            
-            # Extraer menciones de rutas
-            route_mentions = self.extract_routes_mentions(processed_df)
-            if not route_mentions.empty:
-                # Agregar información de rutas mencionadas
-                route_counts = route_mentions.groupby('verbatim_id')['route_mentioned'].apply(list).to_dict()
-                processed_df['routes_mentioned'] = processed_df.get('verbatim_id', processed_df.index).map(route_counts)
-                processed_df['routes_mentioned'] = processed_df['routes_mentioned'].fillna('').apply(
-                    lambda x: x if isinstance(x, list) else []
-                )
-            else:
-                processed_df['routes_mentioned'] = [[] for _ in range(len(processed_df))]
-            
-            return processed_df
-            
-        except Exception as e:
-            logger.error(f"Error processing verbatims: {e}")
-            return verbatims_df
-    
-    def _clean_text(self, text: str) -> str:
-        """Limpia y normaliza texto de verbatims"""
-        try:
-            if not text or pd.isna(text):
-                return ""
-            
-            # Convertir a string y minúsculas
-            clean_text = str(text).lower()
-            
-            # Remover caracteres especiales pero mantener espacios y puntuación básica
-            clean_text = re.sub(r'[^\w\s\.\,\!\?\-]', ' ', clean_text)
-            
-            # Normalizar espacios
-            clean_text = re.sub(r'\s+', ' ', clean_text).strip()
-            
-            return clean_text
-            
-        except Exception as e:
-            logger.error(f"Error cleaning text: {e}")
-            return str(text) if text else ""
-    
-    def _normalize_route(self, route_text: str) -> str:
-        """Normaliza formato de rutas extraídas"""
-        try:
-            if not route_text:
-                return ""
-            
-            # Remover espacios y guiones extra
-            clean_route = re.sub(r'[^\w]', '', route_text.upper())
-            
-            # Verificar que tenga formato de ruta (6 caracteres)
-            if len(clean_route) == 6 and clean_route.isalpha():
-                return f"{clean_route[:3]}-{clean_route[3:]}"
-            
-            return ""
-            
-        except Exception as e:
-            logger.error(f"Error normalizing route: {e}")
-            return ""
-    
-    def _apply_filters(self, verbatims_df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
-        """Aplica filtros específicos a los verbatims"""
-        try:
-            filtered_df = verbatims_df.copy()
-            
-            # Filtro por sentimiento
-            if 'sentiment_type' in filters:
-                sentiment_threshold = filters.get('sentiment_threshold', 0.0)
-                filtered_df = self.filter_by_sentiment(
-                    filtered_df, 
-                    sentiment_threshold, 
-                    filters['sentiment_type']
-                )
-            
-            # Filtro por tema
-            if 'theme' in filters:
-                theme = filters['theme']
-                if f'theme_{theme}' in filtered_df.columns:
-                    filtered_df = filtered_df[filtered_df[f'theme_{theme}'] == True]
-            
-            # Filtro por ruta mencionada
-            if 'route_mentioned' in filters:
-                route = filters['route_mentioned']
-                filtered_df = filtered_df[
-                    filtered_df['routes_mentioned'].apply(lambda x: route in x if isinstance(x, list) else False)
-                ]
-            
-            # Filtro por NPS score mínimo
-            if 'min_nps' in filters and 'nps_score' in filtered_df.columns:
-                filtered_df = filtered_df[filtered_df['nps_score'] >= filters['min_nps']]
-            
-            return filtered_df
-            
-        except Exception as e:
-            logger.error(f"Error applying filters: {e}")
-            return verbatims_df
-
     def test_connection(self) -> tuple[bool, str]:
         """
-        Test connection to the verbatims data source.
-        Returns (success: bool, message: str)
-        """
-        try:
-            # Test token validity first
-            if self.ensure_valid_token():
-                status = self.get_token_status()
-                expires_in = status.get('expires_in', 'Unknown')
-                return True, f"✅ Token is valid - expires in {expires_in}s"
-            else:
-                # Check if PBI fallback is available
-                if hasattr(self, 'pbi_collector') and self.pbi_collector:
-                    return True, "✅ Verbatims collector ready (using PBI fallback)"
-                else:
-                    return False, "❌ No data source available (neither valid token nor PBI collector)"
-                
-        except Exception as e:
-            return False, f"❌ Connection test failed: {str(e)}"
-
-
-    def get_verbatims_data(self, start_date: str, end_date: str, node_path: str, verbatim_type: str = None, intelligent_query: str = None) -> pd.DataFrame:
-        """
-        Get verbatims data for the specified period and node path.
-        
-        Args:
-            start_date: Start date in YYYY-MM-DD format
-            end_date: End date in YYYY-MM-DD format  
-            node_path: Node path for filtering
-            verbatim_type: Type of verbatim (optional)
-            intelligent_query: Intelligent query for filtering verbatims (optional)
+        Test connection to the chatbot API
             
         Returns:
-            DataFrame with verbatims data
+            Tuple of (success: bool, message: str)
         """
         try:
-            # Convert string dates to datetime
-            from datetime import datetime
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            headers = self._get_headers()
             
-            # Use existing collect_verbatims_for_period method
-            date_range = (start_date, end_date)
+            # Simple test payload
+            test_payload = {
+                "value": "¿Qué es NPS?",
+                "filters": {
+                    "date_flight_local": ["2024-01-01", "2024-01-31"]
+                }
+            }
             
-            # Prepare filters
-            filters = {}
-            if verbatim_type:
-                filters["verbatim_type"] = verbatim_type
+            logger.info("🔍 Testing chatbot API connection...")
             
-            # Call the existing method with appropriate parameters
-            df = self.collect_verbatims_for_period(
-                date_range=date_range,
-                node_path=node_path,
-                filters=filters
+            response = requests.post(
+                self.endpoint,
+                json=test_payload,
+                headers=headers,
+                proxies=self.proxies,
+                timeout=10
             )
             
-            # Apply intelligent query filtering if provided
-            if intelligent_query and not df.empty:
-                df = self._apply_intelligent_query_filter(df, intelligent_query)
-            
-            return df
-            
+            if response.status_code in [200, 201]:
+                try:
+                    data = response.json()
+                    if 'jobId' in data or 'answer' in data:
+                        return True, f"✅ Chatbot API connected successfully (status {response.status_code})"
+                    else:
+                        return False, f"⚠️ Unexpected response format: {data}"
+                except Exception as e:
+                    return False, f"❌ Invalid JSON response: {e}"
+            else:
+                return False, f"❌ API returned status {response.status_code}: {response.text[:200]}"
+                
+        except requests.exceptions.ConnectionError:
+            # If chatbot fails, check if PBI fallback is available
+            if self.pbi_collector:
+                return True, "✅ Chatbot API unavailable, using PBI fallback"
+            else:
+                return False, "❌ Cannot connect to chatbot API and no PBI fallback available"
+        except requests.exceptions.Timeout:
+            return False, "❌ Connection timeout"
         except Exception as e:
-            logger.error(f"Error getting verbatims data: {e}")
-            return pd.DataFrame()  # Return empty DataFrame on error
+            return False, f"❌ Connection test failed: {str(e)}"
     
-    def ask_chatbot_question(self, question: str, start_date: str, end_date: str, node_path: str, 
-                            filters: Optional[Dict] = None) -> Optional[Dict]:
+    def ask_chatbot_question(
+        self,
+        question: str,
+        start_date: str,
+        end_date: str,
+        node_path: str,
+        filters: Optional[Dict] = None,
+        max_wait_time: int = 120
+    ) -> Optional[Dict]:
         """
-        Ask a question to the chatbot and get the answer using the working format
+        Ask a question to the chatbot and wait for the answer
         
         Args:
             question: The question to ask
             start_date: Start date in YYYY-MM-DD format
             end_date: End date in YYYY-MM-DD format
-            node_path: Node path for filtering
-            filters: Additional filters (cabin, haul, route, etc.)
+            node_path: Node path for context (not used in current API)
+            filters: Additional filters (cabin, haul, route, nps_category, etc.)
+            max_wait_time: Maximum time to wait for answer in seconds
             
         Returns:
-            Answer data if successful, None otherwise
+            Dictionary with answer data if successful, None otherwise
+            Expected keys: 'answer', 'toolOutput', 'jobId', 'sessionId', etc.
         """
         try:
-            if not self.token:
-                logger.warning("No JWT token available for chatbot question API")
-                return None
+            logger.info(f"🤖 Asking chatbot: {question}")
+            logger.info(f"📅 Date range: {start_date} to {end_date}")
             
-            # Validate token before making API call
-            if not self.ensure_valid_token():
-                logger.warning("JWT token is invalid or expired")
-                return None
+            headers = self._get_headers()
             
-            # Use the working format from the successful test
-            question_payload = {
+            # Prepare question payload
+            payload = {
                 "value": question,
-                "verbatimCol": "iag_mod_501_t_scrubbed",  # This is the working verbatimCol
-                "sessionId": f"session-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
                 "filters": {
                     "date_flight_local": [start_date, end_date]
                 }
@@ -1223,360 +162,208 @@ class ChatbotVerbatimsCollector:
             
             # Add additional filters if provided
             if filters:
+                # Map filter names to chatbot API format
                 if 'cabin' in filters:
-                    question_payload["filters"]["cabin_in_surveyed_flight"] = filters['cabin']
+                    payload["filters"]["cabin_in_surveyed_flight"] = filters['cabin']
                 if 'haul' in filters:
-                    question_payload["filters"]["haul"] = filters['haul']
+                    payload["filters"]["haul"] = filters['haul']
                 if 'route' in filters:
-                    question_payload["filters"]["route"] = filters['route']
+                    payload["filters"]["route"] = filters['route']
                 if 'fleet' in filters:
-                    question_payload["filters"]["fleet"] = filters['fleet']
+                    payload["filters"]["fleet"] = filters['fleet']
                 if 'nps_category' in filters:
-                    question_payload["filters"]["nps_category"] = filters['nps_category']
+                    payload["filters"]["nps_category"] = filters['nps_category']
             
-            # Use the question endpoint
-            question_endpoint = "https://b8fktdca38.execute-api.eu-west-1.amazonaws.com/api/transformation/api/nps-chatbot/question"
+            logger.info(f"📦 Filters: {payload['filters']}")
             
-            import requests
-            
-            headers = {
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json",
-                "User-Agent": "CausalExplanationAgent/1.0"
-            }
-            
-            logger.info(f"🤖 Asking chatbot question: {question}")
-            logger.info(f"🌐 Making POST request to: {question_endpoint}")
-            logger.info(f"📦 Filters: {question_payload['filters']}")
-            
+            # Submit question
             response = requests.post(
-                question_endpoint,
-                json=question_payload,
+                self.endpoint,
+                json=payload,
                 headers=headers,
+                proxies=self.proxies,
                 timeout=30
             )
             
-            if response.status_code == 201:
-                try:
-                    data = response.json()
-                    job_id = data.get('jobId')
-                    if job_id:
-                        logger.info(f"✅ Question submitted successfully, jobId: {job_id}")
-                        
-                        # Wait for the answer using the working method with very short timeout for fast response
-                        return self._wait_for_chatbot_answer_working(job_id, headers, max_wait_time=30)
-                    else:
-                        logger.warning("Question API response missing jobId")
-                        return None
-                except Exception as e:
-                    logger.error(f"Error parsing question API response: {e}")
-                    return None
-            else:
-                logger.warning(f"Question API returned status {response.status_code}: {response.text}")
+            if response.status_code not in [200, 201]:
+                logger.error(f"❌ Question submission failed: {response.status_code}")
+                logger.error(f"Response: {response.text}")
                 return None
+            
+            # Parse response
+            data = response.json()
+            job_id = data.get('jobId')
+            
+            # Check if we got an immediate answer (rare case)
+            answer = data.get('answer')
+            if answer and answer != "null" and answer is not None and str(answer).strip():
+                logger.info(f"✅ Got immediate answer!")
+                return data
+            
+            # If we got a jobId, poll for the answer
+            if job_id:
+                logger.info(f"✅ Question submitted with jobId: {job_id}")
+                return self._wait_for_answer(job_id, headers, max_wait_time)
+            else:
+                logger.warning("⚠️ No jobId or immediate answer in response")
+                return data
                 
-        except Exception as e:
-            logger.error(f"Error asking chatbot question: {e}")
+        except requests.exceptions.ConnectionError:
+            logger.error("❌ Connection error: Cannot connect to chatbot API")
             return None
-
-    def _apply_intelligent_query_filter(self, df: pd.DataFrame, intelligent_query: str) -> pd.DataFrame:
+        except requests.exceptions.Timeout:
+            logger.error("❌ Timeout error: Request timed out")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Error asking chatbot question: {e}")
+            return None
+    
+    def _wait_for_answer(
+        self,
+        job_id: str,
+        headers: Dict,
+        max_wait_time: int = 120
+    ) -> Optional[Dict]:
         """
-        Apply intelligent query filtering to verbatims data.
-        Enhanced with specific handling for route-based queries and representative comments.
-        Adapted for the new verbatims_sentiment table structure.
+        Poll the chatbot API for the answer using the jobId
         
         Args:
-            df: DataFrame with verbatims data
-            intelligent_query: Query string to filter by
+            job_id: The jobId from the question submission
+            headers: HTTP headers for the request
+            max_wait_time: Maximum time to wait in seconds
             
         Returns:
-            Filtered DataFrame with enhanced route and sentiment analysis
+            Answer data if available, None otherwise
         """
-        try:
-            if df.empty or not intelligent_query:
-                return df
+        answer_endpoint = f"{self.endpoint}/{job_id}"
+        
+        start_time = time.time()
+        attempt = 0
+        
+        logger.info(f"⏳ Waiting for answer (jobId: {job_id}, max {max_wait_time}s)...")
+        
+        while time.time() - start_time < max_wait_time:
+            attempt += 1
+            elapsed = int(time.time() - start_time)
             
-            # Clean column names for verbatims_sentiment table
-            df = self._clean_verbatims_columns(df)
-            
-            # Normalize query for better matching
-            query_lower = intelligent_query.lower()
-            
-            # Check for specific query types based on new verbatims questions
-            if 'rutas' in query_lower and 'negativ' in query_lower:
-                # Question 1: Routes with most negative comments
-                return self._filter_routes_negative_comments(df)
-            elif 'comentarios' in query_lower and 'representativ' in query_lower:
-                # Question 2: Representative comments for each route
-                return self._filter_representative_comments(df)
-            else:
-                # Use enhanced general filtering
-                return self._filter_general_intelligent_query(df, intelligent_query)
-            
-        except Exception as e:
-            logger.error(f"Error applying intelligent query filter: {e}")
-            return df
-
-    def _filter_routes_negative_comments(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Filter and analyze routes with most negative comments.
-        Adapted for verbatims_sentiment table structure.
-        Returns DataFrame with route analysis and negative sentiment focus.
-        """
-        try:
-            if df.empty:
-                return df
+            logger.info(f"🔍 Polling attempt {attempt} (elapsed: {elapsed}s)...")
                 
-            # For verbatims_sentiment table, we have different column names
-            text_col = self._get_text_column(df)
-            sentiment_col = self._get_sentiment_column(df)
-            
-            if not text_col:
-                logger.warning("No text column found for negative comments filtering")
-                return df
+            try:
+                response = requests.get(
+                    answer_endpoint,
+                    headers=headers,
+                    proxies=self.proxies,
+                    timeout=30
+                )
                 
-            # Filter for negative sentiment using multiple approaches
-            negative_mask = pd.Series([False] * len(df), index=df.index)
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Check for answer
+                    answer = data.get('answer')
+                    error = data.get('error')
+                    
+                    # Check for error
+                    if error and error != "null" and error is not None:
+                        logger.error(f"❌ Chatbot error: {error}")
+                        return None
+                        
+                    # Check if we have a real answer
+                    if answer and answer != "null" and answer is not None and str(answer).strip():
+                        logger.info(f"✅ Got answer after {elapsed}s ({attempt} attempts)!")
+                        return data
+                    else:
+                        logger.info(f"   ⏳ Still processing...")
+                else:
+                    logger.warning(f"⚠️ Poll returned status {response.status_code}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Error polling for answer: {e}")
             
-            # 1. Use sentiment column if available (verbatims_sentiment structure)
-            if sentiment_col:
-                if 'verbatim_global_sentiment' in df.columns:
-                    # Use the global sentiment column
-                    negative_mask = negative_mask | (df['verbatim_global_sentiment'].str.lower() == 'negative')
-                elif sentiment_col in df.columns:
-                    # Use the sentiment column
-                    negative_mask = negative_mask | (df[sentiment_col].str.lower() == 'negative')
-            
-            # 2. Use sentiment score if available
-            if 'sentiment_score' in df.columns:
-                # Sentiment scores typically range from -1 to 1, negatives are < 0
-                negative_mask = negative_mask | (df['sentiment_score'] < -0.2)
-            
-            # 3. Use keyword-based detection as fallback
-            negative_keywords = [
-                'horrible', 'terrible', 'malo', 'pésimo', 'desastroso', 'awful',
-                'molesto', 'furioso', 'decepcionado', 'nunca más', 'worst',
-                'retraso', 'delay', 'cancelado', 'perdido', 'dañado', 'sucio',
-                'mal servicio', 'bad service', 'poor', 'disappointing', 'terrible',
-                'awful', 'horrible', 'bad', 'worst', 'disappointing', 'frustrated'
-            ]
-            
-            negative_pattern = '|'.join(negative_keywords)
-            keyword_mask = df[text_col].str.lower().str.contains(negative_pattern, na=False, regex=True)
-            negative_mask = negative_mask | keyword_mask
-            
-            # Apply the negative filter
-            negative_df = df[negative_mask]
-            
-            # Extract and analyze routes
-            negative_df = self._enhance_route_extraction(negative_df)
-            
-            logger.info(f"🔍 Found {len(negative_df)} negative verbatims from {len(df)} total")
-            return negative_df
-            
-        except Exception as e:
-            logger.error(f"Error filtering negative routes: {e}")
-            return df
-
-    def _filter_representative_comments(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Filter for most representative comments per route.
-        Adapted for verbatims_sentiment table structure.
-        Returns diverse, informative comments that best represent issues.
-        """
-        try:
-            if df.empty:
-                return df
-                
-            text_col = self._get_text_column(df)
-            if not text_col:
-                logger.warning("No text column found for representative comments filtering")
-                return df
-                
-            # Enhance route extraction first
-            df = self._enhance_route_extraction(df)
-            
-            # Select representative comments based on criteria:
-            # 1. Word count (not too short, not too long)
-            # 2. Clear sentiment
-            # 3. Specific issues mentioned
-            # 4. Route diversity
-            
-            # Filter by word count (meaningful comments)
-            if 'word_count' not in df.columns:
-                df['word_count'] = df[text_col].str.split().str.len()
-            
-            # Keep comments with reasonable length (10-100 words for readability)
-            mask = (df['word_count'] >= 10) & (df['word_count'] <= 100)
-            filtered_df = df[mask]
-            
-            # If we have route information, try to get diverse examples
-            if 'extracted_route' in filtered_df.columns:
-                route_samples = []
-                for route in filtered_df['extracted_route'].dropna().unique():
-                    route_comments = filtered_df[filtered_df['extracted_route'] == route]
-                    # Take top 3 most descriptive comments per route
-                    if len(route_comments) > 0:
-                        # Sort by word count (prefer moderately detailed comments)
-                        top_comments = route_comments.nlargest(3, 'word_count')
-                        route_samples.append(top_comments)
-                
-                if route_samples:
-                    filtered_df = pd.concat(route_samples, ignore_index=True)
-            else:
-                # If no routes, select most informative comments overall
-                filtered_df = filtered_df.nlargest(min(20, len(filtered_df)), 'word_count')
-            
-            logger.info(f"🔍 Selected {len(filtered_df)} representative comments from {len(df)} total")
-            return filtered_df
-            
-        except Exception as e:
-            logger.error(f"Error filtering representative comments: {e}")
-            return df
-
-    def _filter_general_intelligent_query(self, df: pd.DataFrame, intelligent_query: str) -> pd.DataFrame:
-        """
-        Enhanced general filtering for other intelligent queries.
-        Adapted for verbatims_sentiment table structure.
-        """
-        try:
-            query_lower = intelligent_query.lower()
-            
-            # Enhanced keyword mappings
-            keyword_mappings = {
-                'retraso': ['retraso', 'delay', 'tarde', 'puntualidad', 'cancelado', 'atrasado'],
-                'equipaje': ['maleta', 'equipaje', 'baggage', 'perdido', 'dañado', 'facturación'],
-                'servicio': ['servicio', 'atención', 'tripulación', 'azafata', 'personal', 'crew'],
-                'comida': ['comida', 'bebida', 'catering', 'menú', 'desayuno', 'almuerzo', 'food'],
-                'asiento': ['asiento', 'seat', 'espacio', 'cómodo', 'incómodo', 'comfort'],
-                'entretenimiento': ['wifi', 'entretenimiento', 'pantalla', 'película', 'música', 'entertainment'],
-                'conexión': ['conexión', 'transbordo', 'escala', 'connecting', 'connection'],
-                'limpieza': ['limpio', 'sucio', 'limpieza', 'higiene', 'clean', 'dirty'],
-                'precio': ['precio', 'caro', 'barato', 'tarifa', 'coste', 'price', 'expensive'],
-                'reserva': ['reserva', 'booking', 'cambio', 'modificar', 'cancelar', 'reservation'],
-                'aeropuerto': ['aeropuerto', 'airport', 'terminal', 'puerta', 'gate', 'security'],
-                'boarding': ['embarque', 'boarding', 'puerta', 'gate', 'priority', 'zones']
-            }
-            
-            # Extract keywords from query
-            relevant_keywords = []
-            for category, keywords in keyword_mappings.items():
-                if any(keyword in query_lower for keyword in keywords):
-                    relevant_keywords.extend(keywords)
-            
-            # If no specific keywords found, use query terms directly
-            if not relevant_keywords:
-                relevant_keywords = [word.strip() for word in query_lower.split() if len(word.strip()) > 2]
-            
-            # Filter verbatims
-            text_col = self._get_text_column(df)
-            if relevant_keywords and text_col:
-                pattern = '|'.join([re.escape(keyword) for keyword in relevant_keywords])
-                mask = df[text_col].str.lower().str.contains(pattern, na=False, regex=True)
-                filtered_df = df[mask]
-                
-                logger.info(f"🔍 General query '{intelligent_query}' filtered {len(df)} -> {len(filtered_df)} verbatims")
-                return filtered_df
-            
-            return df
-            
-        except Exception as e:
-            logger.error(f"Error in general intelligent query filter: {e}")
-            return df
-
-    def _get_text_column(self, df: pd.DataFrame) -> str:
-        """Get the name of the text column in the DataFrame"""
-        # Updated for verbatims_sentiment table structure
-        possible_names = ['verbatim_text', 'Verbatim_Text', 'text', 'comment', 'feedback', 'Verbatim', '[Verbatim]']
-        for col in possible_names:
-            if col in df.columns:
-                return col
+            # Wait before next attempt - increasing delay
+            wait_time = min(5 + attempt * 2, 15)
+            logger.info(f"   ⏸️  Waiting {wait_time}s...")
+            time.sleep(wait_time)
+        
+        logger.warning(f"⏰ Timeout after {max_wait_time}s waiting for answer")
         return None
-
-    def _clean_verbatims_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+    
+    def get_verbatims_data(
+        self,
+        start_date: str,
+        end_date: str,
+        node_path: str,
+        verbatim_type: str = None,
+        intelligent_query: str = None
+    ) -> pd.DataFrame:
         """
-        Clean column names from verbatims_sentiment table.
-        Converts 'verbatims_sentiment[column_name]' to 'column_name' for easier handling.
-        """
-        try:
-            if df.empty:
-                return df
-            
-            # Create a mapping for column names
-            column_mapping = {}
-            for col in df.columns:
-                if col.startswith('verbatims_sentiment[') and col.endswith(']'):
-                    # Extract the column name from verbatims_sentiment[column_name]
-                    clean_name = col.replace('verbatims_sentiment[', '').replace(']', '')
-                    column_mapping[col] = clean_name
-                elif col == '[Verbatim]':
-                    # Keep the Verbatim column as is
-                    column_mapping[col] = 'Verbatim_Text'
-            
-            # Rename columns
-            if column_mapping:
-                df = df.rename(columns=column_mapping)
-                logger.info(f"🔧 Cleaned {len(column_mapping)} column names")
-            
-            return df
-            
-        except Exception as e:
-            logger.error(f"Error cleaning verbatims columns: {e}")
-            return df
-
-    def _get_sentiment_column(self, df: pd.DataFrame) -> str:
-        """Get the name of the sentiment column in the DataFrame"""
-        # Updated for verbatims_sentiment table structure
-        possible_names = [
-            'verbatim_global_sentiment', 'sentiment', 'sentiment_category', 
-            'global_sentiment', 'overall_sentiment'
-        ]
-        for col in possible_names:
-            if col in df.columns:
-                return col
-        return None
-
-    def _enhance_route_extraction(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Enhanced route extraction from verbatim text.
-        Adds 'extracted_route' column with identified routes.
+        Get verbatims data - fallback to PBI collector if chatbot is not available
+        
+        Args:
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            node_path: Node path for filtering
+            verbatim_type: Type of verbatim (optional)
+            intelligent_query: Intelligent query for filtering (optional)
+        
+        Returns:
+            DataFrame with verbatims data
         """
         try:
-            text_col = self._get_text_column(df)
-            if not text_col:
-                return df
+            logger.info(f"📊 Getting verbatims data for {start_date} to {end_date}")
+            
+            # For now, always fallback to PBI collector for raw verbatims data
+            # The chatbot is better used for Q&A, not for bulk data extraction
+            if self.pbi_collector:
+                logger.info("🔄 Using PBI collector for verbatims data...")
                 
-            # Improved route patterns
-            route_patterns = [
-                r'\b([A-Z]{3})\s*[-–—]\s*([A-Z]{3})\b',  # MAD-BCN, MAD – BCN
-                r'\b([A-Z]{3})\s+to\s+([A-Z]{3})\b',      # MAD to BCN
-                r'\b([A-Z]{3})\s*>\s*([A-Z]{3})\b',       # MAD > BCN
-                r'\bfrom\s+([A-Z]{3})\s+to\s+([A-Z]{3})\b', # from MAD to BCN
-                r'\b([A-Z]{3})[/\\]([A-Z]{3})\b',         # MAD/BCN, MAD\BCN
-            ]
-            
-            extracted_routes = []
-            for text in df[text_col].fillna(''):
-                route_found = None
-                for pattern in route_patterns:
-                    matches = re.finditer(pattern, str(text).upper())
-                    for match in matches:
-                        origin, dest = match.groups()
-                        route_found = f"{origin}-{dest}"
-                        break
-                    if route_found:
-                        break
-                extracted_routes.append(route_found)
-            
-            df = df.copy()  # Create a copy to avoid SettingWithCopyWarning
-            df['extracted_route'] = extracted_routes
-            
-            # Log route extraction stats
-            routes_found = sum(1 for route in extracted_routes if route)
-            logger.info(f"🛫 Extracted routes from {routes_found}/{len(df)} verbatims")
-            
-            return df
+                from datetime import datetime as dt
+                start_dt = dt.strptime(start_date, '%Y-%m-%d')
+                end_dt = dt.strptime(end_date, '%Y-%m-%d')
+                
+                df = self.pbi_collector.collect_verbatims_for_date_range(
+                    node_path=node_path,
+                    start_date=start_dt,
+                    end_date=end_dt
+                )
+                
+                if not df.empty:
+                    logger.info(f"✅ Got {len(df)} verbatims from PBI")
+                    return df
+                else:
+                    logger.warning("⚠️ No verbatims found in PBI")
+                    return pd.DataFrame()
+            else:
+                logger.warning("⚠️ No PBI collector available for verbatims data")
+                return pd.DataFrame()
             
         except Exception as e:
-            logger.error(f"Error enhancing route extraction: {e}")
-            return df  # Return original data on error 
+            logger.error(f"❌ Error getting verbatims data: {e}")
+            return pd.DataFrame()
+    
+    def _get_headers(self) -> Dict[str, str]:
+        """
+        Get HTTP headers for API requests
+        
+        Returns:
+            Dictionary with required headers
+        """
+        return {
+            "X-API-Key": self.api_key,  # Must be X-API-Key, not ApiKey
+            "User-Agent": self.user_agent,
+            "Content-Type": "application/json"
+        }
+    
+    def get_api_info(self) -> Dict[str, Any]:
+        """
+        Get information about the API configuration
+        
+        Returns:
+            Dictionary with API configuration info
+        """
+        return {
+            "environment": self.environment,
+            "endpoint": self.endpoint,
+            "api_key_set": bool(self.api_key),
+            "has_pbi_fallback": bool(self.pbi_collector)
+        }

@@ -4,6 +4,10 @@ FROM continuumio/miniconda3:latest
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
+# Configure Iberia proxy for chatbot access
+ENV HTTP_PROXY="http://proxyib.ib:80"
+ENV HTTPS_PROXY="http://proxyib.ib:80"
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \

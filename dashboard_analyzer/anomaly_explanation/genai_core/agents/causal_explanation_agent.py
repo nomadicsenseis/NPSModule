@@ -2556,111 +2556,44 @@ class CausalExplanationAgent:
         else:
             return False
     
+    # =========================================================================
+    # VERBATIMS TOOL - Refactored clean implementation
+    # =========================================================================
+    
     async def _verbatims_tool(self, node_path: str, start_date: str, end_date: str) -> str:
         """
-        Enhanced verbatims tool that uses strategic multi-round chatbot conversation
-        for comprehensive customer feedback analysis with cross-validation.
+        Verbatims tool for COMPARATIVE mode
+        Analyzes verbatims from TWO periods and compares the changes
+        
+        Args:
+            node_path: Node path for filtering  
+            start_date: Target period start date (YYYY-MM-DD)
+            end_date: Target period end date (YYYY-MM-DD)
+            
+        Returns:
+            Comparative analysis showing what changed between periods
         """
         try:
-            self.logger.info(f"🤖 VERBATIMS_TOOL CALLED - Enhanced Strategic Analysis")
-            self.logger.debug(f"📋 Parameters: node_path={node_path}, start_date={start_date}, end_date={end_date}")
+            self.logger.info(f"🤖 VERBATIMS_TOOL COMPARATIVE MODE")
+            self.logger.info(f"📅 Target: {start_date} to {end_date}")
             
-            # Determine verbatim type based on explanatory drivers context
-            verbatim_type = self._determine_verbatim_type_from_context()
-            self.logger.info(f"🎯 Determined verbatim type: {verbatim_type}")
+            # Calculate comparison dates
+            from datetime import datetime
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d') if isinstance(start_date, str) else start_date
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d') if isinstance(end_date, str) else end_date
             
-            # Try strategic chatbot conversation first if available
+            comparison_start_dt, comparison_end_dt = self.calculate_dynamic_comparison_dates(start_dt, end_dt)
+            comparison_start = comparison_start_dt.strftime('%Y-%m-%d')
+            comparison_end = comparison_end_dt.strftime('%Y-%m-%d')
+            
+            self.logger.info(f"📅 Comparison: {comparison_start} to {comparison_end}")
+            
+            # Extract filters from node_path
+            filters = self._get_chatbot_filters_from_node_path(node_path)
+            
+            # OPTION 1: Try chatbot (preferred)
             if self.chatbot_collector:
-                self.logger.info(f"🤖 Attempting strategic chatbot conversation...")
-                
-                # Test connection
-                connection_success, connection_message = self.chatbot_collector.test_connection()
-                self.logger.info(f"🔍 Connection: {connection_message}")
-                
-                if connection_success:
-                    # Conduct comprehensive strategic conversation
-                    conversation = await self._conduct_chatbot_conversation(
-                        verbatim_type, node_path, start_date, end_date
-                    )
-                    
-                    if conversation:
-                        # Synthesize conversation results
-                        result = self._synthesize_conversation_results(
-                            conversation, verbatim_type, node_path, start_date, end_date
-                        )
-                        
-                        # Store comprehensive conversation data
-                        self.collected_data['verbatims'] = result
-                        self.logger.info("✅ Strategic chatbot conversation completed successfully")
-                        return result
-                    else:
-                        self.logger.warning("🔄 Chatbot conversation failed, fallback to simple analysis...")
-                else:
-                    self.logger.warning("🔄 Chatbot connection failed, attempting fallback...")
-            else:
-                self.logger.warning(f"⚠️ Chatbot collector not available - using fallback methods")
-            
-            # Fallback to simple chatbot analysis if conversation failed
-            if self.chatbot_collector:
-                try:
-                    self.logger.info(f"🤖 Attempting simple chatbot analysis as fallback...")
-                    df = self.chatbot_collector.get_verbatims_data(
-                        start_date=start_date, 
-                        end_date=end_date, 
-                        node_path=node_path,
-                        verbatim_type=verbatim_type
-                    )
-                    
-                    if not df.empty:
-                        result = self._analyze_chatbot_verbatims(df, node_path, start_date, end_date, verbatim_type)
-                        self.collected_data['verbatims'] = result
-                        self.logger.info("✅ Simple chatbot analysis completed")
-                        return result
-                except Exception as e:
-                    self.logger.warning(f"🔄 Simple chatbot analysis failed: {e}, falling back to PBI...")
-            
-            # Final fallback to PBI collector
-            self.logger.info(f"📊 Using PBI verbatims collection as final fallback...")
-            
-            # Convert dates to datetime for PBI (handle both string and datetime inputs)
-            if isinstance(start_date, str):
-                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            else:
-                start_dt = start_date
-                
-            if isinstance(end_date, str):
-                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-            else:
-                end_dt = end_date
-            
-            # collect_verbatims_for_date_range is NOT async
-            df = self._collect_verbatims_with_query_tracking(node_path, start_dt, end_dt)
-            
-            if df.empty:
-                return f"📝 No information available from verbatims tool for {node_path} in date range {start_date} to {end_date}"
-            
-            # Enhanced PBI analysis
-            result = self._analyze_pbi_verbatims(df, node_path, start_date, end_date)
-            self.collected_data['verbatims'] = result
-            self.logger.info("✅ PBI verbatims analysis completed as fallback")
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"💥 Error in verbatims analysis: {str(e)}")
-            return f"Error in verbatims analysis: {str(e)}"
-    
-    async def _verbatims_tool_single_period(self, node_path: str, start_date: str, end_date: str) -> str:
-        """
-        Single period verbatims tool that analyzes customer feedback for a specific period
-        without comparison to other periods.
-        """
-        try:
-            self.logger.info(f"🤖 VERBATIMS_TOOL SINGLE PERIOD CALLED")
-            self.logger.debug(f"📋 Parameters: node_path={node_path}, start_date={start_date}, end_date={end_date}")
-            
-            # Try chatbot analysis for single period
-            if self.chatbot_collector:
-                self.logger.info(f"🤖 Attempting chatbot analysis for single period...")
+                self.logger.info("🤖 Using chatbot for comparative verbatims analysis...")
                 
                 # Test connection
                 connection_success, connection_message = self.chatbot_collector.test_connection()
@@ -2668,191 +2601,533 @@ class CausalExplanationAgent:
                 
                 if connection_success:
                     try:
-                        # Ask a focused question about the specific period
-                        question = f"What are the main customer complaints and issues during {start_date} to {end_date} for {node_path}? Focus on the most frequent and impactful problems mentioned by customers."
-                        
-                        answer_data = self.chatbot_collector.ask_chatbot_question(
-                            question=question,
-                            start_date=start_date,
-                            end_date=end_date,
+                        result = await self._analyze_verbatims_comparative_chatbot(
                             node_path=node_path,
-                            filters=self._get_chatbot_filters_from_node_path(node_path)
+                            target_start=start_date,
+                            target_end=end_date,
+                            comparison_start=comparison_start,
+                            comparison_end=comparison_end,
+                            filters=filters
                         )
                         
-                        if answer_data and answer_data.get('answer'):
-                            self.logger.info(f"📊 Retrieved chatbot answer for single period analysis")
-                            
-                            # Analyze the chatbot response for the specific period
-                            result = self._analyze_chatbot_single_period_response(answer_data, node_path, start_date, end_date)
-                            
-                            # Store data
+                        if result:
                             self.collected_data['verbatims'] = result
-                            self.logger.info("✅ Single period verbatims analysis completed successfully")
+                            self.logger.info("✅ Chatbot comparative analysis completed")
                             return result
                         else:
-                            self.logger.warning(f"📊 No verbatims data found for {node_path} in period {start_date} to {end_date}")
-                            return f"📝 No customer feedback available for {node_path} during {start_date} to {end_date}"
+                            self.logger.warning("⚠️ Chatbot analysis returned empty, falling back to PBI")
                             
                     except Exception as e:
-                        self.logger.error(f"💥 Error in chatbot analysis: {str(e)}")
-                        return f"Error analyzing customer feedback: {str(e)}"
-                else:
-                    self.logger.warning("🔄 Chatbot connection failed")
-                    return f"❌ Unable to connect to customer feedback system for {node_path}"
+                        self.logger.warning(f"⚠️ Chatbot analysis failed: {e}, falling back to PBI")
+            
+            # OPTION 2: Fallback to PBI
+            self.logger.info("📊 Using PBI for comparative verbatims analysis...")
+            
+            result = await self._analyze_verbatims_comparative_pbi(
+                node_path=node_path,
+                target_start=start_date,
+                target_end=end_date,
+                comparison_start=comparison_start,
+                comparison_end=comparison_end
+            )
+            
+            if result:
+                self.collected_data['verbatims'] = result
+                self.logger.info("✅ PBI comparative analysis completed")
+                return result
             else:
-                self.logger.warning(f"⚠️ Chatbot collector not available")
-                return f"📝 Customer feedback analysis not available for {node_path} during {start_date} to {end_date}"
+                return f"📝 No verbatims data available for {node_path} in the specified periods"
+                
+        except Exception as e:
+            self.logger.error(f"❌ Error in comparative verbatims analysis: {e}")
+            return f"ERROR in verbatims analysis: {str(e)}"
+    
+    async def _verbatims_tool_single_period(self, node_path: str, start_date: str, end_date: str) -> str:
+        """
+        Verbatims tool for SINGLE PERIOD mode
+        Analyzes verbatims from ONLY the target period (no comparison)
+        
+        Args:
+            node_path: Node path for filtering
+            start_date: Period start date (YYYY-MM-DD)
+            end_date: Period end date (YYYY-MM-DD)
+            
+        Returns:
+            Analysis of the single period
+        """
+        try:
+            self.logger.info(f"🤖 VERBATIMS_TOOL SINGLE PERIOD MODE")
+            self.logger.info(f"📅 Period: {start_date} to {end_date}")
+            
+            # Extract filters from node_path
+            filters = self._get_chatbot_filters_from_node_path(node_path)
+            
+            # OPTION 1: Try chatbot (preferred)
+            if self.chatbot_collector:
+                self.logger.info("🤖 Using chatbot for single period verbatims analysis...")
+                
+                # Test connection
+                connection_success, connection_message = self.chatbot_collector.test_connection()
+                self.logger.info(f"🔍 Connection: {connection_message}")
+                
+                if connection_success:
+                    try:
+                        result = await self._analyze_verbatims_single_chatbot(
+                            node_path=node_path,
+                            start_date=start_date,
+                            end_date=end_date,
+                            filters=filters
+                        )
+                        
+                        if result:
+                            self.collected_data['verbatims'] = result
+                            self.logger.info("✅ Chatbot single period analysis completed")
+                            return result
+                        else:
+                            self.logger.warning("⚠️ Chatbot analysis returned empty, falling back to PBI")
+                            
+                    except Exception as e:
+                        self.logger.warning(f"⚠️ Chatbot analysis failed: {e}, falling back to PBI")
+            
+            # OPTION 2: Fallback to PBI
+            self.logger.info("📊 Using PBI for single period verbatims analysis...")
+            
+            result = await self._analyze_verbatims_single_pbi(
+                node_path=node_path,
+                start_date=start_date,
+                end_date=end_date
+            )
+            
+            if result:
+                self.collected_data['verbatims'] = result
+                self.logger.info("✅ PBI single period analysis completed")
+                return result
+            else:
+                return f"📝 No verbatims data available for {node_path} in {start_date} to {end_date}"
+                
+        except Exception as e:
+            self.logger.error(f"❌ Error in single period verbatims analysis: {e}")
+            return f"ERROR in verbatims analysis: {str(e)}"
+    
+    async def _analyze_verbatims_comparative_chatbot(
+        self,
+        node_path: str,
+        target_start: str,
+        target_end: str,
+        comparison_start: str,
+        comparison_end: str,
+        filters: dict
+    ) -> str:
+        """Analyze verbatims using chatbot for TWO periods and compare"""
+        try:
+            # Extract segment info for better questions
+            segment_desc = self._get_segment_description(node_path)
+            
+            self.logger.info("🤖 Question 1: Main problems in TARGET period...")
+            
+            # Question 1: Target period - Main problems
+            question_target_problems = f"""Para el segmento {segment_desc} durante el período del {target_start} al {target_end}:
+¿Cuáles son los 3-5 principales problemas y quejas mencionados por los clientes? 
+Para cada problema, indica la frecuencia aproximada y proporciona 1-2 ejemplos específicos de comentarios."""
+            
+            answer_target_problems = self.chatbot_collector.ask_chatbot_question(
+                question=question_target_problems,
+                start_date=target_start,
+                end_date=target_end,
+                node_path=node_path,
+                filters=filters,
+                max_wait_time=120
+            )
+            
+            if not answer_target_problems or not answer_target_problems.get('answer'):
+                self.logger.warning("⚠️ No answer received for target problems")
+                return None
+            
+            target_problems = answer_target_problems.get('answer', '')
+            self.logger.info(f"✅ Target problems answer ({len(target_problems)} chars)")
+            
+            # Question 2: Target period - Affected routes
+            self.logger.info("🤖 Question 2: Affected routes in TARGET period...")
+            
+            question_target_routes = f"""Para el segmento {segment_desc} durante el período del {target_start} al {target_end}:
+¿Cuáles son las rutas específicas (código origen-destino, ej: MAD-BCN, LHR-MAD) más mencionadas en comentarios negativos?
+Enumera las top 5 rutas problemáticas con el número aproximado de quejas por ruta."""
+            
+            answer_target_routes = self.chatbot_collector.ask_chatbot_question(
+                question=question_target_routes,
+                start_date=target_start,
+                end_date=target_end,
+                node_path=node_path,
+                filters=filters,
+                max_wait_time=120
+            )
+            
+            target_routes = answer_target_routes.get('answer', 'No se identificaron rutas específicas') if answer_target_routes else 'No disponible'
+            self.logger.info(f"✅ Target routes answer ({len(target_routes)} chars)")
+            
+            # Question 3: Comparison period - Main problems
+            self.logger.info("🤖 Question 3: Main problems in COMPARISON period...")
+            
+            question_comparison_problems = f"""Para el segmento {segment_desc} durante el período del {comparison_start} al {comparison_end}:
+¿Cuáles eran los 3-5 principales problemas y quejas mencionados por los clientes?
+Para cada problema, indica la frecuencia aproximada."""
+            
+            answer_comparison_problems = self.chatbot_collector.ask_chatbot_question(
+                question=question_comparison_problems,
+                start_date=comparison_start,
+                end_date=comparison_end,
+                node_path=node_path,
+                filters=filters,
+                max_wait_time=120
+            )
+            
+            comparison_problems = answer_comparison_problems.get('answer', 'No hay datos disponibles para el período de comparación') if answer_comparison_problems else 'No disponible'
+            self.logger.info(f"✅ Comparison problems answer ({len(comparison_problems)} chars)")
+            
+            # Question 4: Comparison period - Affected routes
+            self.logger.info("🤖 Question 4: Affected routes in COMPARISON period...")
+            
+            question_comparison_routes = f"""Para el segmento {segment_desc} durante el período del {comparison_start} al {comparison_end}:
+¿Cuáles eran las rutas específicas (código origen-destino) más mencionadas en comentarios negativos?
+Enumera las top 5 rutas problemáticas."""
+            
+            answer_comparison_routes = self.chatbot_collector.ask_chatbot_question(
+                question=question_comparison_routes,
+                start_date=comparison_start,
+                end_date=comparison_end,
+                node_path=node_path,
+                filters=filters,
+                max_wait_time=120
+            )
+            
+            comparison_routes = answer_comparison_routes.get('answer', 'No se identificaron rutas específicas') if answer_comparison_routes else 'No disponible'
+            self.logger.info(f"✅ Comparison routes answer ({len(comparison_routes)} chars)")
+            
+            # Question 5: COMPARATIVE ANALYSIS - Ask chatbot to compare and explain
+            self.logger.info("🤖 Question 5: COMPARATIVE ANALYSIS - Asking chatbot to explain differences...")
+            
+            question_comparative = f"""Tengo datos de verbatims de clientes del segmento {segment_desc} en dos períodos:
+
+PERÍODO RECIENTE ({target_start} a {target_end}):
+Problemas principales: {target_problems[:500]}...
+Rutas afectadas: {target_routes[:300]}...
+
+PERÍODO ANTERIOR ({comparison_start} a {comparison_end}):
+Problemas principales: {comparison_problems[:500]}...
+Rutas afectadas: {comparison_routes[:300]}...
+
+Pregunta: ¿Qué cambios significativos observas entre ambos períodos? ¿Qué problemas nuevos o agravados aparecen en el período reciente que podrían explicar una variación (subida o bajada) en el NPS? Responde de forma concisa identificando los 3 cambios más relevantes."""
+            
+            answer_comparative = self.chatbot_collector.ask_chatbot_question(
+                question=question_comparative,
+                start_date=target_start,
+                end_date=target_end,
+                node_path=node_path,
+                filters=filters,
+                max_wait_time=120
+            )
+            
+            comparative_analysis = answer_comparative.get('answer', 'No se pudo obtener análisis comparativo') if answer_comparative else 'No disponible'
+            self.logger.info(f"✅ Comparative analysis answer ({len(comparative_analysis)} chars)")
+            
+            # Build comprehensive result
+            result = f"""🤖 ANÁLISIS COMPARATIVO DE VERBATIMS (Chatbot)
+
+🎯 SEGMENTO ANALIZADO: {segment_desc}
+
+📅 PERÍODO ANALIZADO: {target_start} a {target_end}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 PRINCIPALES PROBLEMAS:
+{target_problems}
+
+🛫 RUTAS MÁS AFECTADAS:
+{target_routes}
+
+📅 PERÍODO DE COMPARACIÓN: {comparison_start} a {comparison_end}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 PROBLEMAS EN ESE MOMENTO:
+{comparison_problems}
+
+🛫 RUTAS AFECTADAS ENTONCES:
+{comparison_routes}
+
+🔄 ANÁLISIS COMPARATIVO (Chatbot):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{comparative_analysis}
+
+💡 INSIGHT CLAVE: El chatbot ha analizado las diferencias entre períodos para identificar qué cambió en la percepción del cliente y cómo esto explica la variación en el NPS.
+"""
+            
+            # Store conversation data
+            self.collected_data['verbatims_conversation'] = {
+                'mode': 'comparative',
+                'source': 'chatbot',
+                'target_period': f"{target_start} to {target_end}",
+                'comparison_period': f"{comparison_start} to {comparison_end}",
+                'target_problems': target_problems,
+                'target_routes': target_routes,
+                'comparison_problems': comparison_problems,
+                'comparison_routes': comparison_routes,
+                'comparative_analysis': comparative_analysis,
+                'node_path': node_path,
+                'segment': segment_desc
+            }
+            
+            return result
             
         except Exception as e:
-            self.logger.error(f"💥 Error in single period verbatims analysis: {str(e)}")
-            return f"Error in single period verbatims analysis: {str(e)}"
+            self.logger.error(f"❌ Error in chatbot comparative analysis: {e}")
+            return None
     
-    async def _analyze_verbatims_single_period(self, df: pd.DataFrame, node_path: str, start_date: str, end_date: str) -> str:
-        """Analyze verbatims for a single period without comparison"""
+    async def _analyze_verbatims_comparative_pbi(
+        self,
+        node_path: str,
+        target_start: str,
+        target_end: str,
+        comparison_start: str,
+        comparison_end: str
+    ) -> str:
+        """Analyze verbatims using PBI for TWO periods and compare"""
         try:
-            # Simple analysis focused on period-specific themes
-            total_verbatims = len(df)
+            from datetime import datetime
             
-            # Get basic sentiment/theme analysis
-            if hasattr(df, 'sentiment') and 'sentiment' in df.columns:
-                sentiment_counts = df['sentiment'].value_counts()
-                sentiment_summary = ", ".join([f"{sentiment}: {count}" for sentiment, count in sentiment_counts.head(3).items()])
-            else:
-                sentiment_summary = "Sentiment data not available"
+            self.logger.info("📊 Collecting verbatims from PBI for target period...")
             
-            # Sample of verbatims
-            sample_verbatims = df.head(5)['feedback_text'].tolist() if 'feedback_text' in df.columns else ["No feedback text available"]
+            # Get target period verbatims
+            target_start_dt = datetime.strptime(target_start, '%Y-%m-%d')
+            target_end_dt = datetime.strptime(target_end, '%Y-%m-%d')
             
-            result = f"""📝 **ANÁLISIS DE VERBATIMS - PERÍODO ÚNICO**
+            df_target = self._collect_verbatims_with_query_tracking(
+                node_path, target_start_dt, target_end_dt
+            )
+            
+            # Get comparison period verbatims
+            self.logger.info("📊 Collecting verbatims from PBI for comparison period...")
+            
+            comparison_start_dt = datetime.strptime(comparison_start, '%Y-%m-%d')
+            comparison_end_dt = datetime.strptime(comparison_end, '%Y-%m-%d')
+            
+            df_comparison = self._collect_verbatims_with_query_tracking(
+                node_path, comparison_start_dt, comparison_end_dt
+            )
+            
+            if df_target.empty and df_comparison.empty:
+                return None
+            
+            # Analyze both periods
+            target_summary = self._summarize_verbatims_period(df_target, "ANALIZADO")
+            comparison_summary = self._summarize_verbatims_period(df_comparison, "COMPARACIÓN")
+            
+            # Compare
+            changes = self._compare_verbatims_periods(df_target, df_comparison)
+            
+            segment_desc = self._get_segment_description(node_path)
+            
+            result = f"""📊 ANÁLISIS COMPARATIVO DE VERBATIMS (PBI)
 
-**Período Analizado:** {start_date} a {end_date}
-**Segmento:** {node_path}
-**Total de comentarios:** {total_verbatims}
+🎯 SEGMENTO: {segment_desc}
 
-**Distribución de sentimientos:**
-{sentiment_summary}
+📅 PERÍODO ANALIZADO: {target_start} a {target_end}
+{target_summary}
 
-**Temas principales identificados durante el período:**
-{sample_verbatims[:3]}
+📅 PERÍODO DE COMPARACIÓN: {comparison_start} a {comparison_end}
+{comparison_summary}
 
-**Resumen:** Durante el período {start_date} a {end_date}, se identificaron {total_verbatims} comentarios de clientes para {node_path}. Los principales temas mencionados proporcionan contexto sobre la experiencia del cliente durante este período específico.
+🔄 CAMBIOS DETECTADOS:
+{changes}
 """
             
             return result
             
         except Exception as e:
-            self.logger.error(f"💥 Error analyzing single period verbatims: {str(e)}")
-            return f"Error analyzing verbatims for period: {str(e)}"
+            self.logger.error(f"❌ Error in PBI comparative analysis: {e}")
+            return None
     
-    def _determine_verbatim_type_from_context(self) -> str:
-        """Determine verbatim type based on explanatory drivers context."""
-        explanatory_data = self.collected_data.get('explanatory_drivers', '')
-        explanatory_str = str(explanatory_data).lower()
-        
-        # Simple mapping
-        if 'boarding' in explanatory_str:
-            return 'boarding'
-        elif 'crew' in explanatory_str:
-            return 'crew'
-        elif 'food' in explanatory_str or 'f&b' in explanatory_str:
-            return 'food'
-        elif 'checkin' in explanatory_str or 'check-in' in explanatory_str:
-            return 'checkin'
-        else:
-            return 'nps'  # default
-
-    async def _conduct_chatbot_conversation(self, verbatim_type: str, node_path: str, start_date: str, end_date: str) -> List[Dict]:
-        """
-        Conduct a focused 2-question conversation with the chatbot to identify problematic routes and representative comments.
-        
-        Question 1: Which routes have the most negative comments?
-        Question 2: What are the most representative comments for each of those routes?
-        """
-        conversation = []
-        
+    async def _analyze_verbatims_single_chatbot(
+        self,
+        node_path: str,
+        start_date: str,
+        end_date: str,
+        filters: dict
+    ) -> str:
+        """Analyze verbatims using chatbot for a single period"""
         try:
-            if not self.chatbot_collector:
-                self.logger.error("❌ Chatbot collector no disponible para conversación")
-                return []
+            segment_desc = self._get_segment_description(node_path)
             
-            # PREGUNTA 1: Rutas con comentarios más negativos
-            query_1 = self._generate_negative_routes_query(node_path)
-            self.logger.info(f"💬 PREGUNTA 1 (Rutas más negativas): '{query_1}'")
+            self.logger.info("🤖 Question 1: Main problems...")
             
-            # Use the real chatbot API with ask_chatbot_question
-            answer_data_1 = self.chatbot_collector.ask_chatbot_question(
-                question=query_1,
+            # Question 1: Main problems
+            question_problems = f"""Para el segmento {segment_desc} durante el período del {start_date} al {end_date}:
+¿Cuáles son los 5 principales problemas, quejas y temas mencionados por los clientes?
+Para cada problema, proporciona: frecuencia aproximada, severidad, y 1-2 ejemplos de comentarios reales."""
+            
+            answer_problems = self.chatbot_collector.ask_chatbot_question(
+                question=question_problems,
                 start_date=start_date,
                 end_date=end_date,
                 node_path=node_path,
-                filters=self._get_chatbot_filters_from_node_path(node_path)
+                filters=filters,
+                max_wait_time=120
             )
             
-            if answer_data_1 and answer_data_1.get('answer'):
-                response_1 = answer_data_1['answer']
-                self.logger.info(f"🤖 RESPUESTA 1: {response_1}")
-                
-                conversation.append({
-                    "round": 1,
-                    "question": query_1,
-                    "response": response_1,
-                    "answer_data": answer_data_1,
-                    "purpose": "rutas_negativas"
-                })
-                
-                # PREGUNTA 2: Comentarios representativos de cada ruta
-                query_2 = self._generate_representative_comments_query(node_path, response_1)
-                self.logger.info(f"💬 PREGUNTA 2 (Comentarios representativos): '{query_2}'")
-                
-                # Use the real chatbot API for the second question
-                answer_data_2 = self.chatbot_collector.ask_chatbot_question(
-                    question=query_2,
-                    start_date=start_date,
-                    end_date=end_date,
-                    node_path=node_path,
-                    filters=self._get_chatbot_filters_from_node_path(node_path)
-                )
-                
-                if answer_data_2 and answer_data_2.get('answer'):
-                    response_2 = answer_data_2['answer']
-                    self.logger.info(f"🤖 RESPUESTA 2: {response_2}")
-                    
-                    conversation.append({
-                        "round": 2,
-                        "question": query_2,
-                        "response": response_2,
-                        "answer_data": answer_data_2,
-                        "purpose": "comentarios_representativos"
-                    })
-                else:
-                    self.logger.warning("⚠️ No answer received for question 2")
-            else:
-                self.logger.warning("⚠️ No answer received for question 1")
+            if not answer_problems or not answer_problems.get('answer'):
+                self.logger.warning("⚠️ No answer received for problems")
+                return None
             
-            # Store the conversation data
-            self.collected_data['verbatims_conversation'] = {
-                "conversation_log": conversation,
-                "verbatim_type": verbatim_type,
-                "node_path": node_path,
-                "date_range": f"{start_date} to {end_date}"
+            problems = answer_problems.get('answer', '')
+            
+            # Question 2: Affected routes
+            self.logger.info("🤖 Question 2: Affected routes...")
+            
+            question_routes = f"""Para el segmento {segment_desc} durante el período del {start_date} al {end_date}:
+¿Cuáles son las rutas específicas (código origen-destino) más mencionadas en comentarios negativos?
+Enumera las rutas con el número aproximado de quejas y el tipo de problema principal por ruta."""
+            
+            answer_routes = self.chatbot_collector.ask_chatbot_question(
+                question=question_routes,
+                start_date=start_date,
+                end_date=end_date,
+                node_path=node_path,
+                filters=filters,
+                max_wait_time=120
+            )
+            
+            routes = answer_routes.get('answer', 'No se identificaron rutas específicas') if answer_routes else 'No disponible'
+            
+            # Build result
+            result = f"""🤖 ANÁLISIS DE VERBATIMS (Chatbot)
+
+🎯 SEGMENTO: {segment_desc}
+📅 PERÍODO: {start_date} a {end_date}
+
+📊 PRINCIPALES PROBLEMAS Y QUEJAS:
+{problems}
+
+🛫 RUTAS MÁS AFECTADAS:
+{routes}
+
+💡 INSIGHT: Este análisis proporciona la perspectiva cualitativa directa de los clientes durante el período analizado.
+"""
+            
+            # Store data
+            self.collected_data['verbatims_single'] = {
+                'mode': 'single',
+                'source': 'chatbot',
+                'period': f"{start_date} to {end_date}",
+                'problems': problems,
+                'routes': routes,
+                'node_path': node_path,
+                'segment': segment_desc
             }
             
-            return conversation
+            return result
             
         except Exception as e:
-            self.logger.error(f"❌ Error in chatbot conversation: {e}")
-            return []
+            self.logger.error(f"❌ Error in chatbot single period analysis: {e}")
+            return None
+    
+    async def _analyze_verbatims_single_pbi(
+        self,
+        node_path: str,
+        start_date: str,
+        end_date: str
+    ) -> str:
+        """Analyze verbatims using PBI for a single period"""
+        try:
+            from datetime import datetime
+            
+            self.logger.info("📊 Collecting verbatims from PBI...")
+            
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            
+            df = self._collect_verbatims_with_query_tracking(node_path, start_dt, end_dt)
+            
+            if df.empty:
+                return None
+            
+            summary = self._summarize_verbatims_period(df, "ANALIZADO")
+            segment_desc = self._get_segment_description(node_path)
+            
+            result = f"""📊 ANÁLISIS DE VERBATIMS (PBI)
+
+🎯 SEGMENTO: {segment_desc}
+📅 PERÍODO: {start_date} a {end_date}
+
+{summary}
+"""
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error in PBI single period analysis: {e}")
+            return None
+    
+    def _summarize_verbatims_period(self, df: pd.DataFrame, period_label: str) -> str:
+        """Summarize verbatims for a single period"""
+        import pandas as pd
+        
+        if df.empty:
+            return f"No hay datos de verbatims para el período {period_label}"
+        
+        total_count = len(df)
+        
+        # Try to get sentiment if available
+        sentiment_summary = ""
+        if 'sentiment' in df.columns or 'sentiment_category' in df.columns:
+            sentiment_col = 'sentiment' if 'sentiment' in df.columns else 'sentiment_category'
+            sentiment_dist = df[sentiment_col].value_counts()
+            sentiment_summary = f"\n  Sentimiento: {sentiment_dist.to_dict()}"
+        
+        # Get sample verbatims
+        text_col = None
+        for col in ['verbatim_text', 'Verbatim', 'text', 'comment', '[Verbatim]']:
+            if col in df.columns:
+                text_col = col
+                break
+        
+        samples = ""
+        if text_col and not df[text_col].empty:
+            sample_texts = df[text_col].dropna().head(3)
+            samples = "\n  Ejemplos:\n" + "\n".join([f"    - {str(text)[:150]}..." for text in sample_texts])
+        
+        return f"""  Total: {total_count} comentarios{sentiment_summary}{samples}"""
+    
+    def _compare_verbatims_periods(self, df_target: pd.DataFrame, df_comparison: pd.DataFrame) -> str:
+        """Compare verbatims between two periods"""
+        
+        if df_target.empty and df_comparison.empty:
+            return "No hay datos para comparar"
+        
+        target_count = len(df_target) if not df_target.empty else 0
+        comparison_count = len(df_comparison) if not df_comparison.empty else 0
+        
+        volume_change = target_count - comparison_count
+        volume_pct = (volume_change / comparison_count * 100) if comparison_count > 0 else 0
+        
+        changes = [f"  • Volumen de comentarios: {target_count} vs {comparison_count} ({volume_pct:+.1f}%)"]
+        
+        # Compare sentiment if available
+        if not df_target.empty and not df_comparison.empty:
+            sentiment_col = None
+            for col in ['sentiment', 'sentiment_category', 'verbatim_global_sentiment']:
+                if col in df_target.columns and col in df_comparison.columns:
+                    sentiment_col = col
+                    break
+            
+            if sentiment_col:
+                target_negative = (df_target[sentiment_col].str.lower() == 'negative').sum() if sentiment_col in df_target.columns else 0
+                comp_negative = (df_comparison[sentiment_col].str.lower() == 'negative').sum() if sentiment_col in df_comparison.columns else 0
+                
+                target_neg_pct = target_negative / len(df_target) * 100 if len(df_target) > 0 else 0
+                comp_neg_pct = comp_negative / len(df_comparison) * 100 if len(df_comparison) > 0 else 0
+                
+                changes.append(f"  • Comentarios negativos: {target_neg_pct:.1f}% vs {comp_neg_pct:.1f}% ({target_neg_pct - comp_neg_pct:+.1f}pp)")
+        
+        return "\n".join(changes)
     
     def _get_chatbot_filters_from_node_path(self, node_path: str) -> Dict:
-        """
-        Extract chatbot filters from node_path for the chatbot API
-        
-        Args:
-            node_path: The node path (e.g., "Global/LH/Business")
-            
-        Returns:
-            Dictionary with filters for the chatbot API
-        """
+        """Extract chatbot filters from node_path for the chatbot API"""
         try:
             filters = {}
             
@@ -2866,15 +3141,15 @@ class CausalExplanationAgent:
             
             # Extract haul information
             if '/LH' in node_path:
-                filters['haul'] = ['LH']  # Long Haul
+                filters['haul'] = ['Long-haul']
             elif '/SH' in node_path:
-                filters['haul'] = ['SH']  # Short Haul
+                filters['haul'] = ['Short-haul']
             
             # Extract company information
             if '/IB' in node_path:
-                filters['fleet'] = ['IB']  # Iberia
+                filters['fleet'] = ['IB']
             elif '/YW' in node_path:
-                filters['fleet'] = ['YW']  # Air Europa
+                filters['fleet'] = ['YW']
             
             return filters
             
@@ -2882,298 +3157,40 @@ class CausalExplanationAgent:
             self.logger.error(f"❌ Error extracting filters from node_path: {e}")
             return {}
     
-    def _analyze_chatbot_single_period_response(self, answer_data: Dict, node_path: str, start_date: str, end_date: str) -> str:
-        """
-        Analyze chatbot response for single period analysis
-        
-        Args:
-            answer_data: The chatbot response data
-            node_path: The node path being analyzed
-            start_date: Start date of the period
-            end_date: End date of the period
-            
-        Returns:
-            Formatted analysis result
-        """
+    def _get_segment_description(self, node_path: str) -> str:
+        """Get human-readable description of the segment from node_path"""
         try:
-            answer = answer_data.get('answer', 'No answer available')
-            tool_output = answer_data.get('toolOutput', 'No tool output available')
-            job_id = answer_data.get('jobId', 'No job ID')
+            parts = node_path.split('/')
+            descriptions = []
             
-            result = f"""📝 **ANÁLISIS DE VERBATIMS - PERÍODO ÚNICO**
-
-**Período Analizado:** {start_date} a {end_date}
-**Segmento:** {node_path}
-**Job ID:** {job_id}
-
-**Respuesta del Chatbot:**
-{answer}
-
-**Información Técnica:**
-{tool_output}
-
-**Resumen:** Durante el período {start_date} a {end_date}, el análisis del chatbot identificó los principales problemas y quejas de los clientes para {node_path}. Esta información proporciona contexto cualitativo sobre la experiencia del cliente durante este período específico.
-"""
+            for part in parts:
+                if part == 'Global':
+                    descriptions.append('todos los segmentos')
+                elif part == 'LH':
+                    descriptions.append('Long Haul')
+                elif part == 'SH':
+                    descriptions.append('Short Haul')
+                elif part == 'Business':
+                    descriptions.append('Business Class')
+                elif part == 'Premium':
+                    descriptions.append('Premium Economy')
+                elif part == 'Economy':
+                    descriptions.append('Economy Class')
+                elif part == 'IB':
+                    descriptions.append('Iberia')
+                elif part == 'YW':
+                    descriptions.append('Air Europa')
+                else:
+                    descriptions.append(part)
             
-            return result
+            return ' - '.join(descriptions) if descriptions else node_path
             
-        except Exception as e:
-            self.logger.error(f"❌ Error analyzing chatbot single period response: {e}")
-            return f"Error analyzing chatbot response: {str(e)}"
+        except:
+            return node_path
     
-    def _generate_negative_routes_query(self, node_path: str) -> str:
-        """Generate query to identify routes with the most negative comments."""
-        return f"¿Cuáles son las rutas específicas (origen-destino) dentro de {node_path} que tienen los comentarios más negativos durante este período? Ordénalas por negatividad y frecuencia de quejas. Incluye los códigos de aeropuerto (ej: MAD-BCN, LHR-MAD) y el número aproximado de comentarios negativos por ruta."
-    
-    def _generate_representative_comments_query(self, node_path: str, previous_response: str) -> str:
-        """Generate query to get representative comments for each problematic route."""
-        return f"Para cada una de las rutas más problemáticas identificadas en la respuesta anterior, ¿puedes mostrarme 2-3 comentarios representativos reales de clientes que ejemplifiquen los problemas específicos de cada ruta? Organiza los comentarios por ruta (ej: MAD-BCN: 'comentario1', 'comentario2'; LHR-MAD: 'comentario1', 'comentario2') y asegúrate de que sean verbatims auténticos que reflejen los problemas más comunes."
-    
-    def _generate_operational_correlation_query(self, node_path: str, response_1: str, response_2: str) -> str:
-        """Generate a query to correlate customer feedback with operational data."""
-        operative_data = str(self.collected_data.get('operative_data', ''))
-        
-        # Extract operational issues
-        operational_problems = []
-        if 'otp' in operative_data.lower() and 'worsened' in operative_data.lower():
-            operational_problems.append("deterioro significativo en puntualidad (OTP)")
-        if 'mishandling' in operative_data.lower():
-            operational_problems.append("problemas de manejo de equipaje")
-        if 'delay' in operative_data.lower() or 'retrasos' in operative_data.lower():
-            operational_problems.append("retrasos operacionales")
-        
-        problems_text = " y ".join(operational_problems) if operational_problems else "problemas operacionales detectados"
-        
-        return f"Los datos operacionales muestran {problems_text} en {node_path} durante este período. ¿Están los clientes mencionando específicamente estos problemas operacionales en sus comentarios? ¿Cómo describen el impacto de estos problemas en su experiencia de viaje?"
-    
-    def _generate_route_specific_query(self, node_path: str, response_1: str, response_2: str, response_3: str) -> str:
-        """Generate a query to identify route-specific concentrations of problems."""
-        
-        # Analyze previous responses to identify key issues
-        combined_responses = f"{response_1} {response_2} {response_3}".lower()
-        
-        route_focus = ""
-        if "madrid" in combined_responses or "mad" in combined_responses:
-            route_focus = "especialmente en rutas que conectan con Madrid"
-        elif "barcelona" in combined_responses or "bcn" in combined_responses:
-            route_focus = "especialmente en rutas que conectan con Barcelona"
-        elif "london" in combined_responses or "lhr" in combined_responses:
-            route_focus = "especialmente en rutas hacia/desde Londres"
-        elif any(keyword in combined_responses for keyword in ["european", "europa", "continental"]):
-            route_focus = "especialmente en rutas europeas"
-        else:
-            route_focus = "en rutas específicas"
-        
-        return f"Basándome en los problemas identificados en {node_path}, ¿puedes identificar si hay rutas específicas donde se concentran más las quejas de clientes? ¿Los verbatims mencionan destinos, aeropuertos, o rutas particulares {route_focus} donde los problemas son más frecuentes o severos?"
-    
-    def _generate_synthesis_additional_causes_query(self, node_path: str, response_1: str, response_2: str, response_3: str, response_4: str) -> str:
-        """Generate a synthesis query to uncover hidden causes and complete the analysis."""
-        
-        # Extract cabin type from node_path dynamically
-        cabin_type = "clientes"  # default
-        if "/Economy" in node_path:
-            cabin_type = "clientes de Economy Class"
-        elif "/Business" in node_path:
-            cabin_type = "clientes de Business Class"
-        elif "/Premium" in node_path:
-            cabin_type = "clientes de Premium Class"
-        
-        return f"Para completar el análisis de {node_path}, ¿existen causas subyacentes o factores sorprendentes que los clientes mencionan y que podrían no haber sido capturados en las preguntas anteriores? ¿Hay patrones estacionales, problemas de comunicación, expectativas no cumplidas, o aspectos específicos de la experiencia que los {cabin_type} mencionan como problemáticos? Busca insights únicos que no sean obvios en las métricas tradicionales."
-    
-    def _analyze_single_chatbot_response(self, df: pd.DataFrame, purpose: str) -> str:
-        """Analyze a single chatbot analysis response focusing on the conversation context."""
-        if df.empty:
-            return f"No se obtuvo análisis del chatbot para {purpose}"
-        
-        # El chatbot devuelve análisis, no verbatims individuales
-        if 'chatbot_analysis' in df.columns and not df['chatbot_analysis'].empty:
-            analysis_text = df['chatbot_analysis'].iloc[0]
-            data_points = len(df)
-            
-            # Extract key insights from the analysis
-            analysis_summary = f"Análisis del chatbot: {analysis_text}"
-            
-            return analysis_summary
-        elif 'verbatim_text' in df.columns and not df['verbatim_text'].empty:
-            # Fallback for old format - deprecated
-            total_comments = len(df)
-            sample_feedback = df['verbatim_text'].iloc[0][:100] + "..."
-            return f"{total_comments} comentarios analizados. Ejemplo: '{sample_feedback}'"
-        else:
-            return f"Respuesta del chatbot recibida pero sin contenido analizable para {purpose}"
-    
-    def _synthesize_conversation_results(self, conversation: List[Dict], verbatim_type: str, node_path: str, start_date: str, end_date: str) -> str:
-        """Synthesize the multi-round strategic conversation into a comprehensive analysis."""
-        
-        if not conversation:
-            return "❌ No se pudo establecer conversación con el chatbot de verbatims"
-        
-        # Build comprehensive response
-        result_parts = []
-        
-        # Header
-        total_data_points = sum(exchange.get('data_points', 0) for exchange in conversation)
-        result_parts.append(f"🤖 CONVERSACIÓN ESTRATÉGICA COMPLETADA: {len(conversation)} rondas analizando {total_data_points} verbatims en {node_path}")
-        
-        # Conversation flow with better emojis
-        result_parts.append("📋 FLUJO CONVERSACIONAL ESTRATÉGICO:")
-        purpose_emojis = {
-            "exploración_abierta": "🔍", 
-            "validación_cruzada": "🔄", 
-            "correlación_operacional": "⚙️",
-            "rutas_específicas": "🛫",
-            "síntesis_causas_ocultas": "🎯"
-        }
-        
-        for exchange in conversation:
-            emoji = purpose_emojis.get(exchange['purpose'], "💬")
-            result_parts.append(f"   {emoji} Ronda {exchange['round']} ({exchange['purpose']}): {exchange['data_points']} verbatims")
-            result_parts.append(f"      Pregunta: {exchange['question']}")
-            result_parts.append(f"      Respuesta: {exchange['response']}")
-        
-        # Enhanced synthesis based on strategic conversation
-        result_parts.append("🔗 SÍNTESIS ESTRATÉGICA:")
-        
-        # Cross-validation status
-        responses_text = " ".join([ex['response'] for ex in conversation])
-        if "negativ" in responses_text.lower():
-            result_parts.append("   ✅ VALIDACIÓN CRUZADA EXITOSA: Los verbatims confirman los problemas identificados en explanatory drivers y datos operacionales")
-        elif "positiv" in responses_text.lower():
-            result_parts.append("   ⚠️ VALIDACIÓN PARCIAL: Los verbatims muestran perspectivas mixtas, requiere análisis más profundo")
-        else:
-            result_parts.append("   🤔 VALIDACIÓN INCONCLUSA: Los verbatims proporcionan información compleja que requiere investigación adicional")
-        
-        # Strategic insights from conversation (full responses)
-        result_parts.append("💡 INSIGHTS ESTRATÉGICOS COMPLETOS:")
-        if len(conversation) >= 1:
-            result_parts.append(f"   • Exploración abierta: {conversation[0]['response']}")
-        if len(conversation) >= 2:
-            result_parts.append(f"   • Validación cruzada: {conversation[1]['response']}")
-        if len(conversation) >= 3:
-            result_parts.append(f"   • Correlación operacional: {conversation[2]['response']}")
-        if len(conversation) >= 4:
-            result_parts.append(f"   • Rutas específicas: {conversation[3]['response']}")
-        if len(conversation) >= 5:
-            result_parts.append(f"   • Causas ocultas: {conversation[4]['response']}")
-        
-        # Store enhanced conversation data
-        self.collected_data['verbatims_conversation'] = {
-            'source': 'strategic_chatbot_conversation',
-            'strategy': 'cross_validation_exploration',
-            'verbatim_type': verbatim_type,
-            'total_exchanges': len(conversation),
-            'total_data_points': total_data_points,
-            'conversation_log': conversation,
-            'date_range': f"{start_date} to {end_date}",
-            'node_path': node_path,
-            'synthesis_summary': " | ".join(result_parts)
-        }
-        
-        return " | ".join(result_parts)
-    
-    def _analyze_chatbot_verbatims(self, df: pd.DataFrame, node_path: str, start_date: str, end_date: str, verbatim_type: str) -> str:
-        """Analyze chatbot analysis responses with enhanced conversational structure."""
-        total_analyses = len(df)
-        analysis_result = []
-        
-        # Get the intelligent query that was used
-        explanatory_context = self.collected_data.get('explanatory_drivers', '')
-        operative_context = self.collected_data.get('operative_data', '')
-        
-        # Header with conversational context
-        if not df.empty and 'is_sample' in df.columns:
-            is_sample = df['is_sample'].iloc[0] if not df['is_sample'].empty else False
-        else:
-            is_sample = False
-        source_info = "🤖 CHATBOT ANÁLISIS COMPLETADO"
-        if is_sample:
-            source_info += " (datos de ejemplo - desarrollo en progreso)"
-        
-        analysis_result.append(f"{source_info}: {total_analyses} análisis sobre {verbatim_type.upper()} en {node_path}")
-        
-        # Conversational context linking to previous findings
-        if explanatory_context and operative_context:
-            analysis_result.append(f"🔗 CONEXIÓN CON HALLAZGOS: Validando con el análisis del chatbot los problemas operacionales detectados")
-        
-        # Process chatbot analysis content
-        if 'chatbot_analysis' in df.columns and not df['chatbot_analysis'].empty:
-            analysis_text = df['chatbot_analysis'].iloc[0]
-            analysis_result.append(f"💡 ANÁLISIS DEL CHATBOT: {analysis_text}")
-            
-            # Extract insights from analysis text
-            if 'problem' in analysis_text.lower() or 'issue' in analysis_text.lower() or 'problema' in analysis_text.lower():
-                analysis_result.append("🚨 FINDING: El chatbot identifica problemas en los verbatims - confirma hipótesis negativas")
-            elif 'positive' in analysis_text.lower() or 'good' in analysis_text.lower() or 'excellent' in analysis_text.lower():
-                analysis_result.append("✅ FINDING: El chatbot identifica aspectos positivos - respalda service excellence")
-        
-        # Field-specific analysis
-        if 'field_name' in df.columns:
-            field_info = df['field_name'].iloc[0] if not df['field_name'].empty else verbatim_type
-            analysis_result.append(f"📊 Campo analizado: {field_info}")
-        
-        # Analysis type and source
-        if 'analysis_type' in df.columns:
-            analysis_type = df['analysis_type'].iloc[0] if not df['analysis_type'].empty else 'verbatim_summary'
-            analysis_result.append(f"🔍 Tipo de análisis: {analysis_type}")
-        
-        result = " | ".join(analysis_result)
-        
-        # Store collected data with enhanced metadata
-        self.collected_data['verbatims_data'] = {
-            'source': 'chatbot_api',
-            'verbatim_type': verbatim_type,
-            'is_sample': is_sample,
-            'analysis_summary': result,
-            'total_analyses': total_analyses,
-            'chatbot_analysis_content': df['chatbot_analysis'].iloc[0] if 'chatbot_analysis' in df.columns and not df['chatbot_analysis'].empty else None,
-            'date_range': f"{start_date} to {end_date}",
-            'node_path': node_path
-        }
-        
-        return result
-    
-    def _analyze_pbi_verbatims(self, df: pd.DataFrame, node_path: str, start_date: str, end_date: str) -> str:
-        """Analyze verbatims from PBI (fallback method) - original logic."""
-        total_verbatims = len(df)
-        analysis_result = []
-        analysis_result.append(f"📊 PBI FALLBACK - Verbatims Analysis: {total_verbatims} customer comments")
-        
-        # Original PBI sentiment analysis
-        if 'verbatims_sentiment[sentiment]' in df.columns:
-            sentiment_counts = df['verbatims_sentiment[sentiment]'].value_counts()
-            negative_count = int(sentiment_counts.get('Negative', 0) or 0)
-            positive_count = int(sentiment_counts.get('Positive', 0) or 0)
-            neutral_count = int(sentiment_counts.get('Neutral', 0) or 0)
-            
-            sentiment_summary = f"Sentiment: Positive({positive_count}) Negative({negative_count}) Neutral({neutral_count})"
-            analysis_result.append(sentiment_summary)
-            
-            # Determine dominant sentiment
-            if negative_count > positive_count and negative_count > neutral_count:
-                analysis_result.append("FINDING: Predominantly NEGATIVE sentiment - indicates customer dissatisfaction")
-            elif positive_count > negative_count and positive_count > neutral_count:
-                analysis_result.append("FINDING: Predominantly POSITIVE sentiment - supports positive anomaly")
-        
-        # Original PBI topic analysis
-        if 'verbatims_sentiment[topic]' in df.columns:
-            topic_counts = df['verbatims_sentiment[topic]'].value_counts()
-            if not topic_counts.empty:
-                top_topics = topic_counts.head(3)
-                topics_summary = ", ".join([f"{topic}({count})" for topic, count in top_topics.items()])
-                analysis_result.append(f"Top Issues: {topics_summary}")
-        
-        result = " | ".join(analysis_result)
-        
-        # Store collected data
-        self.collected_data['verbatims_data'] = {
-            'source': 'pbi_fallback',
-            'analysis_summary': result,
-            'total_verbatims': total_verbatims,
-            'date_range': f"{start_date} to {end_date}",
-            'node_path': node_path
-        }
-        
-        return result
+    # =========================================================================
+    # END OF VERBATIMS TOOL
+    # =========================================================================
     
     async def _ncs_tool(self, node_path: str, start_date: str, end_date: str, analysis_focus: str = "flights", temporal_comparison: bool = True) -> str:
         """
