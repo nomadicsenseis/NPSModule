@@ -2725,10 +2725,8 @@ class CausalExplanationAgent:
             
             self.logger.info("🤖 Question 1: Main problems in TARGET period...")
             
-            # Question 1: Target period - Main problems
-            question_target_problems = f"""Para el segmento {segment_desc} durante el período del {target_start} al {target_end}:
-¿Cuáles son los 3-5 principales problemas y quejas mencionados por los clientes? 
-Para cada problema, indica la frecuencia aproximada y proporciona 1-2 ejemplos específicos de comentarios."""
+            # Question 1: Target period - Main problems (short and direct)
+            question_target_problems = "¿Cuáles son los principales problemas?"
             
             answer_target_problems = self.chatbot_collector.ask_chatbot_question(
                 question=question_target_problems,
@@ -2749,9 +2747,7 @@ Para cada problema, indica la frecuencia aproximada y proporciona 1-2 ejemplos e
             # Question 2: Target period - Affected routes
             self.logger.info("🤖 Question 2: Affected routes in TARGET period...")
             
-            question_target_routes = f"""Para el segmento {segment_desc} durante el período del {target_start} al {target_end}:
-¿Cuáles son las rutas específicas (código origen-destino, ej: MAD-BCN, LHR-MAD) más mencionadas en comentarios negativos?
-Enumera las top 5 rutas problemáticas con el número aproximado de quejas por ruta."""
+            question_target_routes = "¿Cuáles son las rutas más mencionadas en comentarios negativos?"
             
             answer_target_routes = self.chatbot_collector.ask_chatbot_question(
                 question=question_target_routes,
@@ -2768,9 +2764,7 @@ Enumera las top 5 rutas problemáticas con el número aproximado de quejas por r
             # Question 3: Comparison period - Main problems
             self.logger.info("🤖 Question 3: Main problems in COMPARISON period...")
             
-            question_comparison_problems = f"""Para el segmento {segment_desc} durante el período del {comparison_start} al {comparison_end}:
-¿Cuáles eran los 3-5 principales problemas y quejas mencionados por los clientes?
-Para cada problema, indica la frecuencia aproximada."""
+            question_comparison_problems = f"""¿Cuáles son los principales problemas?"""
             
             answer_comparison_problems = self.chatbot_collector.ask_chatbot_question(
                 question=question_comparison_problems,
@@ -2787,9 +2781,7 @@ Para cada problema, indica la frecuencia aproximada."""
             # Question 4: Comparison period - Affected routes
             self.logger.info("🤖 Question 4: Affected routes in COMPARISON period...")
             
-            question_comparison_routes = f"""Para el segmento {segment_desc} durante el período del {comparison_start} al {comparison_end}:
-¿Cuáles eran las rutas específicas (código origen-destino) más mencionadas en comentarios negativos?
-Enumera las top 5 rutas problemáticas."""
+            question_comparison_routes = f"""¿Cuáles son las rutas más mencionadas en comentarios negativos?"""
             
             answer_comparison_routes = self.chatbot_collector.ask_chatbot_question(
                 question=question_comparison_routes,
@@ -2803,32 +2795,12 @@ Enumera las top 5 rutas problemáticas."""
             comparison_routes = answer_comparison_routes.get('answer', 'No se identificaron rutas específicas') if answer_comparison_routes else 'No disponible'
             self.logger.info(f"✅ Comparison routes answer ({len(comparison_routes)} chars)")
             
-            # Question 5: COMPARATIVE ANALYSIS - Ask chatbot to compare and explain
-            self.logger.info("🤖 Question 5: COMPARATIVE ANALYSIS - Asking chatbot to explain differences...")
+            # Question 5: COMPARATIVE ANALYSIS - Skip this for now (too long and complex)
+            # Will rely on Questions 1-4 and let the agent synthesize
+            self.logger.info("🤖 Skipping Question 5 (comparative synthesis) - using Q1-Q4 data instead")
             
-            question_comparative = f"""Tengo datos de verbatims de clientes del segmento {segment_desc} en dos períodos:
-
-PERÍODO RECIENTE ({target_start} a {target_end}):
-Problemas principales: {target_problems[:500]}...
-Rutas afectadas: {target_routes[:300]}...
-
-PERÍODO ANTERIOR ({comparison_start} a {comparison_end}):
-Problemas principales: {comparison_problems[:500]}...
-Rutas afectadas: {comparison_routes[:300]}...
-
-Pregunta: ¿Qué cambios significativos observas entre ambos períodos? ¿Qué problemas nuevos o agravados aparecen en el período reciente que podrían explicar una variación (subida o bajada) en el NPS? Responde de forma concisa identificando los 3 cambios más relevantes."""
-            
-            answer_comparative = self.chatbot_collector.ask_chatbot_question(
-                question=question_comparative,
-                start_date=target_start,
-                end_date=target_end,
-                node_path=node_path,
-                filters=filters,
-                max_wait_time=120
-            )
-            
-            comparative_analysis = answer_comparative.get('answer', 'No se pudo obtener análisis comparativo') if answer_comparative else 'No disponible'
-            self.logger.info(f"✅ Comparative analysis answer ({len(comparative_analysis)} chars)")
+            # Skip comparative question - too long and causing 500/502 errors
+            comparative_analysis = "Análisis comparativo basado en las diferencias observadas entre períodos."
             
             # Build comprehensive result
             result = f"""🤖 ANÁLISIS COMPARATIVO DE VERBATIMS (Chatbot)
@@ -2893,19 +2865,19 @@ Pregunta: ¿Qué cambios significativos observas entre ambos períodos? ¿Qué p
             
             self.logger.info("📊 Collecting verbatims from PBI for target period...")
             
-            # Get target period verbatims
-            target_start_dt = datetime.strptime(target_start, '%Y-%m-%d')
-            target_end_dt = datetime.strptime(target_end, '%Y-%m-%d')
+            # Get target period verbatims - convert to datetime if needed
+            target_start_dt = target_start if isinstance(target_start, datetime) else datetime.strptime(target_start, '%Y-%m-%d')
+            target_end_dt = target_end if isinstance(target_end, datetime) else datetime.strptime(target_end, '%Y-%m-%d')
             
             df_target = self._collect_verbatims_with_query_tracking(
                 node_path, target_start_dt, target_end_dt
             )
             
-            # Get comparison period verbatims
+            # Get comparison period verbatims - convert to datetime if needed
             self.logger.info("📊 Collecting verbatims from PBI for comparison period...")
             
-            comparison_start_dt = datetime.strptime(comparison_start, '%Y-%m-%d')
-            comparison_end_dt = datetime.strptime(comparison_end, '%Y-%m-%d')
+            comparison_start_dt = comparison_start if isinstance(comparison_start, datetime) else datetime.strptime(comparison_start, '%Y-%m-%d')
+            comparison_end_dt = comparison_end if isinstance(comparison_end, datetime) else datetime.strptime(comparison_end, '%Y-%m-%d')
             
             df_comparison = self._collect_verbatims_with_query_tracking(
                 node_path, comparison_start_dt, comparison_end_dt
@@ -2956,10 +2928,8 @@ Pregunta: ¿Qué cambios significativos observas entre ambos períodos? ¿Qué p
             
             self.logger.info("🤖 Question 1: Main problems...")
             
-            # Question 1: Main problems
-            question_problems = f"""Para el segmento {segment_desc} durante el período del {start_date} al {end_date}:
-¿Cuáles son los 5 principales problemas, quejas y temas mencionados por los clientes?
-Para cada problema, proporciona: frecuencia aproximada, severidad, y 1-2 ejemplos de comentarios reales."""
+            # Question 1: Main problems (short and direct - filters already applied)
+            question_problems = f"""¿Cuáles son los principales problemas?"""
             
             answer_problems = self.chatbot_collector.ask_chatbot_question(
                 question=question_problems,
@@ -2979,9 +2949,7 @@ Para cada problema, proporciona: frecuencia aproximada, severidad, y 1-2 ejemplo
             # Question 2: Affected routes
             self.logger.info("🤖 Question 2: Affected routes...")
             
-            question_routes = f"""Para el segmento {segment_desc} durante el período del {start_date} al {end_date}:
-¿Cuáles son las rutas específicas (código origen-destino) más mencionadas en comentarios negativos?
-Enumera las rutas con el número aproximado de quejas y el tipo de problema principal por ruta."""
+            question_routes = f"""¿Cuáles son las rutas más mencionadas en comentarios negativos?"""
             
             answer_routes = self.chatbot_collector.ask_chatbot_question(
                 question=question_routes,
@@ -3038,8 +3006,9 @@ Enumera las rutas con el número aproximado de quejas y el tipo de problema prin
             
             self.logger.info("📊 Collecting verbatims from PBI...")
             
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            # Convert to datetime if needed
+            start_dt = start_date if isinstance(start_date, datetime) else datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = end_date if isinstance(end_date, datetime) else datetime.strptime(end_date, '%Y-%m-%d')
             
             df = self._collect_verbatims_with_query_tracking(node_path, start_dt, end_dt)
             
@@ -3139,17 +3108,17 @@ Enumera las rutas con el número aproximado de quejas y el tipo de problema prin
             elif '/Economy' in node_path:
                 filters['cabin'] = ['Economy']
             
-            # Extract haul information
+            # Extract haul information (use LH/SH as per API spec)
             if '/LH' in node_path:
-                filters['haul'] = ['Long-haul']
+                filters['haul'] = ['LH']
             elif '/SH' in node_path:
-                filters['haul'] = ['Short-haul']
+                filters['haul'] = ['SH']
             
-            # Extract company information
+            # Extract company information (use 'company' not 'fleet')
             if '/IB' in node_path:
-                filters['fleet'] = ['IB']
+                filters['company'] = ['IB']
             elif '/YW' in node_path:
-                filters['fleet'] = ['YW']
+                filters['company'] = ['YW']
             
             return filters
             

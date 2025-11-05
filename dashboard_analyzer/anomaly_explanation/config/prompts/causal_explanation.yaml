@@ -306,7 +306,13 @@ tools_prompts:
       operative: |
         **FLUJO OPERATIVO** - Después de verbatims_tool
 
-        🎯 **ANÁLISIS COMPLETADO**: Se obtuvo feedback cualitativo sobre la experiencia operativa.
+        🎯 **ANÁLISIS COMPLETADO**: Se obtuvo feedback cualitativo sobre la experiencia operativa de ambos períodos.
+
+        **ANÁLISIS COMPARATIVO REQUERIDO** 📊:
+        1. **Compara los verbatims del período TARGET vs COMPARISON**: ¿Qué problemas aparecieron/desaparecieron? ¿Qué cambió en intensidad?
+        2. **Identifica los cambios clave**: ¿Qué diferencias en las quejas de los clientes explican la variación en el NPS?
+        3. **Relaciona con drivers SHAP**: ¿Los verbatims confirman los drivers operativos identificados anteriormente?
+        4. **Sintetiza**: Resume los 2-3 cambios principales en los verbatims que explican la anomalía de NPS.
 
         **PRÓXIMO PASO**: Ejecuta `routes_tool` para identificar las rutas específicas afectadas por los problemas operativos.
 
@@ -315,7 +321,13 @@ tools_prompts:
       product: |
         **FLUJO PRODUCTO** - Después de verbatims_tool
 
-        🎯 **ANÁLISIS COMPLETADO**: Se obtuvo feedback cualitativo sobre la experiencia del producto.
+        🎯 **ANÁLISIS COMPLETADO**: Se obtuvo feedback cualitativo sobre la experiencia del producto de ambos períodos.
+
+        **ANÁLISIS COMPARATIVO REQUERIDO** 📊:
+        1. **Compara los verbatims del período TARGET vs COMPARISON**: ¿Qué aspectos del producto mejoraron/empeoraron según los clientes?
+        2. **Identifica los cambios clave**: ¿Qué diferencias en las opiniones sobre el producto explican la variación en el NPS?
+        3. **Relaciona con drivers SHAP**: ¿Los verbatims confirman los drivers de producto identificados anteriormente?
+        4. **Sintetiza**: Resume los 2-3 cambios principales en la percepción del producto que explican la anomalía de NPS.
 
         **PRÓXIMO PASO**: Ejecuta `routes_tool` para identificar las rutas específicas afectadas por los problemas de producto.
 
@@ -324,11 +336,17 @@ tools_prompts:
       mixed: |
         **FLUJO MIXTO** - Después de verbatims_tool
 
-        🎯 **ANÁLISIS COMPLETADO**: Se obtuvo feedback cualitativo sobre la experiencia operativa.
+        🎯 **ANÁLISIS COMPLETADO**: Se obtuvo feedback cualitativo sobre la experiencia operativa y de producto de ambos períodos.
 
-        **PRÓXIMO PASO**: Ejecuta `routes_tool` para identificar las rutas específicas afectadas por los problemas operativos.
+        **ANÁLISIS COMPARATIVO REQUERIDO** 📊:
+        1. **Compara los verbatims del período TARGET vs COMPARISON**: ¿Qué problemas operativos y de producto aparecieron/desaparecieron? ¿Qué cambió en intensidad?
+        2. **Identifica los cambios clave**: ¿Qué diferencias en las quejas de los clientes explican la variación en el NPS?
+        3. **Relaciona con drivers SHAP**: ¿Los verbatims confirman los drivers mixtos (operativos + producto) identificados anteriormente?
+        4. **Sintetiza**: Resume los 2-3 cambios principales en los verbatims que explican la anomalía de NPS.
 
-        **OBJETIVO**: Mapear qué rutas específicas dentro del segmento experimentaron los problemas operativos identificados.
+        **PRÓXIMO PASO**: Ejecuta `routes_tool` para identificar las rutas específicas afectadas por los problemas operativos y de producto.
+
+        **OBJETIVO**: Mapear qué rutas específicas dentro del segmento experimentaron los problemas identificados.
 
     single: |
       **ANÁLISIS COMPLETADO**: Se obtuvo feedback cualitativo de los clientes del día.

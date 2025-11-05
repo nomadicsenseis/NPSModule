@@ -161,6 +161,7 @@ class ChatbotVerbatimsCollector:
             # Prepare question payload
             payload = {
                 "value": question,
+                "verbatimCol": "nps_all_t",  # Required field for chatbot API
                 "filters": {
                     "date_flight_local": [start_date, end_date]
                 }
@@ -168,19 +169,35 @@ class ChatbotVerbatimsCollector:
             
             # Add additional filters if provided
             if filters:
-                # Map filter names to chatbot API format
+                # Map filter names to chatbot API format (verified with API tests)
                 if 'cabin' in filters:
-                    payload["filters"]["cabin_in_surveyed_flight"] = filters['cabin']
+                    payload["filters"]["cabin"] = filters['cabin']
                 if 'haul' in filters:
-                    payload["filters"]["haul"] = filters['haul']
+                    payload["filters"]["haul"] = filters['haul']  # LH or SH
                 if 'route' in filters:
                     payload["filters"]["route"] = filters['route']
-                if 'fleet' in filters:
-                    payload["filters"]["fleet"] = filters['fleet']
+                if 'company' in filters:
+                    payload["filters"]["company"] = filters['company']  # IB or YW
                 if 'nps_category' in filters:
                     payload["filters"]["nps_category"] = filters['nps_category']
             
             logger.info(f"📦 Filters: {payload['filters']}")
+            
+            # DEBUG: Print full request details (both logger and stdout)
+            import json
+            debug_msg = "\n" + "=" * 80 + "\n"
+            debug_msg += "🔍 DEBUG: FULL API REQUEST\n"
+            debug_msg += "=" * 80 + "\n"
+            debug_msg += f"Endpoint: {self.endpoint}\n"
+            debug_msg += f"Headers: {headers}\n"
+            debug_msg += f"Proxies: {self.proxies}\n"
+            debug_msg += "Payload JSON:\n"
+            debug_msg += json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+            debug_msg += "=" * 80
+            
+            # Print to both stdout and logger
+            print(debug_msg)
+            logger.info(debug_msg)
             
             # Submit question
             response = requests.post(
