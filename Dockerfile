@@ -3,6 +3,7 @@ FROM continuumio/miniconda3:latest
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app:$PYTHONPATH
 
 # Note: Proxy configuration (HTTP_PROXY/HTTPS_PROXY) can be set at runtime if needed
 # Do NOT set proxy here as it breaks CI/CD builds (GitLab runners have no access to internal Iberia network)
