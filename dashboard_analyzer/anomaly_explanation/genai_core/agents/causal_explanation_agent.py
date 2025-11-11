@@ -338,8 +338,8 @@ class CausalExplanationAgent:
         self.chatbot_collector = self._init_chatbot_collector()
         self.ncs_collector = self._init_ncs_collector()
         
-        # Initialize S3 uploader with local environment
-        self.s3_uploader = S3ReportUploader(environment="local")
+        # Initialize S3 uploader with production environment
+        self.s3_uploader = S3ReportUploader(environment="prod")
         
         # Create LLM and agent
         self.llm = self._create_llm(llm_type)
@@ -516,13 +516,13 @@ class CausalExplanationAgent:
         """Initialize NCS collector with local environment"""
         try:
             temp_creds_file = "dashboard_analyzer/temp_aws_credentials.env"
-            collector = NCSDataCollector(temp_env_file=temp_creds_file, environment="local")
-            self.logger.info("✅ NCS collector initialized with local environment")
+            collector = NCSDataCollector(temp_env_file=temp_creds_file, environment="prod")
+            self.logger.info("✅ NCS collector initialized with production environment")
             return collector
         except Exception as e:
             self.logger.error(f"Error initializing NCS collector: {e}")
             self.logger.warning("Using fallback NCS collector without temp credentials")
-            return NCSDataCollector(environment="local")
+            return NCSDataCollector(environment="prod")
     
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""

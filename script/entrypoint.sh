@@ -2,4 +2,4 @@
 
 echo "Generating Catia report.\n"
 
-python dashboard_analyzer/main.py
+python dashboard_analyzer/weekly_deep_research.py

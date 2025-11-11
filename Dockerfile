@@ -33,11 +33,15 @@ RUN conda install -c conda-forge -y \
     jupyter \
     && conda clean -afy
 
+# Copy application code
+COPY dashboard_analyzer dashboard_analyzer
+
+# Copy entrypoint script
+COPY script script
+
+RUN chmod 777 script/entrypoint.sh
+
 # Set the default command
 CMD ["/bin/bash"]
 
-COPY script /script
-
-RUN chmod 777 /script/entrypoint.sh
-
-ENTRYPOINT ["/script/entrypoint.sh"]
+ENTRYPOINT ["script/entrypoint.sh"]
