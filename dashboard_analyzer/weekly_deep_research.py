@@ -385,18 +385,20 @@ async def main():
     
     # Execute weekly comprehensive analysis
     try:
-    await run_weekly_comprehensive_analysis(
-        analysis_date=analysis_date,
-        date_parameter=date_parameter,
-        segment=args.segment,
-        causal_filter=args.causal_filter_comparison,
-        comparison_start_date=comparison_start_date,
-        comparison_end_date=comparison_end_date,
-        date_flight_local=args.date_flight_local,
-        daily_anomaly_detection_mode=args.daily_anomaly_detection_mode,
-        daily_baseline_periods=args.daily_baseline_periods,
-        environment=args.environment
-    )
+        await run_weekly_comprehensive_analysis(
+            analysis_date=analysis_date,
+            date_parameter=date_parameter,
+            segment=args.segment,
+            causal_filter=args.causal_filter_comparison,
+            comparison_start_date=comparison_start_date,
+            comparison_end_date=comparison_end_date,
+            date_flight_local=args.date_flight_local,
+            daily_anomaly_detection_mode=args.daily_anomaly_detection_mode,
+            daily_baseline_periods=args.daily_baseline_periods,
+            daily_aggregation_days=1,
+            daily_periods=7,
+            environment=args.environment
+        )
     except KeyboardInterrupt:
         print("\n⏸️ Analysis interrupted by user")
     except Exception as e:
