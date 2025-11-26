@@ -282,7 +282,7 @@ class CausalExplanationAgent:
         comparison_start_date: datetime = None,
         comparison_end_date: datetime = None,
         study_mode: str = "comparative",
-        environment: str = "local"
+        environment: str = "prod"
     ):
         # Use default LLM type if none provided
         if llm_type is None:

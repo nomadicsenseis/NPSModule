@@ -104,7 +104,7 @@ def debug_save_hierarchical_data(hierarchical_explanation: str, period: int, dat
     except Exception as e:
         print(f"⚠️ DEBUG: Failed to save hierarchical data: {e}")
 
-async def collect_flexible_data(aggregation_days: int, target_folder: str, segment: str = "Global", analysis_date: datetime = None, environment: str = "local"):
+async def collect_flexible_data(aggregation_days: int, target_folder: str, segment: str = "Global", analysis_date: datetime = None, environment: str = "prod"):
     """
     Collect flexible NPS data for all nodes in the specified segment
     
@@ -156,7 +156,7 @@ async def collect_flexible_data(aggregation_days: int, target_folder: str, segme
         print("❌ No data collected successfully")
         return False
 
-async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7d", environment: str = "local"):
+async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7d", environment: str = "prod"):
     """Generate comprehensive explanations for nodes with anomalies"""
     if not analysis_data:
         return
@@ -272,7 +272,7 @@ async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7
         print(f"      • 💬 Customer verbatims sentiment")
         print(f"      • 📅 Date-filtered data for specific periods")
 
-async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "local"):
+async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod"):
     """Show trees for all periods analyzed INCLUDING explanations and parent interpretations"""
     if not analysis_data:
         return
@@ -1293,7 +1293,7 @@ async def run_flexible_data_download_with_date(aggregation_days: int, periods: i
         print(f"❌ Data collection failed")
         return None
 
-async def run_flexible_data_download_silent_with_date(aggregation_days: int, periods: int, start_date, date_parameter: str, segment: str = "Global", environment: str = "local"):
+async def run_flexible_data_download_silent_with_date(aggregation_days: int, periods: int, start_date, date_parameter: str, segment: str = "Global", environment: str = "prod"):
     """Run flexible data download completely silently with custom date and parameter naming"""
     # Generate folder name with new naming convention
     date_str = start_date.strftime('%Y_%m_%d')
@@ -1566,7 +1566,7 @@ def get_segment_node_paths(segment: str) -> list:
             print(f"⚠️ Segment '{segment}' not found. Using Global as fallback.")
             return all_nodes["Global"]
 
-async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime = None, date_parameter: str = None, anomaly_detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = "vs L7d", periods: int = 7, causal_comparison_dates: tuple = None, segment: str = "Global", environment: str = "local"):
+async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime = None, date_parameter: str = None, anomaly_detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = "vs L7d", periods: int = 7, causal_comparison_dates: tuple = None, segment: str = "Global", environment: str = "prod"):
     """Run flexible analysis completely silently"""
     import os
     from contextlib import redirect_stdout, redirect_stderr
@@ -1659,7 +1659,7 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
         'baseline_periods': baseline_periods
     }
 
-async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, show_all_periods=False, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "local"):
+async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, show_all_periods=False, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod"):
     """Show only trees and AI summaries for periods with anomalies - silent version"""
     import os
     from contextlib import redirect_stdout, redirect_stderr
@@ -1963,7 +1963,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
     # The caller (e.g., weekly_deep_research.py) will consolidate if needed
     return all_periods_data
 
-async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "local"):
+async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod"):
     """Show clean, focused analysis: tree + agent workflow + summary"""
     from contextlib import redirect_stdout, redirect_stderr
     import os
@@ -2400,8 +2400,8 @@ async def main():
                         help='End date for comparison period (YYYY-MM-DD) when using --causal-filter-comparison "vs Sel. Period"')
     
     # Environment parameter
-    parser.add_argument('--environment', type=str, default='local', choices=['local', 'prod'],
-                       help='Environment: local (reads .env) or prod (uses system env vars). Default: local')
+    parser.add_argument('--environment', type=str, default='prod', choices=['local', 'prod'],
+                       help='Environment: local (reads .env) or prod (uses system env vars). Default: prod')
     
     args = parser.parse_args()
 
@@ -2919,7 +2919,7 @@ async def execute_analysis_flow(
     comparison_end_date: Optional[datetime] = None,
     date_flight_local: Optional[str] = None,
     study_mode: str = "comparative",
-    environment: str = "local",
+    environment: str = "prod",
 ) -> str:
     """
     Executes a complete analysis flow for a given configuration.

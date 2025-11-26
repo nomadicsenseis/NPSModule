@@ -84,7 +84,7 @@ async def run_weekly_comprehensive_analysis(
     daily_baseline_periods: int = 7,
     daily_aggregation_days: int = 1,
     daily_periods: int = 7,
-    environment: str = "local"
+    environment: str = "prod"
 ):
     """
     Comprehensive weekly analysis orchestrator.
@@ -310,8 +310,8 @@ async def main():
                        help='Number of baseline periods for daily analysis. Default: 7')
     
     # Environment parameter
-    parser.add_argument('--environment', type=str, default='local', choices=['local', 'prod'],
-                       help='Environment: local (reads .env) or prod (uses system env vars). Default: local')
+    parser.add_argument('--environment', type=str, default='prod', choices=['local', 'prod'],
+                       help='Environment: local (reads .env) or prod (uses system env vars). Default: prod')
     
     args = parser.parse_args()
     

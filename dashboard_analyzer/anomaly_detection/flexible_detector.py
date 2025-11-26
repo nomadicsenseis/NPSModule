@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 class FlexibleAnomalyDetector:
     """Enhanced flexible anomaly detector with target-based detection support"""
     
-    def __init__(self, aggregation_days: int = 7, threshold: float = 5.0, min_sample_size: int = 5, detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = None, causal_comparison_dates: tuple = None, environment: str = "local"):
+    def __init__(self, aggregation_days: int = 7, threshold: float = 5.0, min_sample_size: int = 5, detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = None, causal_comparison_dates: tuple = None, environment: str = "prod"):
         """
         Initialize flexible anomaly detector
         

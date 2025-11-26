@@ -46,7 +46,7 @@ class AnomalySummaryAgent:
         llm_type: Optional[LLMType] = None,
         config_path: str = "../../config/prompts/anomaly_summary.yaml",
         logger: Optional[logging.Logger] = None,
-        environment: str = "local"
+        environment: str = "prod"
     ):
         """
         Initialize the Anomaly Summary Agent.

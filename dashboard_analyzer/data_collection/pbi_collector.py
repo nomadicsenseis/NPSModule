@@ -14,7 +14,7 @@ import logging
 class PBIDataCollector:
     """Collects data from Power BI API for each node in the NPS tree hierarchy"""
     
-    def __init__(self, environment: str = "local"):
+    def __init__(self, environment: str = "prod"):
         # Setup logging
         self.logger = logging.getLogger(__name__)
         

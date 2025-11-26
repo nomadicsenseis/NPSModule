@@ -145,7 +145,7 @@ class AnomalyInterpreterAgent:
         config_path: str = "dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
         logger: Optional[logging.Logger] = None,
         study_mode: str = "comparative",
-        environment: str = "local"
+        environment: str = "prod"
     ):
         """
         Initialize the Anomaly Interpreter Agent.
