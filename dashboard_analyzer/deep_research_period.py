@@ -155,7 +155,7 @@ async def collect_flexible_data(aggregation_days: int, target_folder: str, segme
         print("❌ No data collected successfully")
         return False
 
-async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7d"):
+async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7d", environment: str = "local"):
     """Generate comprehensive explanations for nodes with anomalies"""
     if not analysis_data:
         return
@@ -170,8 +170,8 @@ async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7
     
     # Initialize PBI collector and interpreter with full capabilities
     print("🔧 Initializing data collectors...")
-    pbi_collector = PBIDataCollector()
-    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, causal_filter=causal_filter)
+    pbi_collector = PBIDataCollector(environment=environment)
+    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, causal_filter=causal_filter, environment=environment)
     
     explanation_count = 0
     total_nodes_analyzed = 0
@@ -271,7 +271,7 @@ async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7
         print(f"      • 💬 Customer verbatims sentiment")
         print(f"      • 📅 Date-filtered data for specific periods")
 
-async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
+async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "local"):
     """Show trees for all periods analyzed INCLUDING explanations and parent interpretations"""
     if not analysis_data:
         return
@@ -286,8 +286,8 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     periods_analyzed = analysis_data.get('periods_analyzed', anomaly_periods)
     
     # Initialize interpreter for explanations with agent mode
-    pbi_collector = PBIDataCollector()
-    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date)
+    pbi_collector = PBIDataCollector(environment=environment)
+    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date, environment=environment)
     print(f"🔧 Explanation mode: AGENT")
     
     # Initialize AI agent for interpretation
@@ -299,7 +299,8 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             llm_type=get_default_llm_type(),
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
-            study_mode="comparative"
+            study_mode="comparative",
+            environment=environment
         )
         ai_available = True
         print("🤖 AI Agent initialized for interpretations")
@@ -1656,7 +1657,7 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
         'baseline_periods': baseline_periods
     }
 
-async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, show_all_periods=False, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
+async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, show_all_periods=False, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "local"):
     """Show only trees and AI summaries for periods with anomalies - silent version"""
     import os
     from contextlib import redirect_stdout, redirect_stderr
@@ -1668,7 +1669,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
     periods_analyzed = analysis_data.get('periods_analyzed', anomaly_periods)
     
     # Initialize interpreter for explanations with specified mode
-    pbi_collector = PBIDataCollector()
+    pbi_collector = PBIDataCollector(environment=environment)
     
     # Determine study_mode based on analysis_type and causal_filter
     if analysis_type == "WEEKLY_COMPARATIVE" or causal_filter == "vs Sel. Period":
@@ -1688,7 +1689,8 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
         causal_filter=causal_filter, 
         comparison_start_date=comparison_start_date, 
         comparison_end_date=comparison_end_date,
-        study_mode=study_mode
+        study_mode=study_mode,
+        environment=environment
     )    
     # Initialize AI agent for interpretation
     try:
@@ -1707,7 +1709,8 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
             llm_type=get_default_llm_type(),
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
-            study_mode=ai_study_mode
+            study_mode=ai_study_mode,
+            environment=environment
         )
         ai_available = True
     except Exception:
@@ -2393,6 +2396,10 @@ async def main():
     parser.add_argument('--comparison-end-date', type=str,
                         help='End date for comparison period (YYYY-MM-DD) when using --causal-filter-comparison "vs Sel. Period"')
     
+    # Environment parameter
+    parser.add_argument('--environment', type=str, default='local', choices=['local', 'prod'],
+                       help='Environment: local (reads .env) or prod (uses system env vars). Default: local')
+    
     args = parser.parse_args()
 
     # Add placeholders for arguments that might not be defined by the parser in all cases
@@ -2485,7 +2492,8 @@ async def main():
             comparison_start_date=args.comparison_start_date,
             comparison_end_date=args.comparison_end_date,
             date_flight_local=args.date_flight_local,
-            study_mode=args.study_mode
+            study_mode=args.study_mode,
+            environment=args.environment
         )
 
     except KeyboardInterrupt:
@@ -2908,6 +2916,7 @@ async def execute_analysis_flow(
     comparison_end_date: Optional[datetime] = None,
     date_flight_local: Optional[str] = None,
     study_mode: str = "comparative",
+    environment: str = "local",
 ) -> str:
     """
     Executes a complete analysis flow for a given configuration.
@@ -2915,7 +2924,7 @@ async def execute_analysis_flow(
     """
     
     print(f"\n🚀 DEBUG: execute_analysis_flow CALLED!")
-    print(f"🔍 Parameters: segment={segment}, study_mode={study_mode}")
+    print(f"🔍 Parameters: segment={segment}, study_mode={study_mode}, environment={environment}")
     print(f"🔍 Parameters: causal_filter={causal_filter}, comparison_dates={comparison_start_date} to {comparison_end_date}")
 
     # Adjust causal_filter based on study_mode
@@ -2984,7 +2993,8 @@ async def execute_analysis_flow(
         segment=segment,
         causal_filter=causal_filter,
         comparison_start_date=comparison_start_date,
-        comparison_end_date=comparison_end_date
+        comparison_end_date=comparison_end_date,
+        environment=environment
     )
     
     print(f"🔍 DEBUG EXECUTE_ANALYSIS_FLOW: show_all_anomaly_periods_with_explanations completed")

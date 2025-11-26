@@ -45,7 +45,8 @@ class AnomalySummaryAgent:
         self,
         llm_type: Optional[LLMType] = None,
         config_path: str = "../../config/prompts/anomaly_summary.yaml",
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
+        environment: str = "local"
     ):
         """
         Initialize the Anomaly Summary Agent.
@@ -54,6 +55,7 @@ class AnomalySummaryAgent:
             llm_type: Type of LLM to use (supports OpenAI and AWS Bedrock models)
             config_path: Path to YAML configuration file with prompts
             logger: Optional logger instance
+            environment: Environment type ("local" or "prod")
         """
         # Use default LLM type if none provided
         if llm_type is None:
@@ -62,13 +64,16 @@ class AnomalySummaryAgent:
         self.config_path = config_path
         self.logger = logger or self._setup_logger()
         self.silent_mode = False
+        self.environment = environment
         
-        # Initialize S3 uploader with production environment
-        self.s3_uploader = S3ReportUploader(environment="prod")
+        # Initialize S3 uploader with environment
+        self.s3_uploader = S3ReportUploader(environment=environment)
         
-        # Load environment variables from .devcontainer/.env
-        dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
-        load_dotenv(dotenv_path)
+        # Load environment variables from .devcontainer/.env only if not in prod
+        if self.environment != "prod":
+            dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
+            if dotenv_path.exists():
+                load_dotenv(dotenv_path)
         
         # Load prompt configuration
         self.config = self._load_prompt_config(config_path)

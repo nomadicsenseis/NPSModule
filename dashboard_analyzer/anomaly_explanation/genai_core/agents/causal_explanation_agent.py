@@ -281,7 +281,8 @@ class CausalExplanationAgent:
         causal_filter: str = "vs L7d",
         comparison_start_date: datetime = None,
         comparison_end_date: datetime = None,
-        study_mode: str = "comparative"
+        study_mode: str = "comparative",
+        environment: str = "local"
     ):
         # Use default LLM type if none provided
         if llm_type is None:
@@ -290,6 +291,7 @@ class CausalExplanationAgent:
         self.config_path = config_path
         self.logger = logger or self._setup_logger()
         self.silent_mode = silent_mode
+        self.environment = environment
         # Transform detection_mode if needed (vslast -> vslast_dynamic when causal_filter is "vs Sel. Period")
         if detection_mode == "vslast" and causal_filter == "vs Sel. Period":
             self.detection_mode = "vslast_dynamic"
@@ -334,12 +336,12 @@ class CausalExplanationAgent:
             self._merge_helper_prompts(custom_helper_prompts)
         
         # Initialize data collectors
-        self.pbi_collector = PBIDataCollector()
+        self.pbi_collector = PBIDataCollector(environment=environment)
         self.chatbot_collector = self._init_chatbot_collector()
         self.ncs_collector = self._init_ncs_collector()
         
-        # Initialize S3 uploader with production environment
-        self.s3_uploader = S3ReportUploader(environment="prod")
+        # Initialize S3 uploader with environment
+        self.s3_uploader = S3ReportUploader(environment=environment)
         
         # Create LLM and agent
         self.llm = self._create_llm(llm_type)
@@ -355,7 +357,7 @@ class CausalExplanationAgent:
         self.collected_data = {}
         
         if not self.silent_mode:
-            self.logger.info(f"CausalExplanationAgent initialized with {llm_type.value}")
+            self.logger.info(f"CausalExplanationAgent initialized with {llm_type.value} (Env: {environment})")
     
     def _setup_logger(self) -> logging.Logger:
         """Setup default logger for the agent."""
@@ -553,10 +555,11 @@ class CausalExplanationAgent:
     
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
         """Create AWS Bedrock LLM instance."""
-        # Load environment variables from .devcontainer/.env
-        dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
-        if dotenv_path.exists():
-            load_dotenv(dotenv_path)
+        # Load environment variables from .devcontainer/.env only if not in prod
+        if self.environment != "prod":
+            dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
+            if dotenv_path.exists():
+                load_dotenv(dotenv_path)
         
         region_name = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
         aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")

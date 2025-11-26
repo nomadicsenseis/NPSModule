@@ -15,10 +15,11 @@ class FlexibleAnomalyInterpreter:
     Handles date range conversion and multi-source data collection
     """
     
-    def __init__(self, data_folder: str, pbi_collector: PBIDataCollector = None, drivers_survey_threshold: int = 100, default_comparison_days: int = 7, silent_mode: bool = False, detection_mode: str = "vslast", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, study_mode: str = None):
-        print(f"         🔍 DEBUG: FlexibleAnomalyInterpreter.__init__ called with detection_mode: '{detection_mode}', causal_filter: '{causal_filter}'")
+    def __init__(self, data_folder: str, pbi_collector: PBIDataCollector = None, drivers_survey_threshold: int = 100, default_comparison_days: int = 7, silent_mode: bool = False, detection_mode: str = "vslast", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, study_mode: str = None, environment: str = "local"):
+        print(f"         🔍 DEBUG: FlexibleAnomalyInterpreter.__init__ called with detection_mode: '{detection_mode}', causal_filter: '{causal_filter}', environment: '{environment}'")
         self.data_folder = data_folder
         self.pbi_collector = pbi_collector
+        self.environment = environment
         self.operational_analyzer = OperationalDataAnalyzer()
         self.routes_analyzer = RoutesAnalyzer(pbi_collector) if pbi_collector else None
         self.drivers_survey_threshold = drivers_survey_threshold  # Minimum surveys for explanatory drivers
@@ -67,7 +68,8 @@ class FlexibleAnomalyInterpreter:
                     causal_filter=agent_causal_filter, 
                     comparison_start_date=agent_comparison_start_date, 
                     comparison_end_date=agent_comparison_end_date,
-                    study_mode=agent_study_mode
+                    study_mode=agent_study_mode,
+                    environment=self.environment
                 )
                 self._agent_initialized = True
                 if not self.silent_mode:

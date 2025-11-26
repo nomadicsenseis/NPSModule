@@ -14,13 +14,17 @@ import logging
 class PBIDataCollector:
     """Collects data from Power BI API for each node in the NPS tree hierarchy"""
     
-    def __init__(self):
+    def __init__(self, environment: str = "local"):
         # Setup logging
         self.logger = logging.getLogger(__name__)
         
-        # Load environment variables from .devcontainer/.env
-        dotenv_path = Path(__file__).parent.parent.parent / '.devcontainer' / '.env'
-        load_dotenv(dotenv_path)
+        self.environment = environment
+        
+        # Load environment variables from .devcontainer/.env ONLY if not in prod
+        if self.environment != "prod":
+            dotenv_path = Path(__file__).parent.parent.parent / '.devcontainer' / '.env'
+            if dotenv_path.exists():
+                load_dotenv(dotenv_path)
         
         # Get credentials from environment
         self.client_id = os.getenv("CLIENT_ID")

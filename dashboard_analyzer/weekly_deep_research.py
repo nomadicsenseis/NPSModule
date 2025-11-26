@@ -83,7 +83,8 @@ async def run_weekly_comprehensive_analysis(
     daily_anomaly_detection_mode: str = 'mean',
     daily_baseline_periods: int = 7,
     daily_aggregation_days: int = 1,
-    daily_periods: int = 7
+    daily_periods: int = 7,
+    environment: str = "local"
 ):
     """
     Comprehensive weekly analysis orchestrator.
@@ -124,6 +125,7 @@ async def run_weekly_comprehensive_analysis(
             comparison_end_date=comparison_end_date,
             date_flight_local=date_flight_local,
             study_mode="comparative",
+            environment=environment
         )
         
         # Add weekly report to generated_reports
@@ -159,6 +161,7 @@ async def run_weekly_comprehensive_analysis(
             comparison_end_date=None,
             date_flight_local=date_flight_local,
             study_mode="single",
+            environment=environment
         )
         if daily_report_path and "Error" not in str(daily_report_path):
             generated_reports.append({
@@ -210,7 +213,8 @@ async def run_weekly_comprehensive_analysis(
             print("\n🤖 Initializing Summary Agent...")
             summary_agent = AnomalySummaryAgent(
                 llm_type=get_default_llm_type(),
-                logger=logging.getLogger("summary_agent")
+                logger=logging.getLogger("summary_agent"),
+                environment=environment
             )
             print("✅ Summary Agent initialized. Generating executive summary...")
             
@@ -305,6 +309,10 @@ async def main():
     parser.add_argument('--daily-baseline-periods', type=int, default=7,
                        help='Number of baseline periods for daily analysis. Default: 7')
     
+    # Environment parameter
+    parser.add_argument('--environment', type=str, default='local', choices=['local', 'prod'],
+                       help='Environment: local (reads .env) or prod (uses system env vars). Default: local')
+    
     args = parser.parse_args()
     
     # Add placeholders for arguments that might not be defined
@@ -377,17 +385,18 @@ async def main():
     
     # Execute weekly comprehensive analysis
     try:
-        await run_weekly_comprehensive_analysis(
-            analysis_date=analysis_date,
-            date_parameter=date_parameter,
-            segment=args.segment,
-            causal_filter=args.causal_filter_comparison,
-            comparison_start_date=comparison_start_date,
-            comparison_end_date=comparison_end_date,
-            date_flight_local=args.date_flight_local,
-            daily_anomaly_detection_mode=args.daily_anomaly_detection_mode,
-            daily_baseline_periods=args.daily_baseline_periods
-        )
+    await run_weekly_comprehensive_analysis(
+        analysis_date=analysis_date,
+        date_parameter=date_parameter,
+        segment=args.segment,
+        causal_filter=args.causal_filter_comparison,
+        comparison_start_date=comparison_start_date,
+        comparison_end_date=comparison_end_date,
+        date_flight_local=args.date_flight_local,
+        daily_anomaly_detection_mode=args.daily_anomaly_detection_mode,
+        daily_baseline_periods=args.daily_baseline_periods,
+        environment=args.environment
+    )
     except KeyboardInterrupt:
         print("\n⏸️ Analysis interrupted by user")
     except Exception as e:

@@ -144,7 +144,8 @@ class AnomalyInterpreterAgent:
         llm_type: Optional[LLMType] = None,
         config_path: str = "dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
         logger: Optional[logging.Logger] = None,
-        study_mode: str = "comparative"
+        study_mode: str = "comparative",
+        environment: str = "local"
     ):
         """
         Initialize the Anomaly Interpreter Agent.
@@ -154,6 +155,7 @@ class AnomalyInterpreterAgent:
             config_path: Path to YAML configuration file with prompts
             logger: Optional logger instance
             study_mode: Study mode - "single" or "comparative"
+            environment: Environment type ("local" or "prod")
         """
         # Use default LLM type if none provided
         if llm_type is None:
@@ -162,13 +164,15 @@ class AnomalyInterpreterAgent:
         self.llm_type = llm_type
         self.logger = logger or self._setup_logger()
         self.study_mode = study_mode
+        self.environment = environment
         
-        # Load environment variables from .devcontainer/.env
-        project_root = find_project_root()
-        if project_root:
-            dotenv_path = project_root / '.devcontainer' / '.env'
-            if dotenv_path.exists():
-                load_dotenv(dotenv_path)
+        # Load environment variables from .devcontainer/.env only if not in prod
+        if self.environment != "prod":
+            project_root = find_project_root()
+            if project_root:
+                dotenv_path = project_root / '.devcontainer' / '.env'
+                if dotenv_path.exists():
+                    load_dotenv(dotenv_path)
         
         # Load prompt configuration
         self.config = self._load_prompt_config(config_path)
@@ -184,8 +188,8 @@ class AnomalyInterpreterAgent:
         self.generation_data = {}
         self.conversation_tracker = HierarchicalConversationTracker()
         
-        # Initialize S3 uploader with production environment
-        self.s3_uploader = S3ReportUploader(environment="prod")
+        # Initialize S3 uploader with environment
+        self.s3_uploader = S3ReportUploader(environment=environment)
         
         # desempeño metrics
         self.total_processing_time = 0.0
