@@ -104,7 +104,7 @@ def debug_save_hierarchical_data(hierarchical_explanation: str, period: int, dat
     except Exception as e:
         print(f"⚠️ DEBUG: Failed to save hierarchical data: {e}")
 
-async def collect_flexible_data(aggregation_days: int, target_folder: str, segment: str = "Global", analysis_date: datetime = None):
+async def collect_flexible_data(aggregation_days: int, target_folder: str, segment: str = "Global", analysis_date: datetime = None, environment: str = "local"):
     """
     Collect flexible NPS data for all nodes in the specified segment
     
@@ -113,6 +113,7 @@ async def collect_flexible_data(aggregation_days: int, target_folder: str, segme
         target_folder: Where to save the data
         segment: Root segment to collect (Global, SH, LH, etc.)
         analysis_date: Optional analysis date to use instead of TODAY() in queries
+        environment: Environment type ("local" or "prod")
     """
     print(f"📥 Collecting flexible NPS data")
     print(f"   🔧 Aggregation: {aggregation_days} days per period")
@@ -121,7 +122,7 @@ async def collect_flexible_data(aggregation_days: int, target_folder: str, segme
     if analysis_date:
         print(f"   📅 Analysis date: {analysis_date.strftime('%Y-%m-%d')}")
     
-    collector = PBIDataCollector()
+    collector = PBIDataCollector(environment=environment)
     node_paths = get_segment_node_paths(segment)
     
     total_attempted = 0
@@ -1292,7 +1293,7 @@ async def run_flexible_data_download_with_date(aggregation_days: int, periods: i
         print(f"❌ Data collection failed")
         return None
 
-async def run_flexible_data_download_silent_with_date(aggregation_days: int, periods: int, start_date, date_parameter: str, segment: str = "Global"):
+async def run_flexible_data_download_silent_with_date(aggregation_days: int, periods: int, start_date, date_parameter: str, segment: str = "Global", environment: str = "local"):
     """Run flexible data download completely silently with custom date and parameter naming"""
     # Generate folder name with new naming convention
     date_str = start_date.strftime('%Y_%m_%d')
@@ -1306,7 +1307,7 @@ async def run_flexible_data_download_silent_with_date(aggregation_days: int, per
     
     target_folder = f"tables/{date_parameter}_{date_str}_flexible_{aggregation_days}d{segment_suffix}_{timestamp}"
     
-    collector = PBIDataCollector()
+    collector = PBIDataCollector(environment=environment)
     
     # Get node paths for the specified segment
     node_paths = get_segment_node_paths(segment)
@@ -1961,7 +1962,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
     # The caller (e.g., weekly_deep_research.py) will consolidate if needed
     return all_periods_data
 
-async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None):
+async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "local"):
     """Show clean, focused analysis: tree + agent workflow + summary"""
     from contextlib import redirect_stdout, redirect_stderr
     import os
@@ -1973,8 +1974,8 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
     periods_analyzed = analysis_data.get('periods_analyzed', anomaly_periods)
     
     # Initialize interpreter for explanations
-    pbi_collector = PBIDataCollector()
-    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, silent_mode=True, causal_filter=causal_filter)
+    pbi_collector = PBIDataCollector(environment=environment)
+    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, silent_mode=True, causal_filter=causal_filter, environment=environment)
     
     # Initialize AI agent for interpretation
     try:
@@ -1985,7 +1986,8 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
             llm_type=get_default_llm_type(),
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
-            study_mode="comparative"
+            study_mode="comparative",
+            environment=environment
         )
         ai_available = True
     except Exception:
@@ -2959,7 +2961,8 @@ async def execute_analysis_flow(
         periods=periods,
         start_date=analysis_date,
         date_parameter=f"{date_parameter}_{study_mode}_{aggregation_days}d",
-        segment=segment
+        segment=segment,
+        environment=environment
     )
 
     if not data_folder:

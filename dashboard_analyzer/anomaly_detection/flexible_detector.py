@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 class FlexibleAnomalyDetector:
     """Enhanced flexible anomaly detector with target-based detection support"""
     
-    def __init__(self, aggregation_days: int = 7, threshold: float = 5.0, min_sample_size: int = 5, detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = None, causal_comparison_dates: tuple = None):
+    def __init__(self, aggregation_days: int = 7, threshold: float = 5.0, min_sample_size: int = 5, detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = None, causal_comparison_dates: tuple = None, environment: str = "local"):
         """
         Initialize flexible anomaly detector
         
@@ -24,12 +24,14 @@ class FlexibleAnomalyDetector:
             baseline_periods: Number of baseline periods for mean-based anomaly detection (default: 7) - only used when detection_mode="mean"
             causal_filter: Causal filter comparison (e.g., "vs LM", "vs LY") - used to determine correct vslast mode
             causal_comparison_dates: Tuple of (start_date, end_date) for "vs Sel. Period" comparison
+            environment: Environment type ("local" or "prod")
         """
         self.aggregation_days = aggregation_days
         self.threshold = threshold
         self.min_sample_size = min_sample_size
         self.causal_filter = causal_filter
         self.causal_comparison_dates = causal_comparison_dates
+        self.environment = environment
         
         # Determine the actual detection mode based on detection_mode and causal_filter
         if detection_mode == "vslast" and causal_filter:
@@ -886,7 +888,7 @@ class FlexibleAnomalyDetector:
             cabins, companies, hauls = self._extract_filters_from_node_path_vs_sel_period(node_path)
             
             # Create a temporary collector to execute the query
-            collector = PBIDataCollector()
+            collector = PBIDataCollector(environment=self.environment)
             
             # Calculate current period (we need this for the query structure)
             # For now, use a reasonable current period - this could be improved
