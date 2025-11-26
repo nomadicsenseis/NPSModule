@@ -1566,7 +1566,7 @@ def get_segment_node_paths(segment: str) -> list:
             print(f"⚠️ Segment '{segment}' not found. Using Global as fallback.")
             return all_nodes["Global"]
 
-async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime = None, date_parameter: str = None, anomaly_detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = "vs L7d", periods: int = 7, causal_comparison_dates: tuple = None, segment: str = "Global"):
+async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime = None, date_parameter: str = None, anomaly_detection_mode: str = "target", baseline_periods: int = 7, causal_filter: str = "vs L7d", periods: int = 7, causal_comparison_dates: tuple = None, segment: str = "Global", environment: str = "local"):
     """Run flexible analysis completely silently"""
     import os
     from contextlib import redirect_stdout, redirect_stderr
@@ -1589,7 +1589,8 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
         detection_mode=("vslast_dynamic" if anomaly_detection_mode == "vslast" and locals().get('causal_filter') == "vs Sel. Period" else anomaly_detection_mode),
         baseline_periods=baseline_periods,
         causal_filter=causal_filter,
-        causal_comparison_dates=causal_comparison_dates
+        causal_comparison_dates=causal_comparison_dates,
+        environment=environment
     )
     
     # Calculate the correct period numbers based on date parameter type and periods parameter
@@ -2979,7 +2980,8 @@ async def execute_analysis_flow(
         causal_filter,
         periods=periods,
         causal_comparison_dates=(str(comparison_start_date), str(comparison_end_date)) if comparison_start_date and comparison_end_date else None,
-        segment=segment
+        segment=segment,
+        environment=environment
     )
 
     if not analysis_data or not analysis_data.get('anomaly_periods'):
