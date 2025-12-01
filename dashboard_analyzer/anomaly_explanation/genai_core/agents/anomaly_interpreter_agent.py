@@ -272,8 +272,8 @@ class AnomalyInterpreterAgent:
     def _create_openai_llm(self, llm_type: LLMType) -> OpenAiLLM:
         """Create OpenAI/Azure OpenAI LLM instance."""
         # Get credentials from environment variables
-        api_key = os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        api_base = os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_API_BASE")
+        api_key = os.getenv("AZURE_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+        api_base = os.getenv("AZURE_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_API_BASE")
         api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
         deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
         

@@ -33,9 +33,21 @@ class PBIDataCollector:
         self.group_id = os.getenv("GROUP_ID")
         self.dataset_id = os.getenv("DATASET_ID")
         
-        if not all([self.client_id, self.client_secret, self.tenant_id, self.group_id, self.dataset_id]):
-            print("⚠️ Warning: Missing required environment variables for Power BI API")
-            print("Required: CLIENT_ID, CLIENT_SECRET, TENANT_ID, GROUP_ID, DATASET_ID")
+        missing_vars = []
+        if not self.client_id: missing_vars.append("CLIENT_ID")
+        if not self.client_secret: missing_vars.append("CLIENT_SECRET")
+        if not self.tenant_id: missing_vars.append("TENANT_ID")
+        if not self.group_id: missing_vars.append("GROUP_ID")
+        if not self.dataset_id: missing_vars.append("DATASET_ID")
+        
+        if missing_vars:
+            error_msg = f"❌ CRITICAL: Missing required environment variables for Power BI API: {', '.join(missing_vars)}"
+            if self.environment == "prod":
+                error_msg += "\n   Running in 'prod' mode: System environment variables are expected but not found."
+            else:
+                error_msg += "\n   Running in 'local' mode: Checked .devcontainer/.env but variables are missing."
+            print(error_msg)
+            raise ValueError(error_msg)
         
         self.access_token = None
         
