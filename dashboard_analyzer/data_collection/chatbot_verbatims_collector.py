@@ -33,15 +33,20 @@ class ChatbotVerbatimsCollector:
         
         # Configure API endpoints and credentials based on environment
         # Note: Must use X-API-Key header (not ApiKey) - confirmed working in tests
+        import os
+        
         if self.environment == "prod":
-            self.endpoint = "https://nps.chatbot.iberia.es/ibdp/api/question"
-            self.api_key = "aUdQhwiCl75T4Jn39X0fa27MZlhHWNUQ57DFp3kY"
+            self.endpoint = os.getenv("CHATBOT_API_ENDPOINT", "https://nps.chatbot.iberia.es/ibdp/api/question")
+            self.api_key = os.getenv("CHATBOT_API_KEY")
         elif self.environment == "pre":
-            self.endpoint = "https://nps.chatbot.pre.iberia.es/ibdp/api/question"
-            self.api_key = "ZfmperiyNP2PXKw1zaN1f2oGJ3VcAOiG7kWNYQIh"
+            self.endpoint = os.getenv("CHATBOT_API_ENDPOINT", "https://nps.chatbot.pre.iberia.es/ibdp/api/question")
+            self.api_key = os.getenv("CHATBOT_API_KEY")
             # Note: PRE environment requires Iberia proxy configuration
         else:
             raise ValueError(f"Invalid environment: {environment}. Must be 'prod' or 'pre'")
+            
+        if not self.api_key:
+             logger.warning(f"⚠️ Missing CHATBOT_API_KEY for environment {self.environment}")
         
         # Configure proxy
         self.proxy = proxy

@@ -460,19 +460,11 @@ class CausalExplanationAgent:
     def _init_chatbot_collector(self):
         """Initialize chatbot collector with simple token management"""
         try:
-            # Load token if available
-            token = self._load_chatbot_token()
-            if token:
-                self.logger.info("🔄 Initializing ChatbotVerbatimsCollector with token...")
-                return ChatbotVerbatimsCollector(
-                    token=token,
-                    pbi_collector=self.pbi_collector  # Provide PBI collector as fallback
-                )
-            else:
-                self.logger.info("🔄 No token found - initializing with PBI fallback only...")
-                return ChatbotVerbatimsCollector(
-                    pbi_collector=self.pbi_collector
-                )
+            self.logger.info("🔄 Initializing ChatbotVerbatimsCollector...")
+            return ChatbotVerbatimsCollector(
+                pbi_collector=self.pbi_collector,
+                environment=self.environment
+            )
                 
         except Exception as e:
             self.logger.error(f"Failed to initialize chatbot collector: {e}")
