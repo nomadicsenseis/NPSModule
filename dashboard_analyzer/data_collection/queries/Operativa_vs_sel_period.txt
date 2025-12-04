@@ -87,14 +87,14 @@ DEFINE
     -- Misconex Measures  
     MEASURE 'Measure'[Misconex_Current] =
         CALCULATE(
-            DIVIDE(SUM(customer_connections[total_pax_misc]), SUM(customer_connections[total_pax_conex])) * 100,
+            DIVIDE(SUM(customer_connections[flag_pax_misc]), SUM(customer_connections[flag_pax_conex])) * 100,
             __CurrentPeriodFilter,
             __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
         )
 
     MEASURE 'Measure'[Misconex_Comparison] =
         CALCULATE(
-            DIVIDE(SUM(customer_connections[total_pax_misc]), SUM(customer_connections[total_pax_conex])) * 100,
+            DIVIDE(SUM(customer_connections[flag_pax_misc]), SUM(customer_connections[flag_pax_conex])) * 100,
             __ComparisonPeriodFilter,
             __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
         )
