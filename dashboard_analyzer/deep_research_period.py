@@ -272,7 +272,7 @@ async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7
         print(f"      • 💬 Customer verbatims sentiment")
         print(f"      • 📅 Date-filtered data for specific periods")
 
-async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod"):
+async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None):
     """Show trees for all periods analyzed INCLUDING explanations and parent interpretations"""
     if not analysis_data:
         return
@@ -285,6 +285,15 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     aggregation_days = analysis_data['aggregation_days']
     anomaly_periods = analysis_data['anomaly_periods']
     periods_analyzed = analysis_data.get('periods_analyzed', anomaly_periods)
+    
+    # Determine study_mode if not provided
+    if study_mode is None:
+        if causal_filter is None or causal_filter == 'None':
+            study_mode = "single"
+        else:
+            study_mode = "comparative"
+    
+    print(f"🔬 Study mode: {study_mode.upper()}")
     
     # Initialize interpreter for explanations with agent mode
     pbi_collector = PBIDataCollector(environment=environment)
@@ -300,7 +309,7 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             llm_type=get_default_llm_type(),
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
-            study_mode="comparative",
+            study_mode=study_mode,
             environment=environment
         )
         ai_available = True
@@ -1975,7 +1984,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
     # The caller (e.g., weekly_deep_research.py) will consolidate if needed
     return all_periods_data
 
-async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod"):
+async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None):
     """Show clean, focused analysis: tree + agent workflow + summary"""
     from contextlib import redirect_stdout, redirect_stderr
     import os
@@ -1985,6 +1994,13 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
     aggregation_days = analysis_data['aggregation_days']
     anomaly_periods = analysis_data['anomaly_periods']
     periods_analyzed = analysis_data.get('periods_analyzed', anomaly_periods)
+    
+    # Determine study_mode if not provided
+    if study_mode is None:
+        if causal_filter is None or causal_filter == 'None':
+            study_mode = "single"
+        else:
+            study_mode = "comparative"
     
     # Initialize interpreter for explanations
     pbi_collector = PBIDataCollector(environment=environment)
@@ -1999,7 +2015,7 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
             llm_type=get_default_llm_type(),
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
-            study_mode="comparative",
+            study_mode=study_mode,
             environment=environment
         )
         ai_available = True
@@ -3011,7 +3027,8 @@ async def execute_analysis_flow(
         causal_filter=causal_filter,
         comparison_start_date=comparison_start_date,
         comparison_end_date=comparison_end_date,
-        environment=environment
+        environment=environment,
+        study_mode=study_mode
     )
     
     print(f"🔍 DEBUG EXECUTE_ANALYSIS_FLOW: show_all_anomaly_periods_with_explanations completed")

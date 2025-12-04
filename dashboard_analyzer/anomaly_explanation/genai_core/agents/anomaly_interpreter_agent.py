@@ -217,16 +217,59 @@ class AnomalyInterpreterAgent:
 
             with open(full_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
-            self.logger.info(f"Prompt configuration loaded from {full_path}")
             
+            # Validate that the config has the expected structure
+            required_keys = ['comparative_prompts', 'single_prompts', 'hierarchical_diagnostic_helpers']
+            missing_keys = [k for k in required_keys if k not in config]
+            if missing_keys:
+                self.logger.warning(f"⚠️ Config loaded but missing keys: {missing_keys}")
+            
+            self.logger.info(f"Prompt configuration loaded from {full_path}")
             return config
+            
         except Exception as e:
             self.logger.error(f"Failed to load prompt config from {config_path}: {e}")
-            # Return a basic configuration as fallback
-            return {
-                "system_prompt": "You are an expert anomaly interpreter.",
-                "input_template": "Analyze the following anomaly tree: {anomaly_tree}"
+            # Return a comprehensive fallback configuration
+            return self._get_fallback_config()
+    
+    def _get_fallback_config(self) -> Dict[str, Any]:
+        """Return a comprehensive fallback configuration when YAML loading fails"""
+        base_system_prompt = """Eres un analista de datos experto en la industria aérea, especializado en interpretar datos de Net Promoter Score (NPS).
+Tu objetivo es generar una interpretación clara, concisa y ejecutiva de las anomalías detectadas."""
+        
+        context_template = """Analiza la siguiente información sobre anomalías de NPS para el día {date}.
+
+<tree_data>
+{tree_data}
+</tree_data>
+
+Confirma que has recibido la información y estás listo para el análisis paso a paso."""
+
+        return {
+            "comparative_prompts": {
+                "system_prompt": base_system_prompt,
+                "input_templates": {
+                    "hierarchical_context_setup": context_template,
+                    "hierarchical_analysis": "📊 **ANÁLISIS JERÁRQUICO**\n\n{tree_data}\n\n**Fecha:** {date}",
+                    "single_node_analysis": "📊 **ANÁLISIS INTEGRADO**\n\n{tree_data}\n\n**Fecha:** {date}"
+                }
+            },
+            "single_prompts": {
+                "system_prompt": base_system_prompt,
+                "input_templates": {
+                    "hierarchical_context_setup": context_template,
+                    "hierarchical_analysis": "📊 **ANÁLISIS JERÁRQUICO**\n\n{tree_data}\n\n**Fecha:** {date}",
+                    "single_node_analysis": "📊 **ANÁLISIS INTEGRADO**\n\n{tree_data}\n\n**Fecha:** {date}"
+                }
+            },
+            "hierarchical_diagnostic_helpers": {
+                "step1_company_level_diagnosis": "🏢 **PASO 1: DIAGNÓSTICO A NIVEL COMPAÑÍA**\n\nAnaliza si las causas están localizadas a nivel de compañía (IB/YW) en Short Haul.",
+                "step2_cabin_level_diagnosis": "✈️ **PASO 2: DIAGNÓSTICO A NIVEL DE CABINA**\n\nAnaliza las diferencias entre Economy, Business y Premium.",
+                "step3_radio_global_diagnosis": "📡 **PASO 3: DIAGNÓSTICO A NIVEL RADIO/GLOBAL**\n\nAnaliza las diferencias entre Long Haul y Short Haul.",
+                "step4_detailed_cause_analysis": "🔍 **PASO 4: ANÁLISIS DETALLADO DE CAUSAS**\n\nIdentifica las causas raíz con evidencia operativa específica.",
+                "step5_executive_synthesis": "📋 **PASO 5: SÍNTESIS EJECUTIVA**\n\nGenera un resumen ejecutivo con las principales conclusiones y recomendaciones."
             }
+        }
 
     
     def _get_system_prompt(self, mode: str = None) -> str:
@@ -249,12 +292,28 @@ class AnomalyInterpreterAgent:
         else:
             templates = self.config.get('comparative_prompts', {}).get('input_templates', {})
         
-        return templates.get(template_name, f"Template {template_name} not found for mode {mode}")
+        template = templates.get(template_name)
+        if template:
+            return template
+        
+        # Log warning but return a usable fallback instead of error message
+        self.logger.warning(f"⚠️ Template '{template_name}' not found for mode '{mode}', using fallback")
+        fallback_config = self._get_fallback_config()
+        fallback_templates = fallback_config.get('comparative_prompts' if mode != 'single' else 'single_prompts', {}).get('input_templates', {})
+        return fallback_templates.get(template_name, f"Analiza los datos proporcionados para {template_name}.")
     
     def _get_hierarchical_helper(self, step_name: str) -> str:
         """Get hierarchical diagnostic helper (shared between modes)"""
         helpers = self.config.get('hierarchical_diagnostic_helpers', {})
-        return helpers.get(step_name, f"Helper {step_name} not found")
+        helper = helpers.get(step_name)
+        if helper:
+            return helper
+        
+        # Log warning but return a usable fallback instead of error message
+        self.logger.warning(f"⚠️ Helper '{step_name}' not found, using fallback")
+        fallback_config = self._get_fallback_config()
+        fallback_helpers = fallback_config.get('hierarchical_diagnostic_helpers', {})
+        return fallback_helpers.get(step_name, f"Ejecuta el paso de análisis: {step_name}")
 
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""

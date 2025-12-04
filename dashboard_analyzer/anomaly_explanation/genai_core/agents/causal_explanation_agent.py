@@ -17,7 +17,7 @@ import pandas as pd
 import os
 import re
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 from pathlib import Path
 import json
 import time
@@ -748,8 +748,8 @@ class CausalExplanationAgent:
         self, 
         tool_name: str, 
         node_path: str, 
-        start_date: str, 
-        end_date: str,
+        start_date: Union[str, datetime], 
+        end_date: Union[str, datetime],
         iteration: int,
         comparison_context: str = "",
         baseline_periods: int = 7,
@@ -758,15 +758,27 @@ class CausalExplanationAgent:
     ) -> str:
         """Execute a tool for single period analysis"""
         try:
+            # Ensure dates are handled correctly (convert to str/datetime as needed)
+            if isinstance(end_date, str):
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                end_date_str = end_date
+            else:
+                end_dt = end_date
+                end_date_str = end_date.strftime('%Y-%m-%d')
+                
+            if isinstance(start_date, str):
+                start_date_str = start_date
+            else:
+                start_date_str = start_date.strftime('%Y-%m-%d')
+
             if tool_name == "operative_data_tool":
                 # FIX: Define a fixed baseline period (e.g., 14 days prior to the analysis end date)
-                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
                 baseline_start_dt = end_dt - timedelta(days=14)
                 
                 return await self._operative_data_tool_single_period(
                     node_path=node_path,
-                    start_date=start_date,
-                    end_date=end_date,
+                    start_date=start_date_str,
+                    end_date=end_date_str,
                     baseline_start_date=baseline_start_dt.strftime('%Y-%m-%d'),
                     comparison_context=comparison_context,
                     baseline_periods=baseline_periods,
@@ -776,28 +788,28 @@ class CausalExplanationAgent:
             elif tool_name == "ncs_tool":
                 return await self._ncs_tool_single_period(
                     node_path=node_path,
-                    start_date=start_date,
-                    end_date=end_date
+                    start_date=start_date_str,
+                    end_date=end_date_str
                 )
             elif tool_name == "routes_tool":
                 return await self._routes_tool_single_period(
                     node_path=node_path,
-                    start_date=start_date,
-                    end_date=end_date,
+                    start_date=start_date_str,
+                    end_date=end_date_str,
                     min_surveys=3,
                     anomaly_type=getattr(self, 'current_anomaly_type', 'unknown')
                 )
             elif tool_name == "verbatims_tool":
                 return await self._verbatims_tool_single_period(
                     node_path=node_path,
-                    start_date=start_date,
-                    end_date=end_date
+                    start_date=start_date_str,
+                    end_date=end_date_str
                 )
             elif tool_name == "customer_profile_tool":
                 return await self._customer_profile_tool(
                     node_path=node_path,
-                    start_date=start_date,
-                    end_date=end_date,
+                    start_date=start_date_str,
+                    end_date=end_date_str,
                     min_surveys=3,
                     mode="single"
                 )
@@ -1682,6 +1694,10 @@ class CausalExplanationAgent:
                                     current_tool = "routes_tool"
                                 elif next_tool_code == "customer_profile_tool":
                                     current_tool = "customer_profile_tool"
+                                elif next_tool_code in ["TERMINAR", "FIN", "END", "STOP"]:
+                                    self.logger.info(f"✅ Agent decided to end investigation (code: {next_tool_code})")
+                                    current_tool = None
+                                    break
                                 else:
                                     self.logger.warning(f"⚠️ Unknown tool code: {next_tool_code}")
                                     # Let agent decide the next tool based on reflection
@@ -1987,6 +2003,10 @@ class CausalExplanationAgent:
                                     current_tool = "routes_tool"
                                 elif next_tool_code == "customer_profile_tool":
                                     current_tool = "customer_profile_tool"
+                                elif next_tool_code in ["TERMINAR", "FIN", "END", "STOP"]:
+                                    self.logger.info(f"✅ Agent decided to end investigation (code: {next_tool_code})")
+                                    current_tool = None
+                                    break
                                 else:
                                     self.logger.warning(f"⚠️ Unknown tool code: {next_tool_code}")
                                     # Fallback to agent decision
@@ -2202,7 +2222,7 @@ class CausalExplanationAgent:
             self.logger.info(f"🤖 Agent response: '{next_tool}'")
             
             # Clean up the response
-            if next_tool.lower() in ['end', 'none', 'complete', 'finished']:
+            if next_tool.lower() in ['end', 'none', 'complete', 'finished', 'terminar', 'fin']:
                 self.logger.info(f"✅ Agent decided to END investigation")
                 return None
             
