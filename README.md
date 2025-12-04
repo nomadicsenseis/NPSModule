@@ -697,6 +697,7 @@ AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 # Performance Tuning
 MAX_CONCURRENT_REQUESTS=5
 DEFAULT_TIMEOUT=300
+PBI_API_TIMEOUT=120  # Timeout in seconds for individual Power BI API calls
 ENABLE_CACHING=true
 ```
 

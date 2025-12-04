@@ -72,6 +72,10 @@ class PBIDataCollector:
         
         self.access_token = None
         
+        # Configure API timeout from environment variable (default 120 seconds)
+        self.api_timeout = int(os.getenv("PBI_API_TIMEOUT", "120"))
+        self.logger.info(f"🔧 PBI API timeout configured: {self.api_timeout}s")
+        
         # Get access token on initialization
         self.access_token = self._get_access_token()
         
@@ -403,8 +407,18 @@ class PBIDataCollector:
         
         return query
     
-    def _execute_query(self, query: str) -> pd.DataFrame:
-        """Execute a DAX query against Power BI API"""
+    def _execute_query(self, query: str, timeout_seconds: int = None) -> pd.DataFrame:
+        """Execute a DAX query against Power BI API
+        
+        Args:
+            query: DAX query string
+            timeout_seconds: Timeout for the API request (uses self.api_timeout if not specified)
+            
+        Returns:
+            DataFrame with query results or empty DataFrame on error
+        """
+        timeout = timeout_seconds if timeout_seconds is not None else self.api_timeout
+        
         dax_query = {
             "queries": [{"query": query}],
             "serializerSettings": {"includeNulls": True}
@@ -417,27 +431,43 @@ class PBIDataCollector:
         }
         
         try:
-            response = requests.post(url, headers=headers, json=dax_query)
+            response = requests.post(url, headers=headers, json=dax_query, timeout=timeout)
             
             if response.status_code != 200:
-                print(f"Error {response.status_code}: {response.text}")
+                self.logger.error(f"❌ PBI API Error {response.status_code}: {response.text}")
                 return pd.DataFrame()
                 
             results = response.json()
             
             if not results.get('results') or not results['results'][0].get('tables'):
-                print("No data returned from query")
+                self.logger.warning("⚠️ No data returned from PBI query")
                 return pd.DataFrame()
                 
             rows = results['results'][0]['tables'][0].get('rows', [])
             return pd.DataFrame(rows)
-            
+        
+        except requests.exceptions.Timeout:
+            self.logger.error(f"⏰ PBI API timeout after {timeout}s - query may be too complex or API is slow")
+            return pd.DataFrame()
+        except requests.exceptions.ConnectionError as e:
+            self.logger.error(f"❌ PBI API connection error: {type(e).__name__}: {str(e)}")
+            return pd.DataFrame()
         except Exception as e:
-            print(f"Error executing query: {str(e)}")
+            self.logger.error(f"❌ Error executing query: {type(e).__name__}: {str(e)}")
             return pd.DataFrame()
     
-    async def _execute_query_async(self, query: str) -> pd.DataFrame:
-        """Execute a DAX query against Power BI API asynchronously"""
+    async def _execute_query_async(self, query: str, timeout_seconds: int = None) -> pd.DataFrame:
+        """Execute a DAX query against Power BI API asynchronously
+        
+        Args:
+            query: DAX query string
+            timeout_seconds: Timeout for the API request (uses self.api_timeout if not specified)
+            
+        Returns:
+            DataFrame with query results or empty DataFrame on error
+        """
+        effective_timeout = timeout_seconds if timeout_seconds is not None else self.api_timeout
+        
         dax_query = {
             "queries": [{"query": query}],
             "serializerSettings": {"includeNulls": True}
@@ -449,25 +479,34 @@ class PBIDataCollector:
             "Content-Type": "application/json"
         }
         
+        # Configure timeout for the aiohttp request
+        timeout = aiohttp.ClientTimeout(total=effective_timeout)
+        
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, headers=headers, json=dax_query) as response:
                     if response.status != 200:
                         response_text = await response.text()
-                        print(f"Error {response.status}: {response_text}")
+                        self.logger.error(f"❌ PBI API Error {response.status}: {response_text}")
                         return pd.DataFrame()
                         
                     results = await response.json()
                     
                     if not results.get('results') or not results['results'][0].get('tables'):
-                        print("No data returned from query")
+                        self.logger.warning("⚠️ No data returned from PBI query")
                         return pd.DataFrame()
                         
                     rows = results['results'][0]['tables'][0].get('rows', [])
                     return pd.DataFrame(rows)
-                    
+        
+        except asyncio.TimeoutError:
+            self.logger.error(f"⏰ PBI API timeout after {effective_timeout}s - query may be too complex or API is slow")
+            return pd.DataFrame()
+        except aiohttp.ClientError as e:
+            self.logger.error(f"❌ PBI API connection error: {type(e).__name__}: {str(e)}")
+            return pd.DataFrame()
         except Exception as e:
-            print(f"Error executing async query: {str(e)}")
+            self.logger.error(f"❌ Error executing async query: {type(e).__name__}: {str(e)}")
             return pd.DataFrame()
     
     def _get_node_filters(self, node_path: str) -> Tuple[List[str], List[str], List[str]]:
