@@ -83,6 +83,10 @@ class ChatbotVerbatimsCollector:
         Returns:
             Tuple of (success: bool, message: str)
         """
+        # Check API Key first
+        if not self.api_key:
+            return False, "❌ CHATBOT_API_KEY is missing. Cannot connect to Chatbot API."
+
         try:
             headers = self._get_headers()
             
@@ -112,7 +116,10 @@ class ChatbotVerbatimsCollector:
                     else:
                         return False, f"⚠️ Unexpected response format: {data}"
                 except Exception as e:
-                    return False, f"❌ Invalid JSON response: {e}"
+                    # Log the actual content that failed to parse
+                    error_content = response.text[:500] if response.text else "Empty response"
+                    logger.error(f"❌ JSON Decode Error. Content: {error_content}")
+                    return False, f"❌ Invalid JSON response: {e}. Content starts with: {error_content[:100]}"
             else:
                 return False, f"❌ API returned status {response.status_code}: {response.text[:200]}"
                 
