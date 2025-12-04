@@ -398,92 +398,104 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             total_nodes = len(nodes_with_anomalies)
             successful_explanations = 0
 
-            print(f"      📊 Processing {total_nodes} anomalous nodes for causal explanations...")
+            print(f"      📊 Processing {total_nodes} anomalous nodes for causal explanations (PARALLEL EXECUTION)...")
             
-            for i, node_path in enumerate(nodes_with_anomalies, 1):
-                try:
-                    anomaly_state = period_anomalies.get(node_path, "?")
-                    deviation_value = period_deviations.get(node_path, 0.0)  # Get actual deviation
-                    print(f"🔍 DEBUG GLOBAL ANOMALY: node_path='{node_path}', period_anomalies.get()='{anomaly_state}', deviation_value={deviation_value}")
-                    print(f"🔍 DEBUG GLOBAL ANOMALY: period_anomalies keys: {list(period_anomalies.keys())}")
-                    print(f"🔍 DEBUG GLOBAL ANOMALY: period_anomalies values: {list(period_anomalies.values())}")
-                    
-                    # For Global node, determine anomaly state based on sign of change (using same nomenclature as other nodes)
-                    if node_path == "Global" and anomaly_state == "?":
-                        if deviation_value > 0:
-                            anomaly_state = "+"  # Positive anomaly
-                        elif deviation_value < 0:
-                            anomaly_state = "-"  # Negative anomaly
-                        else:
-                            anomaly_state = "N"  # Neutral
-                    
-                    print(f"      🔍 [{i}/{total_nodes}] Collecting explanation for {node_path} (state: {anomaly_state}, deviation: {deviation_value:+.1f})")
-                    
-                    # Calculate correct date range if analysis_date is available
-                    start_date, end_date = None, None
-                    analysis_date = analysis_data.get('analysis_date')
-                    if analysis_date:
-                        print(f"🔍 DEBUG DATE FLOW: analysis_date={analysis_date}, period={period}, aggregation_days={aggregation_days}")
-                        start_date, end_date = calculate_period_date_range(analysis_date, period, aggregation_days)
-                        print(f"🔍 DEBUG DATE FLOW: calculate_period_date_range returned: start_date={start_date}, end_date={end_date}")
-                        print(f"         📅 Using calculated date range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
-                    
-                    # Build enriched NPS context for the causal agent
-                    nps_context = ""
-                    comparison_context = ""
-                    print(f"🔍 DEBUG NPS CONTEXT BUILD: period_nps_values keys: {list(period_nps_values.keys()) if period_nps_values else 'None'}", file=sys.stderr)
-                    print(f"🔍 DEBUG NPS CONTEXT BUILD: Looking for node_path: {node_path}", file=sys.stderr)
-                    print(f"🔍 DEBUG NPS CONTEXT BUILD: Node in period_nps_values: {node_path in period_nps_values if period_nps_values else False}", file=sys.stderr)
-                    if period_nps_values and node_path in period_nps_values:
-                        nps_data = period_nps_values[node_path]
-                        print(f"🔍 DEBUG Causal agent NPS for {node_path}: {nps_data}", file=sys.stderr)
-                        if isinstance(nps_data, dict):
-                            current_nps = nps_data.get('current', 'N/A')
-                            baseline_nps = nps_data.get('baseline', 'N/A')
-                            nps_context = f"Current NPS: {current_nps}, Baseline NPS: {baseline_nps}"
-                            
-                            # Generate comparison context
-                            baseline_description = nps_data.get('baseline_description', None)
-                            comparison_context = generate_comparison_context(
-                                analysis_data.get('anomaly_detection_mode', 'target'), 
-                                analysis_data.get('aggregation_days', 7),
-                                analysis_data.get('baseline_periods', 7),
-                                baseline_description
-                            )
-                        else:
-                            nps_context = f"NPS: {nps_data}"
-                    else:
-                        print(f"🔍 DEBUG Causal agent NO NPS for {node_path}", file=sys.stderr)
-                    
-                    explanation = await asyncio.wait_for(
-                        interpreter.explain_anomaly(
-                            node_path=node_path,
-                            target_period=period,
-                            aggregation_days=aggregation_days,
-                            anomaly_state=anomaly_state,
-                            start_date=start_date,
-                            end_date=end_date,
-                            anomaly_magnitude=deviation_value,  # ✅ Now passing actual deviation
-                            nps_context=nps_context,  # ✅ Now passing NPS context
-                            causal_filter=causal_filter,
-                            # New parameters for enriched context
-                            anomaly_detection_mode=analysis_data.get('anomaly_detection_mode', 'target'),
-                            comparison_context=comparison_context,
-                            baseline_periods=analysis_data.get('baseline_periods', 7)
-                        ),
-                        timeout=600.0
-                    )
-                    explanations[node_path] = explanation
+            # Semaphore to limit concurrent agents (prevent API rate limits or resource exhaustion)
+            concurrency_limit = 5
+            sem = asyncio.Semaphore(concurrency_limit)
+            
+            async def process_node_anomaly(i, node_path):
+                async with sem:
+                    try:
+                        # Create an ISOLATED interpreter for this task to prevent state conflicts
+                        # FlexibleAnomalyInterpreter is not thread/async-safe for shared use because it resets self.causal_agent
+                        node_interpreter = FlexibleAnomalyInterpreter(
+                            data_folder, 
+                            pbi_collector=pbi_collector, 
+                            causal_filter=causal_filter, 
+                            detection_mode=detector.detection_mode, 
+                            comparison_start_date=comparison_start_date, 
+                            comparison_end_date=comparison_end_date, 
+                            environment=environment
+                        )
+                        
+                        anomaly_state = period_anomalies.get(node_path, "?")
+                        deviation_value = period_deviations.get(node_path, 0.0)  # Get actual deviation
+                        # Debug logs removed to reduce noise in parallel execution
+                        
+                        # For Global node, determine anomaly state based on sign of change
+                        if node_path == "Global" and anomaly_state == "?":
+                            if deviation_value > 0:
+                                anomaly_state = "+"
+                            elif deviation_value < 0:
+                                anomaly_state = "-"
+                            else:
+                                anomaly_state = "N"
+                        
+                        print(f"      ⏳ [{i}/{total_nodes}] Starting analysis for {node_path}...")
+                        
+                        # Calculate correct date range if analysis_date is available
+                        start_date, end_date = None, None
+                        analysis_date = analysis_data.get('analysis_date')
+                        if analysis_date:
+                            start_date, end_date = calculate_period_date_range(analysis_date, period, aggregation_days)
+                        
+                        # Build enriched NPS context for the causal agent
+                        nps_context = ""
+                        comparison_context = ""
+                        if period_nps_values and node_path in period_nps_values:
+                            nps_data = period_nps_values[node_path]
+                            if isinstance(nps_data, dict):
+                                current_nps = nps_data.get('current', 'N/A')
+                                baseline_nps = nps_data.get('baseline', 'N/A')
+                                nps_context = f"Current NPS: {current_nps}, Baseline NPS: {baseline_nps}"
+                                
+                                # Generate comparison context
+                                baseline_description = nps_data.get('baseline_description', None)
+                                comparison_context = generate_comparison_context(
+                                    analysis_data.get('anomaly_detection_mode', 'target'), 
+                                    analysis_data.get('aggregation_days', 7),
+                                    analysis_data.get('baseline_periods', 7),
+                                    baseline_description
+                                )
+                            else:
+                                nps_context = f"NPS: {nps_data}"
+                        
+                        explanation = await asyncio.wait_for(
+                            node_interpreter.explain_anomaly(
+                                node_path=node_path,
+                                target_period=period,
+                                aggregation_days=aggregation_days,
+                                anomaly_state=anomaly_state,
+                                start_date=start_date,
+                                end_date=end_date,
+                                anomaly_magnitude=deviation_value,
+                                nps_context=nps_context,
+                                causal_filter=causal_filter,
+                                anomaly_detection_mode=analysis_data.get('anomaly_detection_mode', 'target'),
+                                comparison_context=comparison_context,
+                                baseline_periods=analysis_data.get('baseline_periods', 7)
+                            ),
+                            timeout=600.0
+                        )
+                        print(f"         ✅ [{i}/{total_nodes}] FINISHED: {node_path} ({len(explanation)} chars)")
+                        return node_path, explanation, True
+                    except Exception as e:
+                        error_details = f"Type: {type(e).__name__}, Message: '{str(e)}'"
+                        print(f"         ❌ [{i}/{total_nodes}] FAILED: {node_path} - {error_details}")
+                        import traceback
+                        traceback.print_exc()
+                        return node_path, f"Analysis failed: {error_details}", False
+
+            # Create tasks
+            tasks = [process_node_anomaly(i, node) for i, node in enumerate(nodes_with_anomalies, 1)]
+            
+            # Run tasks and process as they complete
+            for task in asyncio.as_completed(tasks):
+                node_path, result, success = await task
+                explanations[node_path] = result
+                if success:
                     successful_explanations += 1
-                    print(f"         ✅ [{i}/{total_nodes}] Explanation collected: {len(explanation)} chars")
-                except Exception as e:
-                    error_details = f"Type: {type(e).__name__}, Message: '{str(e)}', Args: {e.args}"
-                    print(f"         ❌ [{i}/{total_nodes}] Explanation failed: {error_details}")
-                    # Also try to get traceback
-                    import traceback
-                    traceback_str = traceback.format_exc()
-                    print(f"         🔍 Full traceback: {traceback_str}")
-                    explanations[node_path] = f"Analysis failed: {error_details}"
             
             print(f"      📋 Summary: {successful_explanations}/{total_nodes} explanations collected successfully")
         
@@ -2400,8 +2412,8 @@ async def main():
                         help='End date for comparison period (YYYY-MM-DD) when using --causal-filter-comparison "vs Sel. Period"')
     
     # Environment parameter
-    parser.add_argument('--environment', type=str, default='prod', choices=['local', 'prod'],
-                       help='Environment: local (reads .env) or prod (uses system env vars). Default: prod')
+    parser.add_argument('--environment', type=str, default='local', choices=['local', 'prod'],
+                       help='Environment: local (reads .env) or prod (uses system env vars). Default: local')
     
     args = parser.parse_args()
 

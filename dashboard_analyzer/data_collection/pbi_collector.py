@@ -24,12 +24,33 @@ class PBIDataCollector:
         if self.environment != "prod":
             dotenv_path = Path(__file__).parent.parent.parent / '.devcontainer' / '.env'
             if dotenv_path.exists():
-                load_dotenv(dotenv_path)
+                print(f"🔍 DEBUG: Loading .env from {dotenv_path}")
+                load_dotenv(dotenv_path, override=True)
+            else:
+                print(f"⚠️ WARNING: .env file not found at {dotenv_path}")
         
         # Get credentials from environment
         self.client_id = os.getenv("CLIENT_ID")
         self.client_secret = os.getenv("CLIENT_SECRET") 
         self.tenant_id = os.getenv("TENANT_ID")
+        
+        # Strip whitespace from credentials if they exist
+        if self.client_id:
+            self.client_id = self.client_id.strip()
+        if self.client_secret:
+            self.client_secret = self.client_secret.strip()
+        if self.tenant_id:
+            self.tenant_id = self.tenant_id.strip()
+        
+        # DEBUG CREDENTIALS (safe print)
+        if self.client_id:
+            print(f"🔍 DEBUG CREDENTIALS: CLIENT_ID starts with: {self.client_id[:5]}...")
+        if self.client_secret:
+            # Check for potentially problematic characters in secret length/content without revealing it
+            has_special = any(c in self.client_secret for c in "$%#")
+            print(f"🔍 DEBUG CREDENTIALS: CLIENT_SECRET len={len(self.client_secret)}, has_special_chars=${has_special}")
+        if self.tenant_id:
+            print(f"🔍 DEBUG CREDENTIALS: TENANT_ID starts with: {self.tenant_id[:5]}...")
         self.group_id = os.getenv("GROUP_ID")
         self.dataset_id = os.getenv("DATASET_ID")
         
