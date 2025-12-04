@@ -28,15 +28,12 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../..'))
 from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
 
-# Helper function to find a file from the project root
-def find_project_root(marker_file=".git"):
-    """Find the project root by searching for a marker file."""
-    path = Path(__file__).resolve()
-    while not (path / marker_file).exists():
-        if path.parent == path:
-            return None  # Reached the filesystem root
-        path = path.parent
-    return path
+# Get the directory containing this file for relative path resolution
+_AGENT_DIR = Path(__file__).resolve().parent
+# Config is at: anomaly_explanation/config/prompts/ (2 levels up from agents/, then into config/prompts/)
+_CONFIG_DIR = _AGENT_DIR.parent.parent / "config" / "prompts"
+# Project root is 4 levels up from agents/ (agents → genai_core → anomaly_explanation → dashboard_analyzer → root)
+_PROJECT_ROOT = _AGENT_DIR.parent.parent.parent.parent
 
 class HierarchicalConversationTracker:
     """Track hierarchical conversation workflow with generation-by-generation analysis"""
@@ -168,11 +165,9 @@ class AnomalyInterpreterAgent:
         
         # Load environment variables from .devcontainer/.env only if not in prod
         if self.environment != "prod":
-            project_root = find_project_root()
-            if project_root:
-                dotenv_path = project_root / '.devcontainer' / '.env'
-                if dotenv_path.exists():
-                    load_dotenv(dotenv_path)
+            dotenv_path = _PROJECT_ROOT / '.devcontainer' / '.env'
+            if dotenv_path.exists():
+                load_dotenv(dotenv_path)
         
         # Load prompt configuration
         self.config = self._load_prompt_config(config_path)
@@ -211,12 +206,11 @@ class AnomalyInterpreterAgent:
     def _load_prompt_config(self, config_path: str) -> Dict[str, Any]:
         """Load prompt configuration from YAML file."""
         try:
-            # Construct path from project root
-            project_root = find_project_root()
-            if not project_root:
-                raise FileNotFoundError("Could not find project root (.git folder).")
-            
-            full_path = project_root / config_path
+            # Use relative path from this file's location
+            # config_path is like "dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml"
+            # Extract just the filename
+            config_filename = Path(config_path).name
+            full_path = _CONFIG_DIR / config_filename
             
             if not full_path.exists():
                 raise FileNotFoundError(f"Prompt config file not found at {full_path}")
@@ -505,7 +499,7 @@ class AnomalyInterpreterAgent:
             self.logger.info(f"✅ Hierarchical interpretation completed in {self.total_processing_time:.2f}s")
             
             # Export successful conversation for debugging
-            conversation_file = self.export_hierarchical_conversation(date=date)
+            conversation_file = await self.export_hierarchical_conversation(date=date)
             if conversation_file:
                 self.logger.info(f"🗂️ Conversación jerárquica guardada: {conversation_file}")
             
@@ -518,7 +512,7 @@ class AnomalyInterpreterAgent:
             error_msg = f"Error durante la interpretación jerárquica: {str(e)}"
             
             # Export error conversation for debugging
-            self.export_hierarchical_conversation(date, error_msg)
+            await self.export_hierarchical_conversation(date, error_msg)
             
             return f"❌ Error en la interpretación jerárquica: {str(e)}"
     
@@ -810,8 +804,8 @@ class AnomalyInterpreterAgent:
             # Last resort: return a generic error
             return "⚠️ **ANÁLISIS PARCIAL** (Error en compilación)"
     
-    def export_hierarchical_conversation(self, date: Optional[str] = None, error: Optional[str] = None) -> str:
-        """Export the hierarchical conversation log to JSON file"""
+    async def export_hierarchical_conversation(self, date: Optional[str] = None, error: Optional[str] = None) -> str:
+        """Export the hierarchical conversation log to JSON file and S3 (in production)"""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             # Use analysis date if provided, otherwise use current date
@@ -843,10 +837,21 @@ class AnomalyInterpreterAgent:
                 "generation_analysis": self.generation_data
             }
             
+            # Save locally
             with open(full_path, 'w', encoding='utf-8') as f:
                 json.dump(conversation_data, f, indent=2, ensure_ascii=False)
-            
             self.logger.info(f"📝 Hierarchical conversation exported to: {full_path}")
+            
+            # Upload to S3 in production
+            try:
+                s3_key = await self.s3_uploader.upload_interpreter_conversation(conversation_data, filename)
+                if s3_key:
+                    self.logger.info(f"📤 Interpreter conversation uploaded to S3: {s3_key}")
+                else:
+                    self.logger.info("🔧 S3 upload skipped (local environment or failed)")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
+            
             return str(full_path)
             
         except Exception as e:

@@ -21,6 +21,7 @@ from dashboard_analyzer.deep_research_period import (
 
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type
+from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
 
 
 async def generate_consolidated_summary(agent, consolidated_data: List[Dict], date_flight_local: str = None) -> str:
@@ -260,8 +261,39 @@ async def run_weekly_comprehensive_analysis(
             print(executive_summary)
             print("=" * 80)
             
-            # TODO: Upload to S3 and send email (if configured)
-            print("\n📤 Upload to S3 and email notification: [TODO]")
+            # Upload to S3
+            try:
+                print("\n📤 Uploading comprehensive report to S3...")
+                s3_uploader = S3ReportUploader(environment=environment)
+                
+                # Prepare date ranges
+                date_ranges = {
+                    'analysis_date': analysis_date.strftime('%Y-%m-%d'),
+                    'comparison_start_date': comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date else None,
+                    'comparison_end_date': comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None
+                }
+                
+                s3_key = await s3_uploader.upload_comprehensive_report(
+                    execution_date=datetime.now(),
+                    analysis_date=analysis_date.strftime('%Y-%m-%d'),
+                    segment=segment,
+                    explanation_mode="weekly_comprehensive",
+                    causal_filter=causal_filter,
+                    weekly_analysis_params=weekly_analysis_params,
+                    daily_analysis_params=daily_analysis_params,
+                    date_ranges=date_ranges,
+                    final_synthesis=executive_summary,
+                    comparison_start_date=comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date else None,
+                    comparison_end_date=comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None
+                )
+                
+                if s3_key:
+                    print(f"✅ Report uploaded to S3: {s3_key}")
+                else:
+                    print("⚠️ S3 upload skipped (empty synthesis or local environment)")
+                    
+            except Exception as s3_error:
+                print(f"⚠️ S3 upload failed (non-critical): {s3_error}")
             
             return executive_summary
             
@@ -310,7 +342,7 @@ async def main():
                        help='Number of baseline periods for daily analysis. Default: 7')
     
     # Environment parameter
-    parser.add_argument('--environment', type=str, default='local', choices=['local', 'prod'],
+    parser.add_argument('--environment', type=str, default='prod', choices=['local', 'prod'],
                        help='Environment: local (reads .env) or prod (uses system env vars). Default: local')
     
     args = parser.parse_args()

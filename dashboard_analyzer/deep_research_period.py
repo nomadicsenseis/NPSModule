@@ -2412,7 +2412,7 @@ async def main():
                         help='End date for comparison period (YYYY-MM-DD) when using --causal-filter-comparison "vs Sel. Period"')
     
     # Environment parameter
-    parser.add_argument('--environment', type=str, default='local', choices=['local', 'prod'],
+    parser.add_argument('--environment', type=str, default='prod', choices=['local', 'prod'],
                        help='Environment: local (reads .env) or prod (uses system env vars). Default: local')
     
     args = parser.parse_args()

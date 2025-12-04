@@ -1,0 +1,117 @@
+{
+  "metadata": {
+    "agent_type": "causal_explanation",
+    "analysis_type": "separated_workflow_investigation",
+    "export_timestamp": "2025-12-04T10:25:58.099722",
+    "node_path": "Global/SH/Business/YW",
+    "start_date": "2025-11-26",
+    "end_date": "2025-11-26",
+    "total_iterations": 4,
+    "llm_type": "O4_MINI",
+    "anomaly_type": "+",
+    "total_messages": 6,
+    "tools_used": [],
+    "investigation_success": true
+  },
+  "conversation_log": [
+    {
+      "iteration": 0,
+      "type": "SYSTEM",
+      "content": "Eres un **analista sénior de NPS** especializado en investigación de anomalías para períodos únicos. Tu análisis se enfoca en entender qué pasó en un día específico.\n\n⚠️ **CRÍTICO - NO INVENTES DATOS:**\nSi hay algún dato que te falta, NO lo supongas ni inventes. En su lugar, indica claramente que ese dato específico no está disponible.\nPara las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.\nEN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.\n\n**MODO SINGLE:** Análisis de un período único sin comparación\n\n**OBJETIVOS:**\n1. **IDENTIFICAR FACTORES** que influyeron en el NPS del día\n2. **ANALIZAR MÉTRICAS OPERATIVAS** del período específico\n3. **ENTENDER FEEDBACK** de los clientes de ese día\n4. **IDENTIFICAR RUTAS** que tuvieron mayor impacto\n\n**Metodología**: Una herramienta por iteración, reflexiona y elige la siguiente. Máximo 5 iteraciones.\n\n**Flujo de Trabajo** (se ejecuta automáticamente):\n▸ `operative_data_tool` → Analiza métricas operativas del día\n▸ `ncs_tool` → Revisa incidentes reportados\n▸ `verbatims_tool` → Obtiene feedback cualitativo\n▸ `routes_tool` → Identifica rutas con mayor impacto\n▸ `customer_profile_tool` → Analiza impacto por perfil\n\n**Reglas de Terminación** 🏁\n▸ Máximo 5 iteraciones\n▸ Si no hay más herramientas relevantes → termina\n▸ Si no hay evidencia clara → termina con hipótesis débil\n",
+      "metadata": {},
+      "timestamp": "10:25:16"
+    },
+    {
+      "iteration": 0,
+      "type": "USER",
+      "content": "**INVESTIGACIÓN DE ANOMALÍA NPS - MODO SINGLE**\n\n📊 **CONTEXTO NPS:**\n• **Segmento**: Global/SH/Business/YW\n• **Período de Análisis**: 2025-11-26 00:00:00 a 2025-11-26 00:00:00\n• **Tipo de Anomalía**: +\n• **Magnitud**: 22.063825530212085 pts\n• **NPS del Día**: 43.75\n• **NPS Baseline**: 21.686174469787915\n• **Modo de Detección**: mean\n• **Días por Período**: 1\n• **Períodos de Baseline**: 7\n\n📈 **CONTEXTO DE COMPARACIÓN:**\n• **Comparación**: vs media de los últimos 7 días\n\n🎯 **OBJETIVO**: Entender qué factores influyeron en el NPS de este día específico.\n\n**DECIDE QUÉ HERRAMIENTA EJECUTAR PRIMERO** basándote en el contexto NPS y la metodología del flujo de trabajo.\n",
+      "metadata": {},
+      "timestamp": "10:25:16"
+    },
+    {
+      "iteration": 1,
+      "type": "AI",
+      "content": "REFLECTION: La herramienta operative_data_tool falló con un error de tipo (TypeError), por lo que no se pudieron obtener las métricas operativas del día ni validar los drivers SHAP operativos. No se ha cumplido el objetivo de analizar las métricas operativas para este período. Dado que no tenemos datos operativos, avanzaremos a la siguiente fase para revisar los incidentes NCS y buscar correlaciones con posibles anomalías.",
+      "metadata": {},
+      "timestamp": "10:25:23"
+    },
+    {
+      "iteration": 2,
+      "type": "AI",
+      "content": "REFLECTION: La herramienta ncs_tool no devolvió datos de incidentes para el día 2025-11-26, por lo que no se han identificado fallos operativos registrados. Se cumple el objetivo de esta iteración al confirmar la ausencia de incidentes relevantes. Dado que no hay anomalías operativas reportadas, avanzamos a extraer el feedback cualitativo de los clientes para entender percepciones y puntos de mejora.",
+      "metadata": {},
+      "timestamp": "10:25:28"
+    },
+    {
+      "iteration": 3,
+      "type": "AI",
+      "content": "REFLECTION: La revisión de los 23 verbatims muestra una percepción altamente positiva del servicio en Business Class de Air Europa: destacan la atención de la tripulación, la calidad de la comida y el confort para el descanso. No aparecen quejas ni menciones a problemas operativos. Se cumple el objetivo de obtener feedback cualitativo, pero no aporta evidencia de anomalías que expliquen variaciones del NPS.",
+      "metadata": {},
+      "timestamp": "10:25:34"
+    },
+    {
+      "iteration": 4,
+      "type": "AI",
+      "content": "REFLECTION: La herramienta routes_tool no identificó rutas con suficientes encuestas (mínimo 2) ni rutas con incidentes operacionales. Se cumple el objetivo de esta iteración en cuanto a revisar el impacto por ruta, pero no hay datos útiles para detectar anomalías o impactos específicos en rutas. Dado que no hay rutas afectadas ni información adicional que profundizar, no resulta útil ejecutar customer_profile_tool.",
+      "metadata": {},
+      "timestamp": "10:25:41"
+    }
+  ],
+  "clean_explanations": [
+    "La herramienta operative_data_tool falló con un error de tipo (TypeError), por lo que no se pudieron obtener las métricas operativas del día ni validar los drivers SHAP operativos. No se ha cumplido el objetivo de analizar las métricas operativas para este período. Dado que no tenemos datos operativos, avanzaremos a la siguiente fase para revisar los incidentes NCS y buscar correlaciones con posibles anomalías.",
+    "La herramienta ncs_tool no devolvió datos de incidentes para el día 2025-11-26, por lo que no se han identificado fallos operativos registrados. Se cumple el objetivo de esta iteración al confirmar la ausencia de incidentes relevantes. Dado que no hay anomalías operativas reportadas, avanzamos a extraer el feedback cualitativo de los clientes para entender percepciones y puntos de mejora.",
+    "La revisión de los 23 verbatims muestra una percepción altamente positiva del servicio en Business Class de Air Europa: destacan la atención de la tripulación, la calidad de la comida y el confort para el descanso. No aparecen quejas ni menciones a problemas operativos. Se cumple el objetivo de obtener feedback cualitativo, pero no aporta evidencia de anomalías que expliquen variaciones del NPS.",
+    "La herramienta routes_tool no identificó rutas con suficientes encuestas (mínimo 2) ni rutas con incidentes operacionales. Se cumple el objetivo de esta iteración en cuanto a revisar el impacto por ruta, pero no hay datos útiles para detectar anomalías o impactos específicos en rutas. Dado que no hay rutas afectadas ni información adicional que profundizar, no resulta útil ejecutar customer_profile_tool."
+  ],
+  "collected_data_summary": "💬 **VERBATIMS EJECUTADO:**\n   📊 ANÁLISIS DE VERBATIMS (PBI)\n\n🎯 SEGMENTO: todos los segmentos - Short Haul - Business Class - Air Europa\n📅 PERÍODO: 2025-11-26 00:00:00 a 2025-11-26 00:00:00\n\n  Total: 23 comentarios\n  Ejemplos:\n    - porque viajé en Business y la atención por parte de las dos TCPs fue excelente....\n    - Por todo , business class es lo mejor , la comida , la atención y el descanso es impagable....\n    - Amabilidad de la tripulación de cabina...\n",
+  "conversation_summary": {
+    "SYSTEM": 1,
+    "USER": 1,
+    "AI": 4
+  },
+  "dax_queries": [
+    {
+      "tool_name": "verbatims_tool_fallback",
+      "query": "DEFINE  \n    VAR __DS0FilterTable =\n        TREATAS({\"Business\"}, 'Cabin_Master'[Cabin_Show])\n \n    VAR __DS0FilterTable2 =\n        TREATAS({\"YW\"}, 'Company_Master'[Company])\n \n    VAR __DS0FilterTable3 =\n        TREATAS({\"SH\"}, 'Haul_Master'[Haul_Aggr])\n \n    VAR __DS0FilterTable4 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),\n            'Date_Master'[Date] >= date(2025,11,26) && 'Date_Master'[Date] <= date(2025,11,26)\n        )\n \n    var __DS0Core= \nADDCOLUMNS(\n    CALCULATETABLE(verbatims_sentiment,\n            __DS0FilterTable,\n            __DS0FilterTable2,\n            __DS0FilterTable3,\n            __DS0FilterTable4), \"Verbatim\", \nCALCULATE(min(surveys_maritz[nps_all_t])))\n \nEVALUATE\n    __DS0Core ",
+      "parameters": {
+        "node_path": "Global/SH/Business/YW",
+        "start_date": "2025-11-26",
+        "end_date": "2025-11-26",
+        "cabins": [
+          "Business"
+        ],
+        "companies": [
+          "YW"
+        ],
+        "hauls": [
+          "SH"
+        ]
+      },
+      "timestamp": "10:25:28",
+      "iteration": 3
+    },
+    {
+      "tool_name": "routes_tool",
+      "query": "DEFINE\n    VAR __DS0FilterTable9 =\n        FILTER(\n            KEEPFILTERS(VALUES('Route_Master'[route])),\n            NOT(ISBLANK('Route_Master'[route]))\n        )\n\n     VAR __DS0FilterTable =\n        TREATAS({\"Business\"}, 'Cabin_Master'[Cabin_Show])\n\n    VAR __DS0FilterTable2 =\n        TREATAS({\"YW\"}, 'Company_Master'[Company])\n\n    VAR __DS0FilterTable3 =\n        TREATAS({\"SH\"}, 'Haul_Master'[Haul_Aggr])\n\n    VAR __DS0FilterTable4 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),   \n            AND(\n                'Date_Master'[Date] >= DATE(2025, 11, 26),\n                'Date_Master'[Date] <= DATE(2025, 11, 26)\n            )\n        )\n\n    VAR __DS0FilterTable8 =\n        TREATAS({\"'surveys_maritz'[issue_category]\"}, 'Categories'[Categories Campos])\n\n    VAR __DS0FilterTable7 =\n        TREATAS({\"\"}, 'Filtro_Comparativa'[Filtro_Comparativa])\n\n\n\n    VAR __ValueFilterDM2 =\n        FILTER(\n            KEEPFILTERS(\n                SUMMARIZECOLUMNS(\n                    'Route_Master'[route],\n                    'Company_Master'[Company],\n                    __DS0FilterTable,\n                    __DS0FilterTable2,\n                    __DS0FilterTable3,\n                    __DS0FilterTable4,\n                    __DS0FilterTable8,\n                    __DS0FilterTable9,\n                    __DS0FilterTable7,\n                    \"Count_total\", IGNORE('Measure'[Count_total])\n                )\n            ),\n            [Count_total] >= 1\n        )\n\n    VAR __DS0Core =\n        CALCULATETABLE(\n            SUMMARIZECOLUMNS(\n                'Route_Master'[route],\n                'Company_Master'[Company],\n                __DS0FilterTable,\n                __DS0FilterTable2,\n                __DS0FilterTable3,\n                __DS0FilterTable4,\n                __DS0FilterTable8,\n                __DS0FilterTable9,\n                __DS0FilterTable7,\n                    \"NPS\", 'Measure'[NPS (Route)],\n                \"NPS_diff\", [Switch_NPS_Raw_diff],\n                \"Pax\", 'Measure'[n (Route)],\n                \"CodeShare\", 'Measure'[CodeShare (Route)]*100,\n                \"Check_in\", 'Measure'[Check-in (Route)],\n                \"Lounge\", 'Measure'[Lounge (Route)],\n                \"Boarding\", 'Measure'[Boarding (Route)],\n                \"Aircraft_interior\", 'Measure'[Aircraft interior (Route)],\n                \"Wi-Fi\", 'Measure'[Wi-Fi (Route)],\n                \"IFE\", 'Measure'[IFE (Route)],\n                \"F&B\", 'Measure'[F&B (Route)],\n                \"Crew\", 'Measure'[Crew (Route)],\n                \"Arrivals\", 'Measure'[Arrivals (Route)],\n                \"Connections\", 'Measure'[Connections (Route)],\n                \"Operative\", 'Measure'[Operative (Route)],\n                \"NonOperative\", 'Measure'[NonOperative (Route)],\n                \"Check_in_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Check-in\"),\n                \"Lounge_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Lounge\"),\n                \"Boarding_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Boarding\"),\n                \"Aircraft_interior_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Aircraft interior\"),\n                \"Wi-Fi_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Wi-Fi\"),\n                \"IFE_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"IFE\"),\n                \"F&B_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"In flight food and beverage\"),\n                \"Crew_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Cabin Crew\"),\n                \"Arrivals_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Arrivals experience\"),\n                \"Connections_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Connections experience\"),\n                \"Operative_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Punctuality\")\n            ),\n            __ValueFilterDM2\n        )\n       \n\nEVALUATE\n    __DS0Core ",
+      "parameters": {
+        "node_path": "Global/SH/Business/YW",
+        "start_date": "2025-11-26",
+        "end_date": "2025-11-26",
+        "comparison_filter": null,
+        "comparison_start_date": null,
+        "comparison_end_date": null,
+        "cabins": [
+          "Business"
+        ],
+        "companies": [
+          "YW"
+        ],
+        "hauls": [
+          "SH"
+        ]
+      },
+      "timestamp": "10:25:34",
+      "iteration": 4
+    }
+  ]
+}
