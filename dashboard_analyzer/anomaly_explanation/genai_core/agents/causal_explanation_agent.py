@@ -6408,7 +6408,7 @@ Proporciona análisis estructurado, específico y respaldado por números."""
         try:
             self.logger.info(f"🗺️ Filtering NCS using routes dictionary for haul: {target_haul}")
             
-            # 1. Obtener diccionario de rutas
+            # 1. Obtener diccionario de rutas (sin timeout interno, usa el timeout global de 600s+)
             routes_dict = await self.pbi_collector.collect_routes_dictionary()
             
             if routes_dict.empty:
@@ -6456,6 +6456,9 @@ Proporciona análisis estructurado, específico y respaldado por números."""
                 self.logger.warning(f"⚠️ No incidents found for {target_haul} airports, returning original data")
                 return ncs_data
                 
+        except (asyncio.TimeoutError, asyncio.CancelledError) as e:
+            self.logger.warning(f"⚠️ Timeout/Cancelled in routes filtering: {e}, using unfiltered NCS data")
+            return ncs_data
         except Exception as e:
             self.logger.error(f"❌ Error filtering with routes dictionary: {e}")
             # Fallback: devolver datos originales para que el análisis continúe
