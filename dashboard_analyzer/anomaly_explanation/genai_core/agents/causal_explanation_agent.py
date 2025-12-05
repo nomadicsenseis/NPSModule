@@ -825,9 +825,16 @@ class CausalExplanationAgent:
         try:
             self.logger.info(f"Collecting operative data for {node_path} from {baseline_start_date} to {end_date} for single period analysis")
             
-            # Convert string dates to datetime
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-            baseline_start_dt = datetime.strptime(baseline_start_date, '%Y-%m-%d')
+            # Convert dates to datetime (handle both string and datetime inputs)
+            if isinstance(end_date, str):
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            else:
+                end_dt = end_date
+            
+            if isinstance(baseline_start_date, str):
+                baseline_start_dt = datetime.strptime(baseline_start_date, '%Y-%m-%d')
+            else:
+                baseline_start_dt = baseline_start_date
 
             # Get operative data for the entire range (baseline + target day)
             operative_data = await self._collect_operative_data_with_query_tracking(
