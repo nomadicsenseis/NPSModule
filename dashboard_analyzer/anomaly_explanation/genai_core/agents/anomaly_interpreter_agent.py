@@ -943,6 +943,7 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             Lista de claves de prompts que deben ejecutarse
         """
         segment_mapping = {
+            # Base keys
             'Global': ['step1_company_level_diagnosis', 'step2_cabin_level_diagnosis', 
                        'step3_radio_global_diagnosis', 'step4_detailed_cause_analysis'],
             'LH': ['step2_cabin_level_diagnosis', 'step4_detailed_cause_analysis'],
@@ -956,30 +957,91 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             'Premium SH': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
             'IB': ['step4_detailed_cause_analysis'],
             'YW': ['step4_detailed_cause_analysis'],
+            
+            # Path aliases (for robustness when extracting from tree paths)
+            'Global/LH': ['step2_cabin_level_diagnosis', 'step4_detailed_cause_analysis'],
+            'Global/SH': ['step1_company_level_diagnosis', 'step2_cabin_level_diagnosis', 
+                   'step4_detailed_cause_analysis'],
+            'Global/LH/Economy': ['step4_detailed_cause_analysis'],
+            'Global/LH/Business': ['step4_detailed_cause_analysis'],
+            'Global/LH/Premium': ['step4_detailed_cause_analysis'],
+            'Global/SH/Economy': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
+            'Global/SH/Business': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
+            'Global/SH/Premium': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
+            'Global/SH/Economy/IB': ['step4_detailed_cause_analysis'],
+            'Global/SH/Economy/YW': ['step4_detailed_cause_analysis'],
+            'Global/SH/Business/IB': ['step4_detailed_cause_analysis'],
+            'Global/SH/Business/YW': ['step4_detailed_cause_analysis'],
+            
+            # Readable aliases (from print outputs)
+            'Long Haul (LH)': ['step2_cabin_level_diagnosis', 'step4_detailed_cause_analysis'],
+            'Short Haul (SH)': ['step1_company_level_diagnosis', 'step2_cabin_level_diagnosis', 
+                   'step4_detailed_cause_analysis'],
+            'SH Economy': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
+            'SH Business': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
+            'LH Economy': ['step4_detailed_cause_analysis'],
+            'LH Business': ['step4_detailed_cause_analysis'],
+            'LH Premium': ['step4_detailed_cause_analysis'],
         }
         return segment_mapping.get(segment, ['step4_detailed_cause_analysis'])  # default
     
     def _extract_primary_segment_from_data(self, tree_data: str) -> str:
         """
-        Determines the primary segment for analysis based on the study mode.
-        For a 'comparative' (weekly) study, it's always 'Global'.
-        For a 'single' (daily) study, it defaults to the first node found.
+        Determines the primary segment for analysis from the tree data.
+        It scans the tree data to find the root node being analyzed.
 
         Args:
             tree_data: The hierarchical data containing node explanations.
 
         Returns:
-            The detected primary segment ('Global' or the first node path).
+            The detected primary segment (e.g. 'Global', 'Global/SH', etc.)
         """
-        if self.study_mode == 'comparative':
-            self.logger.info("Comparative study mode detected. Setting primary segment to 'Global'.")
-            return 'Global'
+        # Try to find the first node definition in the text
+        # Support multiple formats:
+        # 1. Legacy: "NODO: Global/SH"
+        # 2. Visual Tree: "Global/SH: STATUS" or "├── Global/SH: STATUS"
         
-        # For single mode, fall back to the first node found in the hierarchy.
-        node_paths = re.findall(r"NODO:\s*([^\n]+)", tree_data)
-        primary_segment = node_paths[0] if node_paths else 'Global'
-        self.logger.info(f"Single study mode. Using first detected node as primary segment: {primary_segment}")
-        return primary_segment
+        # Pattern 1: Legacy NODO
+        nodo_matches = re.findall(r"NODO:\s*([^\n]+)", tree_data)
+        if nodo_matches:
+            primary_segment = nodo_matches[0].strip()
+            self.logger.info(f"Detected primary segment (NODO format): {primary_segment}")
+            return primary_segment
+            
+        # Pattern 2: Visual Tree (looking for "Segment Path: Status")
+        # Matches lines starting with optional tree chars, then path, then colon, then status
+        # We look for lines that contain ANOMALY or Normal to be sure it's a node line
+        tree_lines = tree_data.split('\n')
+        for line in tree_lines:
+            if ':' in line and ('ANOMALY' in line or 'Normal' in line or 'No Data' in line):
+                # Extract the part before the colon
+                node_part = line.split(':')[0]
+                # Clean tree characters
+                clean_node = node_part.replace('├─', '').replace('└─', '').replace('│', '').replace('  ', '').strip()
+                # Clean parenthesized abbreviations e.g. "Long Haul (LH)" -> "Global/LH" normalization is tricky here
+                # So we prefer to rely on the clean path if possible. 
+                # Assuming the tree generator outputs clean paths or we can infer them.
+                
+                # If the node name is simple (e.g. "LH"), we might need context, 
+                # but usually the root node of the passed text is what we want.
+                
+                # Special handling: if we see "Global" at the start, that's definitely it
+                if "Global" in clean_node:
+                    # Take the first one we see
+                    self.logger.info(f"Detected primary segment (Tree format): {clean_node}")
+                    return clean_node
+                
+        # Fallback 1: Try to find just the first line with a colon that looks like a node
+        for line in tree_lines:
+            if ':' in line and ('ANOMALY' in line or 'Normal' in line):
+                 node_part = line.split(':')[0]
+                 clean_node = node_part.replace('├─', '').replace('└─', '').replace('│', '').replace('  ', '').strip()
+                 self.logger.info(f"Detected primary segment (Fallback): {clean_node}")
+                 return clean_node
+
+        # Fallback 2: Default to Global if nothing found
+        self.logger.info("Could not detect segment from data. Defaulting to 'Global'.")
+        return 'Global'
 
     def _detect_segment_level(self, segment: str) -> str:
         """
@@ -1013,6 +1075,34 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         Returns:
             String con las secciones de cabina relevantes para el prompt
         """
+        # Normalize segment path to dictionary keys
+        if segment in ['Global', 'Global/']: 
+            segment = 'Global'
+        elif segment in ['Global/SH', 'Short Haul (SH)']: 
+            segment = 'SH'
+        elif segment in ['Global/LH', 'Long Haul (LH)']: 
+            segment = 'LH'
+        elif segment in ['Global/SH/Economy', 'SH Economy']: 
+            segment = 'Economy SH'
+        elif segment in ['Global/SH/Business', 'SH Business']: 
+            segment = 'Business SH'
+        elif segment in ['Global/SH/Premium', 'SH Premium']: 
+            segment = 'Premium SH'
+        elif segment in ['Global/LH/Economy', 'LH Economy']: 
+            segment = 'Economy LH'
+        elif segment in ['Global/LH/Business', 'LH Business']: 
+            segment = 'Business LH'
+        elif segment in ['Global/LH/Premium', 'LH Premium']: 
+            segment = 'Premium LH'
+        elif 'IB' in segment and 'Economy' in segment: # e.g. Global/SH/Economy/IB
+            segment = 'IB'
+        elif 'YW' in segment and 'Economy' in segment: # e.g. Global/SH/Economy/YW
+            segment = 'YW'
+        elif segment == 'IB':
+            segment = 'IB'
+        elif segment == 'YW':
+            segment = 'YW'
+
         cabin_sections = {
             'Global': """
     **ECONOMY SH: [Título]**
