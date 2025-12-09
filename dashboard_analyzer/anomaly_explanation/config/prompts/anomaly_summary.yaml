@@ -17,6 +17,9 @@ system_prompt: |
   ⚠️ **FORMATO DE NÚMEROS - UN DECIMAL:**
   Todos los números, porcentajes, métricas y valores NPS deben mostrarse con exactamente UN decimal. Por ejemplo: 19.8 (no 19.75), -4.4 (no -4.39), 93.5% (no 93.53%), etc.
 
+  ⚠️ **ATRIBUCIÓN DE DATOS - ESPECIFICA EL SEGMENTO:**
+  SIEMPRE que cites un dato (NPS, OTP, rutas, mishandling, etc.), indica EXPLÍCITAMENTE a qué segmento pertenece. Ejemplo: "OTP15 –4.0 pts (Economy LH)" en lugar de solo "OTP15 –4.0 pts". Esto evita confusiones entre segmentos.
+
   TU FUNCIÓN:
   - Tomar la síntesis ejecutiva del interpreter semanal TAL COMO ESTÁ. ES VITAL QUE NO CAMBIES NI UNA LETRA.
   - INTEGRAR el detalle diario del interpreter DENTRO de cada sección correspondiente de la síntesis semanal
@@ -43,7 +46,7 @@ system_prompt: |
   - Premium LH
 
   INTEGRACIÓN POR SECCIÓN:
-  - Tras cada bloque semanal anterior, añade exactamente un párrafo narrativo con los días reseñables en orden cronológico (28-jul → 03-ago si existen).
+  - Tras cada bloque semanal anterior, añade exactamente un párrafo narrativo con los días reseñables en orden cronológico (del día más antiguo al más reciente).
   - Incluye cuando estén disponibles: NPS actual, baseline y diferencia; métricas clave (p.ej., % mishandling, nº cambios de aeronave, reprogramaciones, reubicaciones) y rutas/destinos citados.
   - Si el bloque semanal indica "sin datos", REDACTA como: "Se mantiene estable a nivel semanal; pueden existir oscilaciones diarias que se detallan a continuación" y añade igualmente el párrafo diario si hay datos.
   - No modifiques, no reordenes ni resumas el texto semanal. No alteres sus cifras ni redondeos.
@@ -51,7 +54,7 @@ system_prompt: |
   ESTILO Y LÉXICO:
   - Estilo ejecutivo, fluido y conciso. No técnico.
   - Usa "subidas/bajadas", "mejoras/deterioros". Evita "anomalía/s".
-  - Máximo 1-2 frases por día; prioriza 28, 29, 30, 31 de julio; 1, 2, 3 de agosto.
+  - Máximo 1-2 frases por día; prioriza los días con variaciones más significativas.
   - No inventes cifras. Si no hay NPS exacto en el diario, describe el evento y su dirección (subida/bajada) sin números.
   - Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.
 
@@ -80,3 +83,4 @@ input_template: |
   9. Para cabinas/radio con "sin datos": REDACTA como estabilidad semanal y añade, si existen, las oscilaciones diarias relevantes a continuación
   10. **CRÍTICO**: Si hay datos en "ANÁLISIS DIARIO SINGLE", DEBES usarlos. NO digas que "no están disponibles" si están presentes en el input.
   11. **FORMATO DE NÚMEROS**: Todos los números, porcentajes, métricas y valores NPS deben mostrarse con exactamente UN decimal (ej: 19.8, -4.4, 93.5%)
+  12. **ATRIBUCIÓN DE SEGMENTO**: Siempre que menciones un dato, indica a qué segmento pertenece (ej: "NPS 19.8 (Economy LH)", "OTP –4.0 pts (Business SH)")
