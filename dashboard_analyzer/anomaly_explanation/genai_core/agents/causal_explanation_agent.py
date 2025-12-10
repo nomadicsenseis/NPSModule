@@ -72,7 +72,8 @@ class CleanConversationTracker:
         self.identified_routes = []  # Nuevos campos para tracking
         self.last_tool_context = None  # Contexto del último tool ejecutado
         self.dax_queries = []  # Track DAX queries executed during investigation
-        
+        self.tool_executions = []  # Track structured tool executions with results
+
     def reset_tracker(self):
         """Reset for new investigation"""
         self.conversation_log = []
@@ -81,6 +82,7 @@ class CleanConversationTracker:
         self.identified_routes = []
         self.last_tool_context = None
         self.dax_queries = []
+        self.tool_executions = []
         
     def reset(self):
         """Resets the agent's state for a new analysis run."""
@@ -98,6 +100,7 @@ class CleanConversationTracker:
         self.previous_explanations = []
         self.identified_routes = []
         self.last_tool_context = None
+        self.tool_executions = []
         
     def reset(self):
         """Resets the agent's state for a new analysis run."""
@@ -154,11 +157,23 @@ class CleanConversationTracker:
             'iteration': self.iteration_count
         }
         
+        # Track structured execution
+        self.tool_executions.append({
+            'tool_name': tool_name,
+            'result': result,
+            'iteration': self.iteration_count,
+            'timestamp': datetime.now().isoformat()
+        })
+        
         # Extract routes if mentioned in NCS or verbatims results
         if tool_name in ['ncs_tool', 'verbatims_tool']:
             routes = self._extract_routes_from_result(result)
             if routes:
                 self.identified_routes.extend(routes)
+
+    def get_tool_executions(self) -> List[Dict]:
+        """Get the structured history of tool executions"""
+        return self.tool_executions
     
     def add_dax_query(self, tool_name: str, query: str, parameters: dict = None):
         """Add a DAX query to the tracking list"""
@@ -5312,6 +5327,10 @@ class CausalExplanationAgent:
     def get_conversation_log(self) -> List[Dict]:
         """Get the conversation log"""
         return self.tracker.conversation_log
+
+    def get_investigation_log(self) -> List[Dict]:
+        """Get the structured investigation log (tool executions)"""
+        return self.tracker.get_tool_executions()
     
     async def export_conversation(self, filename: Optional[str] = None, node_path: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> str:
         """Export the conversation log to JSON file and upload to S3"""

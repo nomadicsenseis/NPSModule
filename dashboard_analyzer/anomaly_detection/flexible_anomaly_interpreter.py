@@ -39,6 +39,7 @@ class FlexibleAnomalyInterpreter:
         # Initialize agent lazily (will be created when needed with correct causal_filter)
         self.causal_agent = None
         self._agent_initialized = False
+        self.last_causal_log = []  # Store the last investigation log
         
     def _initialize_causal_agent(self, causal_filter: str = None, comparison_start_date: datetime = None, comparison_end_date: datetime = None, study_mode: str = None):
         """Initialize the causal agent with the correct filter"""
@@ -202,6 +203,10 @@ class FlexibleAnomalyInterpreter:
                 baseline_periods=baseline_periods
             )
             
+            # Capture the investigation log
+            if hasattr(self.causal_agent, 'get_investigation_log'):
+                self.last_causal_log = self.causal_agent.get_investigation_log()
+            
             # Add header to distinguish agent explanations
             explanation = f"🤖 **AGENT CAUSAL ANALYSIS**\n{explanation}"
                 
@@ -211,6 +216,10 @@ class FlexibleAnomalyInterpreter:
             error_msg = f"Error generating explanation for {node_path} period {target_period}: {str(e)}"
             print(f"❌ {error_msg}")
             return error_msg
+    
+    def get_last_causal_log(self) -> List[Dict]:
+        """Get the structured log of the last causal investigation"""
+        return self.last_causal_log
     
     def _get_period_date_range(self, target_period: int, aggregation_days: int) -> Tuple[datetime, datetime]:
         """

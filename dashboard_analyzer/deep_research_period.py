@@ -17,6 +17,7 @@ from contextlib import redirect_stdout, redirect_stderr
 import pandas as pd
 
 from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector
+from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
 from dashboard_analyzer.anomaly_detection.flexible_detector import FlexibleAnomalyDetector
 from dashboard_analyzer.anomaly_detection.flexible_anomaly_interpreter import FlexibleAnomalyInterpreter
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
@@ -487,22 +488,39 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
                             ),
                             timeout=600.0
                         )
+                        
+                        # Capture logs
+                        investigation_log = []
+                        if hasattr(node_interpreter, 'get_last_causal_log'):
+                            investigation_log = node_interpreter.get_last_causal_log()
+                            
                         print(f"         ✅ [{i}/{total_nodes}] FINISHED: {node_path} ({len(explanation)} chars)")
-                        return node_path, explanation, True
+                        return node_path, explanation, investigation_log, True
                     except Exception as e:
                         error_details = f"Type: {type(e).__name__}, Message: '{str(e)}'"
                         print(f"         ❌ [{i}/{total_nodes}] FAILED: {node_path} - {error_details}")
                         import traceback
                         traceback.print_exc()
-                        return node_path, f"Analysis failed: {error_details}", False
+                        return node_path, f"Analysis failed: {error_details}", [], False
 
             # Create tasks
             tasks = [process_node_anomaly(i, node) for i, node in enumerate(nodes_with_anomalies, 1)]
             
+            # Initialize detailed data structure
+            detailed_tree_data = {}
+            
             # Run tasks and process as they complete
             for task in asyncio.as_completed(tasks):
-                node_path, result, success = await task
+                node_path, result, log, success = await task
                 explanations[node_path] = result
+                
+                # Store structured log
+                if success and log:
+                    detailed_tree_data[node_path] = {
+                        "explanation": result,
+                        "tool_trace": log
+                    }
+                
                 if success:
                     successful_explanations += 1
             
@@ -606,6 +624,118 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
                 print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
                 print(ai_interpretation)
         
+        # Save detailed structured JSON
+        try:
+            # Construct hierarchical JSON
+            # Normalize root segment name for tree construction
+            root_name = segment
+            root_node = {"name": root_name, "children": []}
+            
+            # Helper to find or create node in tree
+            def find_or_create_node(current_node, path_parts):
+                if not path_parts:
+                    return current_node
+                
+                target_name = path_parts[0]
+                # Check if child exists
+                found_child = None
+                if "children" not in current_node:
+                    current_node["children"] = []
+                    
+                for child in current_node["children"]:
+                    if child["name"] == target_name:
+                        found_child = child
+                        break
+                
+                if not found_child:
+                    found_child = {"name": target_name, "children": []}
+                    current_node["children"].append(found_child)
+                    
+                return find_or_create_node(found_child, path_parts[1:])
+
+            # Populate tree with all nodes involved in the analysis
+            # Combine period_anomalies keys and detailed_tree_data keys
+            all_node_paths = set(list(period_anomalies.keys()) + list(detailed_tree_data.keys()))
+            
+            for node_path in sorted(list(all_node_paths)):
+                # Handle path parsing based on whether it starts with segment or not
+                # If segment is "Global", paths like "Global/LH" work fine
+                # If segment is "Global/LH", we need to handle "Global/LH/Business" correctly
+                
+                path_parts = []
+                if node_path == root_name:
+                    target_node = root_node
+                elif node_path.startswith(root_name + "/"):
+                    rel_path = node_path[len(root_name)+1:]
+                    path_parts = rel_path.split("/")
+                    target_node = find_or_create_node(root_node, path_parts)
+                else:
+                    # Node path doesn't start with segment (shouldn't happen usually but robust check)
+                    # Treat as separate tree or skip? Let's skip for now to maintain hierarchy
+                    continue
+                
+                # Add data to the node
+                target_node["anomaly_state"] = period_anomalies.get(node_path, "?")
+                target_node["deviation"] = period_deviations.get(node_path, 0.0)
+                
+                # Attach causal analysis if available
+                if node_path in detailed_tree_data:
+                    target_node["causal_analysis"] = detailed_tree_data[node_path]
+                elif node_path in explanations:
+                     # Fallback for nodes that have explanation but no structured log (e.g. failures or non-agent)
+                     target_node["causal_analysis"] = {"explanation": explanations[node_path]}
+
+            # Add metadata
+            json_output = {
+                "metadata": {
+                    "date_range": date_range_str,
+                    "segment": segment,
+                    "execution_timestamp": datetime.now().isoformat(),
+                    "period": period,
+                    "aggregation_days": aggregation_days
+                },
+                "tree": root_node,
+                "ai_interpretation": ai_interpretation
+            }
+            
+            # Save file
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Create safe filename
+            safe_date = date_range_str.replace(" ", "_").replace(":", "-").replace("to", "_")
+            safe_segment = segment.replace("/", "_")
+            
+            # Logic for saving based on environment
+            saved_successfully = False
+            
+            if environment == "prod":
+                try:
+                    s3_filename = f"detailed_tree_{safe_date}_{safe_segment}_{timestamp_str}.json"
+                    # Initialize uploader
+                    s3_uploader = S3ReportUploader(environment=environment)
+                    s3_key = await s3_uploader.upload_mapped_info(json_output, s3_filename)
+                    
+                    if s3_key:
+                        print(f"      ☁️ Uploaded detailed hierarchical analysis to S3: {s3_key}")
+                        saved_successfully = True
+                    else:
+                        print(f"      ⚠️ S3 upload failed, falling back to local file")
+                except Exception as s3_error:
+                    print(f"      ⚠️ S3 upload error: {s3_error}")
+            
+            # Local save (if env is local OR if prod upload failed)
+            if not saved_successfully:
+                filename = f"logs/detailed_tree_{safe_date}_{safe_segment}_{timestamp_str}.json"
+                
+                os.makedirs("logs", exist_ok=True)
+                with open(filename, 'w', encoding='utf-8') as f:
+                    json.dump(json_output, f, indent=2, ensure_ascii=False)
+                print(f"      💾 Saved detailed hierarchical analysis to: {filename}")
+            
+        except Exception as e:
+            print(f"      ⚠️ Failed to save detailed JSON: {e}")
+            import traceback
+            traceback.print_exc()
+
         # Collect period data
         period_data = {
             'period': period,

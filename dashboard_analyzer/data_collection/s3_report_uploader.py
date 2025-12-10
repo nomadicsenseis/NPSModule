@@ -314,3 +314,53 @@ class S3ReportUploader:
     async def upload_summary_conversation(self, conversation_data: Dict[str, Any], filename: str) -> Optional[str]:
         """Upload anomaly summary agent conversation to S3"""
         return await self.upload_agent_conversation(conversation_data, "anomaly_summary", filename)
+
+    async def upload_mapped_info(self, data: Dict[str, Any], filename: str) -> Optional[str]:
+        """
+        Upload mapped info (detailed tree analysis) to S3
+        
+        Args:
+            data: The JSON data dictionary
+            filename: The filename to use
+            
+        Returns:
+            S3 key of uploaded file if successful, None if failed
+        """
+        try:
+            # Only upload in production environment
+            if self.environment != "prod":
+                self.logger.info(f"🔧 Local environment: Skipping S3 upload for mapped info")
+                return None
+            
+            # Validate inputs
+            if not data or not filename:
+                self.logger.warning("⚠️ Invalid data or filename, skipping S3 upload")
+                return None
+            
+            # Generate S3 key
+            s3_key = f"{self.base_prefix}mapped_info/{filename}"
+            
+            # Convert to JSON string
+            json_content = json.dumps(data, indent=2, ensure_ascii=False)
+            
+            # Upload to S3
+            self.logger.info(f"📤 Uploading mapped info to S3: s3://{self.bucket_name}/{s3_key}")
+            
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=json_content.encode('utf-8'),
+                ContentType='application/json',
+                Metadata={
+                    'upload_timestamp': datetime.now().isoformat(),
+                    'content_type': 'mapped_info_tree'
+                }
+            )
+            
+            self.logger.info(f"✅ Successfully uploaded mapped info: s3://{self.bucket_name}/{s3_key}")
+            
+            return s3_key
+            
+        except Exception as e:
+            self.logger.error(f"❌ Unexpected error uploading mapped info to S3: {str(e)}")
+            return None
