@@ -266,7 +266,8 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 "step1_company_level_diagnosis": "🏢 **PASO 1: DIAGNÓSTICO A NIVEL COMPAÑÍA**\n\nAnaliza si las causas están localizadas a nivel de compañía (IB/YW) en Short Haul.",
                 "step2_cabin_level_diagnosis": "✈️ **PASO 2: DIAGNÓSTICO A NIVEL DE CABINA**\n\nAnaliza las diferencias entre Economy, Business y Premium.",
                 "step3_radio_global_diagnosis": "📡 **PASO 3: DIAGNÓSTICO A NIVEL RADIO/GLOBAL**\n\nAnaliza las diferencias entre Long Haul y Short Haul.",
-                "step4_detailed_cause_analysis": "🔍 **PASO 4: ANÁLISIS DETALLADO DE CAUSAS**\n\nIdentifica las causas raíz con evidencia operativa específica.",
+                "step4_nma_identification": "🎯 **PASO 4: IDENTIFICACIÓN DE NMAs**\n\nIdentifica los Nodos Máximo Afectados usando la lógica de burbujeo.",
+                "step4b_evidence_extraction": "📋 **PASO 4B: EXTRACCIÓN DE EVIDENCIAS**\n\nVuelve al contexto inicial y extrae TODAS las evidencias para cada NMA.",
                 "step5_executive_synthesis": "📋 **PASO 5: SÍNTESIS EJECUTIVA**\n\nGenera un resumen ejecutivo con las principales conclusiones y recomendaciones."
             }
         }
@@ -470,13 +471,21 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 'step1_company_level_diagnosis': "COMPANY_LEVEL_DIAGNOSIS",
                 'step2_cabin_level_diagnosis': "CABIN_LEVEL_DIAGNOSIS", 
                 'step3_radio_global_diagnosis': "RADIO_GLOBAL_DIAGNOSIS",
-                'step4_detailed_cause_analysis': "DETAILED_CAUSE_ANALYSIS",
+                'step4_nma_identification': "NMA_IDENTIFICATION",
+                'step4b_evidence_extraction': "EVIDENCE_EXTRACTION",
                 'step5_executive_synthesis': "EXECUTIVE_SYNTHESIS"
             }
             
             for step_key in applicable_step_keys:
                 if step_key in step_name_mapping:
                     conversation_steps.append((step_key, step_name_mapping[step_key]))
+            
+            # Always add step4b (evidence extraction) after step4 if step4 is included
+            step_keys_in_conversation = [s[0] for s in conversation_steps]
+            if 'step4_nma_identification' in step_keys_in_conversation and 'step4b_evidence_extraction' not in step_keys_in_conversation:
+                # Find position of step4 and insert step4b after it
+                step4_index = step_keys_in_conversation.index('step4_nma_identification')
+                conversation_steps.insert(step4_index + 1, ('step4b_evidence_extraction', "EVIDENCE_EXTRACTION"))
             
             # Always add step5 for final synthesis if not already included
             if 'step5_executive_synthesis' not in [s[0] for s in conversation_steps]:
@@ -822,7 +831,8 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 'COMPANY_LEVEL_DIAGNOSIS': '📊 DIAGNÓSTICO A NIVEL DE EMPRESA',
                 'CABIN_LEVEL_DIAGNOSIS': '💺 DIAGNÓSTICO A NIVEL DE CABINA', 
                 'RADIO_GLOBAL_DIAGNOSIS': '🌎 DIAGNÓSTICO GLOBAL POR RADIO',
-                'DETAILED_CAUSE_ANALYSIS': '📋 ANÁLISIS DE CAUSAS DETALLADO',
+                'NMA_IDENTIFICATION': '🎯 IDENTIFICACIÓN DE NODOS MÁXIMO AFECTADOS',
+                'EVIDENCE_EXTRACTION': '📋 EXTRACCIÓN DE EVIDENCIAS',
                 'EXECUTIVE_SYNTHESIS': '📋 SÍNTESIS EJECUTIVA FINAL'
             }
             
@@ -945,45 +955,45 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         segment_mapping = {
             # Base keys
             'Global': ['step1_company_level_diagnosis', 'step2_cabin_level_diagnosis', 
-                       'step3_radio_global_diagnosis', 'step4_detailed_cause_analysis'],
-            'LH': ['step2_cabin_level_diagnosis', 'step4_detailed_cause_analysis'],
+                       'step3_radio_global_diagnosis', 'step4_nma_identification'],
+            'LH': ['step2_cabin_level_diagnosis', 'step4_nma_identification'],
             'SH': ['step1_company_level_diagnosis', 'step2_cabin_level_diagnosis', 
-                   'step4_detailed_cause_analysis'],
-            'Economy LH': ['step4_detailed_cause_analysis'],
-            'Business LH': ['step4_detailed_cause_analysis'],
-            'Premium LH': ['step4_detailed_cause_analysis'],
-            'Economy SH': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
-            'Business SH': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
-            'Premium SH': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
-            'IB': ['step4_detailed_cause_analysis'],
-            'YW': ['step4_detailed_cause_analysis'],
+                   'step4_nma_identification'],
+            'Economy LH': ['step4_nma_identification'],
+            'Business LH': ['step4_nma_identification'],
+            'Premium LH': ['step4_nma_identification'],
+            'Economy SH': ['step1_company_level_diagnosis', 'step4_nma_identification'],
+            'Business SH': ['step1_company_level_diagnosis', 'step4_nma_identification'],
+            'Premium SH': ['step1_company_level_diagnosis', 'step4_nma_identification'],
+            'IB': ['step4_nma_identification'],
+            'YW': ['step4_nma_identification'],
             
             # Path aliases (for robustness when extracting from tree paths)
-            'Global/LH': ['step2_cabin_level_diagnosis', 'step4_detailed_cause_analysis'],
+            'Global/LH': ['step2_cabin_level_diagnosis', 'step4_nma_identification'],
             'Global/SH': ['step1_company_level_diagnosis', 'step2_cabin_level_diagnosis', 
-                   'step4_detailed_cause_analysis'],
-            'Global/LH/Economy': ['step4_detailed_cause_analysis'],
-            'Global/LH/Business': ['step4_detailed_cause_analysis'],
-            'Global/LH/Premium': ['step4_detailed_cause_analysis'],
-            'Global/SH/Economy': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
-            'Global/SH/Business': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
-            'Global/SH/Premium': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
-            'Global/SH/Economy/IB': ['step4_detailed_cause_analysis'],
-            'Global/SH/Economy/YW': ['step4_detailed_cause_analysis'],
-            'Global/SH/Business/IB': ['step4_detailed_cause_analysis'],
-            'Global/SH/Business/YW': ['step4_detailed_cause_analysis'],
+                   'step4_nma_identification'],
+            'Global/LH/Economy': ['step4_nma_identification'],
+            'Global/LH/Business': ['step4_nma_identification'],
+            'Global/LH/Premium': ['step4_nma_identification'],
+            'Global/SH/Economy': ['step1_company_level_diagnosis', 'step4_nma_identification'],
+            'Global/SH/Business': ['step1_company_level_diagnosis', 'step4_nma_identification'],
+            'Global/SH/Premium': ['step1_company_level_diagnosis', 'step4_nma_identification'],
+            'Global/SH/Economy/IB': ['step4_nma_identification'],
+            'Global/SH/Economy/YW': ['step4_nma_identification'],
+            'Global/SH/Business/IB': ['step4_nma_identification'],
+            'Global/SH/Business/YW': ['step4_nma_identification'],
             
             # Readable aliases (from print outputs)
-            'Long Haul (LH)': ['step2_cabin_level_diagnosis', 'step4_detailed_cause_analysis'],
+            'Long Haul (LH)': ['step2_cabin_level_diagnosis', 'step4_nma_identification'],
             'Short Haul (SH)': ['step1_company_level_diagnosis', 'step2_cabin_level_diagnosis', 
-                   'step4_detailed_cause_analysis'],
-            'SH Economy': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
-            'SH Business': ['step1_company_level_diagnosis', 'step4_detailed_cause_analysis'],
-            'LH Economy': ['step4_detailed_cause_analysis'],
-            'LH Business': ['step4_detailed_cause_analysis'],
-            'LH Premium': ['step4_detailed_cause_analysis'],
+                   'step4_nma_identification'],
+            'SH Economy': ['step1_company_level_diagnosis', 'step4_nma_identification'],
+            'SH Business': ['step1_company_level_diagnosis', 'step4_nma_identification'],
+            'LH Economy': ['step4_nma_identification'],
+            'LH Business': ['step4_nma_identification'],
+            'LH Premium': ['step4_nma_identification'],
         }
-        return segment_mapping.get(segment, ['step4_detailed_cause_analysis'])  # default
+        return segment_mapping.get(segment, ['step4_nma_identification'])  # default
     
     def _extract_primary_segment_from_data(self, tree_data: str) -> str:
         """

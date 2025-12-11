@@ -214,10 +214,10 @@ hierarchical_diagnostic_helpers:
     - **Narrativa:** [Aplica lógica Parte B].
     - **Evidencia:** Causa/Ruta/Perfil seleccionados."
 
-  step4_detailed_cause_analysis: |
-    🔍 **PASO 4: CONSOLIDACIÓN DE CAUSAS POR NODO MÁXIMO AFECTADO (NMA)**
+  step4_nma_identification: |
+    🔍 **PASO 4: IDENTIFICACIÓN DE NODOS MÁXIMO AFECTADOS (NMA)**
     
-    **Objetivo:** Usar el razonamiento de los pasos 1-3 para identificar el **Nodo Máximo Afectado (NMA)** de cada causa, seleccionando la explicación causal correcta.
+    **Objetivo:** Usar el razonamiento de los pasos 1-3 para identificar el **Nodo Máximo Afectado (NMA)** de cada causa.
 
     **⚠️ REGLA CLAVE: El "burbujeo" real SOLO ocurre en SINERGIA.**
     
@@ -225,60 +225,103 @@ hierarchical_diagnostic_helpers:
 
     1. **SINERGIA** `(-,- | -)` o `(+,+ | +)`:
        - ✅ La causa ES COMÚN a todos los hijos → **NMA = PADRE**
-       - Usa la explicación causal del PADRE (resume correctamente a ambos hijos)
        - Ejemplo: Si IB y YW ambos tienen "puntualidad" → NMA = Economy SH
 
     2. **TRANSFERENCIA** `(-,N | -)` o `(+,N | +)`:
-       - ❌ La causa es ESPECÍFICA del hijo anómalo, solo el EFECTO se transfiere
        - **NMA = HIJO ANÓMALO** (no el padre)
-       - No uses la explicación del padre (está "contaminada" por el hijo Normal)
-       - Ejemplo: Si solo YW tiene problema (IB Normal) → NMA = YW, no Economy SH
+       - Ejemplo: Si solo YW tiene problema (IB Normal) → NMA = YW
 
     3. **DOMINANCIA** `(-,+ | -)` o `(+,- | +)`:
-       - ❌ Las causas son DISTINTAS y compiten → **NMA = HIJO DOMINANTE**
-       - Usa la explicación del hijo que "ganó"
-       - Menciona la causa del hijo perdedor como "parcialmente mitigada por..."
+       - **NMA = HIJO DOMINANTE** (el que "ganó")
 
     4. **DILUCIÓN** `(-,N | N)` o `(+,N | N)`:
-       - ❌ La causa existe pero fue absorbida → **NMA = HIJO ANÓMALO**
-       - Reporta la causa del hijo aunque no propagó al padre
+       - **NMA = HIJO ANÓMALO** (aunque no propagó al padre)
 
     5. **CANCELACIÓN** `(-,+ | N)` o `(+,- | N)`:
-       - ❌ Causas OPUESTAS que se anulan → **NO hay NMA único**
-       - Reporta AMBAS causas por separado, cada una con su hijo correspondiente
+       - **NO hay NMA único** → Reporta AMBOS nodos por separado
 
     **PROCESO DE IDENTIFICACIÓN:**
     Recorre la cadena de escenarios detectados en pasos 1-3:
-    - Si es SINERGIA en todos los niveles → NMA sube hasta el ancestro más alto con SINERGIA
-    - Si en algún nivel hay TRANSFERENCIA/DOMINANCIA/DILUCIÓN → NMA se detiene en el hijo correspondiente
+    - Si es SINERGIA en todos los niveles → NMA sube hasta el ancestro más alto
+    - Si en algún nivel hay TRANSFERENCIA/DOMINANCIA/DILUCIÓN → NMA se detiene en el hijo
 
-    **Por cada causa identificada, proporciona:**
-
-    A. NODO MÁXIMO AFECTADO (NMA):
-      • El nodo cuya explicación causal usarás (según reglas arriba)
-      • Lista los sub-segmentos afectados por esta causa
-
-    B. EXPLICACIÓN CAUSAL DEL NMA (Tríada Causa-Ruta-Perfil):
-      • **QUÉ FALLÓ:** Causa raíz del NMA (drivers, operativa)
-      • **DÓNDE:** Rutas más afectadas según datos del NMA
-      • **QUIÉN:** Perfiles de cliente más reactivos según datos del NMA
-      • **EVIDENCIA:** Métricas clave (NPS, indicadores, NCS, verbatims)
-
-    **⚠️ REGLA DE ATRIBUCIÓN:** Cada dato citado DEBE incluir el segmento al que pertenece.
-    - ✅ Correcto: "OTP –4.0 pts (Economy LH)", "NPS 21.64 (SH/Economy)"
-    - ❌ Incorrecto: "OTP –4.0 pts", "NPS cayó 10 puntos"
-
-    **Salida Esperada:**
+    **Salida Esperada (SOLO identificación, sin datos específicos aún):**
     ```
-    CAUSA 1: [Nombre]
-    - Escenario: [SINERGIA/TRANSFERENCIA/DOMINANCIA/etc.]
-    - NMA: [Nodo cuya explicación usamos]
-    - Afecta a: [Sub-segmentos]
-    - Qué falló: [Driver/Causa raíz] (segmento)
-    - Dónde: [Top 3-5 rutas con NPS] (segmento)
-    - Quién: [Perfiles reactivos con spread] (segmento)
-    - Evidencia COMPLETA: [Explanatory Drivers en ppts] + [Datos operativos: OTP, mishandling, etc.] + [Incidentes NCS] (todo con segmento explícito)
+    CAUSA 1: [Nombre descriptivo breve]
+    - Escenario: [SINERGIA/TRANSFERENCIA/DOMINANCIA/DILUCIÓN/CANCELACIÓN]
+    - NMA: [Nodo path, ej: Global/LH/Economy]
+    - Afecta a: [Lista de sub-segmentos impactados]
+    - Tipo de impacto: [POSITIVO/NEGATIVO]
+
+    CAUSA 2: [Nombre descriptivo breve]
+    ...
     ```
+    
+    **⚠️ IMPORTANTE:** En este paso SOLO identifica los NMAs y escenarios. Los datos específicos (SHAP, OTP, NCS, rutas, perfiles) se extraerán en el siguiente paso.
+
+  step4b_evidence_extraction: |
+    📊 **PASO 4B: EXTRACCIÓN DE EVIDENCIAS DEL CONTEXTO INICIAL**
+    
+    **⚠️ INSTRUCCIÓN CRÍTICA:** Este paso requiere que VUELVAS A LEER el contexto inicial (tree_data) que recibiste al principio de la conversación.
+    
+    **Objetivo:** Para cada NMA identificado en el paso anterior, extraer TEXTUALMENTE todas las evidencias disponibles del contexto inicial.
+
+    **PROCESO OBLIGATORIO:**
+    Para cada NMA identificado, BUSCA en el <tree_data> original y COPIA los valores exactos de:
+
+    1. **EXPLANATORY DRIVERS (si disponibles):**
+       - Busca: "SHAP", "Punctuality", "Load factor", "explanatory_drivers"
+       - Formato: "Punctuality SHAP = +1.868" → Copia exactamente
+
+    2. **DATOS OPERATIVOS:**
+       - Busca: "OTP", "OTP15", "Mishandling", "Misconex", "Load Factor", "operative_data"
+       - Formato: "OTP15 +0.6 pts" → Copia exactamente
+
+    3. **INCIDENTES NCS:**
+       - Busca: "cancelaciones", "retrasos", "cancellations", "delays", "aircraft limitations", "ncs_tool"
+       - Formato: "cancelaciones +17, retrasos -126" → Copia exactamente
+
+    4. **VERBATIMS/FEEDBACK:**
+       - Busca: "verbatims", "comentarios", "menciones positivas/negativas"
+       - Formato: Resume los temas principales mencionados
+
+    5. **RUTAS AFECTADAS:**
+       - Busca: "rutas", "routes", nombres de rutas (MAD-XXX, XXX-MAD)
+       - Formato: "MAD-ORD: NPS -10.1 (31 pax)" → Copia exactamente
+
+    6. **PERFILES DE CLIENTE:**
+       - Busca: "CodeShare", "Fleet", "Residence Region", "Business/Leisure", "spread"
+       - Formato: "CodeShare: spread 250.0 pts" → Copia exactamente
+
+    **Salida Requerida:**
+    Para cada NMA del paso anterior, genera:
+    ```
+    === NMA: [Node Path] ===
+    
+    📈 EXPLANATORY DRIVERS:
+    [Copia textual de los valores SHAP encontrados, o "No disponible" si no hay]
+    
+    📊 DATOS OPERATIVOS:
+    [Copia textual de OTP, mishandling, load factor, etc., o "No disponible"]
+    
+    🚨 INCIDENTES NCS:
+    [Copia textual de cancelaciones, retrasos, limitaciones, etc., o "No disponible"]
+    
+    💬 FEEDBACK DE CLIENTES:
+    [Resumen de verbatims, o "No disponible"]
+    
+    ✈️ RUTAS AFECTADAS (Top 5):
+    [Lista de rutas con NPS y pax, o "No disponible"]
+    
+    👥 PERFILES REACTIVOS:
+    [Perfiles con spread, o "No disponible"]
+    ```
+
+    **⚠️ REGLAS ESTRICTAS:**
+    - NO INVENTES valores. Si no encuentras un dato, escribe "No disponible"
+    - COPIA los valores EXACTAMENTE como aparecen en el contexto inicial
+    - Incluye SIEMPRE el segmento al que pertenece cada dato
+    - Si un NMA tiene datos en múltiples fuentes (explanatory_drivers + ncs), incluye AMBAS
 
   step5_executive_synthesis: |
     🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**
