@@ -326,34 +326,34 @@ hierarchical_diagnostic_helpers:
   step5_executive_synthesis: |
     🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**
     
-    **Enfoque requerido:** Genera un informe ejecutivo orientado a CAUSAS. Usa las evidencias extraídas en el paso anterior (4B) para cada causa identificada.
+    **Enfoque requerido:** Genera un informe ejecutivo NARRATIVO orientado a causas. Usa las evidencias extraídas en el paso anterior (4B).
     
     **⚠️ REGLAS DE LENGUAJE EJECUTIVO:**
     - NUNCA uses términos técnicos internos: "nodo", "árbol", "NMA", "burbujeo", "jerarquía", "agregación"
     - USA lenguaje de negocio: "segmento", "cabina", "radio", "compañía"
     - Escribe como si fuera un informe para dirección ejecutiva
+    - **NO ENUMERES las causas** (nada de "CAUSA 1:", "CAUSA 2:"). Nárralas de forma fluida.
     
     **Formato esperado:**
     
     📈 **SÍNTESIS EJECUTIVA:**
     
-    **PÁRRAFO INTRODUCTORIO (2-3 líneas máximo):**
-    "Durante la semana del [fecha], hemos identificado [N] causas principales que explican las variaciones de NPS en la red. [Breve mención del resultado global: subida/bajada de X pts]."
+    **PÁRRAFO INTRODUCTORIO (2-3 líneas):**
+    "Durante la semana del [fecha], hemos identificado [N] causas principales que explican las variaciones de NPS. [Resultado global: subida/bajada de X pts]."
     
-    **CAUSAS IDENTIFICADAS:**
+    **DESARROLLO NARRATIVO DE LAS CAUSAS (2-4 párrafos):**
+    Escribe de forma NARRATIVA y FLUIDA, desarrollando cada causa identificada en el paso 4. NO uses listas enumeradas ni formato "CAUSA N:". En su lugar, narra las causas como un texto continuo que apoya y desarrolla lo dicho en la introducción.
     
-    Para CADA causa identificada en el paso 4, escribe una sección con este formato:
+    Cada causa debe incluir (integrado naturalmente en la narrativa):
+    - Qué segmento afecta y cuánto impacta el NPS
+    - Las evidencias que la sustentan (drivers, operativa, incidentes, feedback)
+    - Las rutas más afectadas
+    - Los perfiles de cliente más reactivos
     
-    **CAUSA [N]: [Nombre descriptivo de la causa]**
-    - **Segmento afectado:** [Ej: "Long Haul" o "Business SH de IB"]
-    - **Impacto en NPS:** [NPS pasó de X a Y (±Z pts)]
-    - **Evidencias:**
-      • Explanatory Drivers: [valores SHAP relevantes]
-      • Datos operativos: [OTP, mishandling, load factor si aplica]
-      • Incidentes: [cancelaciones, retrasos, limitaciones si aplica]
-      • Feedback clientes: [temas de verbatims si aplica]
-    - **Rutas más afectadas:** [Top 3-5 rutas con NPS y pax]
-    - **Perfiles más reactivos:** [Perfiles con mayor spread]
+    **Ejemplo de narrativa fluida:**
+    "La principal causa del deterioro fue el aumento de cancelaciones en Long Haul, donde el NPS cayó de 17.9 a 12.1 (–5.7 pts vs L7d). Este impacto se evidenció en un empeoramiento de la puntualidad (–1.1 ppts según Explanatory Drivers), un incremento de +17 cancelaciones y +4 limitaciones de aeronave, afectando especialmente las rutas MAD–MCO (NPS –32.0, 17 pax) y JFK–MAD (NPS –14.5, 78 pax). Los pasajeros más sensibles fueron aquellos agrupados por región de residencia (spread 142.4 pts) y en vuelos code-share (spread 72.2 pts).
+    
+    En contraste, el corto radio mostró una dinámica opuesta..."
     
     ---
     
@@ -364,7 +364,7 @@ hierarchical_diagnostic_helpers:
     **⚠️ IMPORTANTE:**
     - EMPIEZA DIRECTAMENTE CON "📈 **SÍNTESIS EJECUTIVA:**"
     - El párrafo introductorio debe ser MUY BREVE (2-3 líneas)
-    - Las causas son el FOCO PRINCIPAL del informe
+    - El desarrollo de causas debe ser NARRATIVO, no enumerado
     - USA LAS EVIDENCIAS DEL PASO 4B - no inventes datos
     - **ATRIBUCIÓN OBLIGATORIA:** Cada métrica debe indicar a qué segmento pertenece
     - **TERMINOLOGÍA DE COMPARACIÓN:** Usa "vs L7d", "vs semana anterior", etc. según aparezca en los datos
@@ -378,16 +378,3 @@ hierarchical_diagnostic_helpers:
     - "operative_data_tool" → "métricas operativas"
     - "verbatims_tool" → "feedback de clientes"
     - "customer_profile_tool" → "segmentación de clientes"
-    
-    **Ejemplo de causa bien redactada:**
-    ```
-    **CAUSA 1: Cancelaciones por huelgas en aeropuertos europeos**
-    - **Segmento afectado:** Long Haul (Economy, Business y Premium)
-    - **Impacto en NPS:** Long Haul cayó de 17.9 a 12.1 (–5.7 pts vs L7d)
-    - **Evidencias:**
-      • Explanatory Drivers: Punctuality –1.1 ppts, Load factor –0.1 ppts
-      • Métricas operativas: Mishandling +1.2 pts, Load factor +0.3 pts
-      • Incidentes: +17 cancelaciones, +4 limitaciones de aeronave
-    - **Rutas más afectadas:** MAD–MCO (NPS –32.0, 17 pax), MAD–ORD (NPS –10.1, 31 pax), JFK–MAD (NPS –14.5, 78 pax)
-    - **Perfiles más reactivos:** Residence Region (spread 142.4 pts), CodeShare (spread 72.2 pts)
-    ```
