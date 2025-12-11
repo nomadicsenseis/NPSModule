@@ -326,57 +326,68 @@ hierarchical_diagnostic_helpers:
   step5_executive_synthesis: |
     🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**
     
-    **Enfoque requerido:** Genera un análisis ejecutivo del árbol de anomalías NPS. Evita frameworks genéricos y enfócate en interpretar los datos NPS proporcionados.
+    **Enfoque requerido:** Genera un informe ejecutivo orientado a CAUSAS. Usa las evidencias extraídas en el paso anterior (4B) para cada causa identificada.
+    
+    **⚠️ REGLAS DE LENGUAJE EJECUTIVO:**
+    - NUNCA uses términos técnicos internos: "nodo", "árbol", "NMA", "burbujeo", "jerarquía", "agregación"
+    - USA lenguaje de negocio: "segmento", "cabina", "radio", "compañía"
+    - Escribe como si fuera un informe para dirección ejecutiva
     
     **Formato esperado:**
     
-    📈 SÍNTESIS EJECUTIVA:
+    📈 **SÍNTESIS EJECUTIVA:**
     
-    [ESCRIBE UN PÁRRAFO NARRATIVO que explique las anomalías NPS detectadas, incluyendo:
-    - Qué segmentos tienen anomalías (positivas/negativas) CON VALORES NPS EXACTOS (NPS inicial → NPS final, diferencia)
-    - Causas identificadas, en que segmento se producen y que anomalías (nodos del arbol jerarquico con anomalias en NPS) explican.
-    - Datos que evidencian cada una de estas causas.
-
-    [ESCRIBE UN SEGUNDO PÁRRAFO NARRATIVO sobre:
-    - Rutas más afectadas según los datos disponibles
-    - Grupos de clientes más reactivos
-
+    **PÁRRAFO INTRODUCTORIO (2-3 líneas máximo):**
+    "Durante la semana del [fecha], hemos identificado [N] causas principales que explican las variaciones de NPS en la red. [Breve mención del resultado global: subida/bajada de X pts]."
+    
+    **CAUSAS IDENTIFICADAS:**
+    
+    Para CADA causa identificada en el paso 4, escribe una sección con este formato:
+    
+    **CAUSA [N]: [Nombre descriptivo de la causa]**
+    - **Segmento afectado:** [Ej: "Long Haul" o "Business SH de IB"]
+    - **Impacto en NPS:** [NPS pasó de X a Y (±Z pts)]
+    - **Evidencias:**
+      • Explanatory Drivers: [valores SHAP relevantes]
+      • Datos operativos: [OTP, mishandling, load factor si aplica]
+      • Incidentes: [cancelaciones, retrasos, limitaciones si aplica]
+      • Feedback clientes: [temas de verbatims si aplica]
+    - **Rutas más afectadas:** [Top 3-5 rutas con NPS y pax]
+    - **Perfiles más reactivos:** [Perfiles con mayor spread]
+    
+    ---
+    
+    **DETALLE POR CABINA:**
+    
     {CABIN_SECTIONS}
 
     **⚠️ IMPORTANTE:**
-    - EMPIEZA DIRECTAMENTE CON "📈 SÍNTESIS EJECUTIVA:"
-    - Los textos entre corchetes [...] deben ser reemplazados con contenido real
-    - **INCLUYE LOS VALORES NPS EXACTOS** cuando menciones segmentos, pero de forma narrativa y fluida: "experimentó una mejora/deterioro de X puntos, pasando de un NPS de Y a Z" o "mostró un NPS de X (mejora/deterioro de Y puntos vs período anterior)"
-    - **INTEGRA LOS VALORES NPS NATURALMENTE** en la narrativa, no como datos crudos separados
-    - **ESPECIFICA EL NODO EXACTO** de los datos analizados. Si los datos corresponden a un subsegmento específico (ej: YW, IB, etc.), menciona el nodo completo en el título y texto. Ejemplo: "ECONOMY SH YW" en lugar de solo "ECONOMY SH"
-    - **ATRIBUCIÓN OBLIGATORIA DE DATOS:** Cada métrica citada (NPS, OTP, drivers, rutas, perfiles) DEBE indicar a qué segmento pertenece. Ejemplos correctos: "OTP –4.0 pts (Economy LH)", "mishandling +3.5 (Global)", "ruta MAD-ORD NPS –57.7 (Economy LH)". NUNCA cites datos sin su segmento.
-    - **EXTRÁE Y USA LA TERMINOLOGÍA DE COMPARACIÓN** que ya está en los datos de los nodos. Si los datos mencionan "vs L7d", "período previo 7 días", "vs target", etc., usa esa terminología específica en lugar de términos genéricos como "baseline" o "período anterior"
-    - **PARA CABINAS SH:** En las secciones de ECONOMY SH y BUSINESS SH, menciona explícitamente los valores NPS de cada compañía (IB y YW) por separado antes de explicar el efecto neto. Si una compañía no aparece en el árbol, indica que "mantuvo desempeño estable".
-    - **EXCEPCIÓN:** Para las secciones de cabina definidas en {CABIN_SECTIONS}, sigue las instrucciones específicas de cada sección (que pueden requerir agregación de subsegmentos).
-    - Evita numeración y estructuras de pasos
-    - Los párrafos deben ser NARRATIVOS y FLUIDOS
-    - Enfócate en interpretar los datos NPS del árbol
-    - Usa términos como "subidas y bajadas de NPS" en lugar de "anomalías"
-    - Si alguna cabina no tiene datos disponibles, indica que es una cabina estable a nivel semanal esta semana.
+    - EMPIEZA DIRECTAMENTE CON "📈 **SÍNTESIS EJECUTIVA:**"
+    - El párrafo introductorio debe ser MUY BREVE (2-3 líneas)
+    - Las causas son el FOCO PRINCIPAL del informe
+    - USA LAS EVIDENCIAS DEL PASO 4B - no inventes datos
+    - **ATRIBUCIÓN OBLIGATORIA:** Cada métrica debe indicar a qué segmento pertenece
+    - **TERMINOLOGÍA DE COMPARACIÓN:** Usa "vs L7d", "vs semana anterior", etc. según aparezca en los datos
+    - **PARA CABINAS SH:** Menciona valores NPS de IB y YW por separado
+    - Si una cabina no tiene variaciones significativas, indica "mantuvo desempeño estable"
     
     **📊 TRADUCCIÓN DE TERMINOLOGÍA (INPUT → OUTPUT):**
-    Los datos de entrada (tree_data) usan terminología técnica. TRADÚCELA así en tu síntesis:
-    - Cuando leas "SHAP = X" o "valor SHAP", escribe: "X ppts según Explanatory Drivers"
-    - Cuando leas "OTP15" o "OTP15_adjusted", escribe simplemente: "OTP"
-    - Cuando leas "ncs_tool" o "NCS", escribe: "incidentes NCS"
-    - Cuando leas "operative_data_tool", escribe: "datos operativos"
-    - Cuando leas "verbatims_tool", escribe: "feedback de clientes"
-    - Cuando leas "customer_profile_tool", escribe: "perfiles de cliente"
-    - Cuando leas "explanatory_drivers_tool", escribe: "Explanatory Drivers"
+    - "SHAP = X" → "X ppts según Explanatory Drivers"
+    - "OTP15" → "OTP"
+    - "ncs_tool" → "incidentes operativos"
+    - "operative_data_tool" → "métricas operativas"
+    - "verbatims_tool" → "feedback de clientes"
+    - "customer_profile_tool" → "segmentación de clientes"
     
-    Ejemplo de traducción:
-    - INPUT: "Punctuality (SHAP = –1.323)"
-    - OUTPUT: "Punctuality (–1.3 ppts según Explanatory Drivers)"
-    
-    **🔗 EVIDENCIAS COMPLETAS POR CAUSA:**
-    Para cada causa identificada, incluye TODAS las evidencias disponibles de las diferentes fuentes:
-    - **Explanatory Drivers**: Impacto en ppts del driver (ej: "Punctuality –1.3 ppts según Explanatory Drivers")
-    - **Datos operativos**: Métricas OTP, mishandling, misconexiones, load factor
-    - **Incidentes NCS**: Número y tipo de incidentes (cancelaciones, retrasos, limitaciones de aeronave, etc.)
-    - **Feedback de clientes**: Temas o sentimientos destacados en verbatims (si disponibles)
-    Ejemplo correcto: "El deterioro de puntualidad (–1.3 ppts según Explanatory Drivers, OTP –4.0 pts, +10 retrasos y +3 cancelaciones en NCS) explica la caída de NPS en Economy LH."
+    **Ejemplo de causa bien redactada:**
+    ```
+    **CAUSA 1: Cancelaciones por huelgas en aeropuertos europeos**
+    - **Segmento afectado:** Long Haul (Economy, Business y Premium)
+    - **Impacto en NPS:** Long Haul cayó de 17.9 a 12.1 (–5.7 pts vs L7d)
+    - **Evidencias:**
+      • Explanatory Drivers: Punctuality –1.1 ppts, Load factor –0.1 ppts
+      • Métricas operativas: Mishandling +1.2 pts, Load factor +0.3 pts
+      • Incidentes: +17 cancelaciones, +4 limitaciones de aeronave
+    - **Rutas más afectadas:** MAD–MCO (NPS –32.0, 17 pax), MAD–ORD (NPS –10.1, 31 pax), JFK–MAD (NPS –14.5, 78 pax)
+    - **Perfiles más reactivos:** Residence Region (spread 142.4 pts), CodeShare (spread 72.2 pts)
+    ```
