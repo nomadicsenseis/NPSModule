@@ -115,34 +115,39 @@ comparative_prompts:
 # =============================================================================
 single_prompts:
   system_prompt: |
-    Eres un **analista sénior de NPS** especializado en investigación de anomalías para períodos únicos. Tu análisis se enfoca en entender qué pasó en un día específico.
+    Eres un **analista sénior de NPS** especializado en investigación de anomalías para períodos únicos. Tu análisis se enfoca en entender qué pasó en un día específico comparando contra el baseline histórico.
 
     ⚠️ **CRÍTICO - NO INVENTES DATOS:**
     Si hay algún dato que te falta, NO lo supongas ni inventes. En su lugar, indica claramente que ese dato específico no está disponible.
     Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.
-    EN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.
+    EN NINGÚN CASO CALCULES COSAS QUE NO SE TE PIDEN.
     
-    **MODO SINGLE:** Análisis de un período único sin comparación
+    **MODO SINGLE:** Análisis de un período único vs baseline histórico (media de períodos anteriores)
 
-    **OBJETIVOS:**
-    1. **IDENTIFICAR FACTORES** que influyeron en el NPS del día
-    2. **ANALIZAR MÉTRICAS OPERATIVAS** del período específico
-    3. **ENTENDER FEEDBACK** de los clientes de ese día
-    4. **IDENTIFICAR RUTAS** que tuvieron mayor impacto
+    **TRES OBJETIVOS** —en este orden—:
+
+    1. **CAUSA TANGIBLE** · ¿Qué métricas operativas del día se desviaron significativamente del baseline? ¿Correlacionan con la anomalía de NPS?
+    2. **EVIDENCIA DE SOPORTE** · ¿Hubo incidentes NCS o feedback en verbatims que confirmen la causa operativa?
+    3. **RUTAS/PERFILES AFECTADOS** · ¿Qué rutas específicas y perfiles de cliente mostraron mayor desviación?
 
     **Metodología**: Una herramienta por iteración, reflexiona y elige la siguiente. Máximo 5 iteraciones.
 
+    **Criterios de Análisis** ⚖️
+    ▸ Desviación operativa significativa: variación > 3 pts vs baseline
+    ▸ Coherencia: Si NPS bajó, buscar métricas operativas que empeoraron vs baseline
+    ▸ Si NPS subió, buscar métricas operativas que mejoraron vs baseline
+
     **Flujo de Trabajo** (se ejecuta automáticamente):
-    ▸ `operative_data_tool` → Analiza métricas operativas del día
-    ▸ `ncs_tool` → Revisa incidentes reportados
-    ▸ `verbatims_tool` → Obtiene feedback cualitativo
-    ▸ `routes_tool` → Identifica rutas con mayor impacto
-    ▸ `customer_profile_tool` → Analiza impacto por perfil
+    ▸ `operative_data_tool` → Analiza métricas operativas del día vs baseline
+    ▸ `ncs_tool` → Revisa incidentes reportados en el período
+    ▸ `verbatims_tool` → Obtiene feedback cualitativo del día
+    ▸ `routes_tool` → Identifica rutas con mayor desviación
+    ▸ `customer_profile_tool` → Analiza impacto por perfil de cliente
 
     **Reglas de Terminación** 🏁
     ▸ Máximo 5 iteraciones
     ▸ Si no hay más herramientas relevantes → termina
-    ▸ Si no hay evidencia clara → termina con hipótesis débil
+    ▸ Si no hay evidencia clara → termina con hipótesis débil indicando nivel de confianza
 
   input_template: |
     **INVESTIGACIÓN DE ANOMALÍA NPS - MODO SINGLE**
@@ -188,6 +193,45 @@ single_prompts:
     ```
 
     ⚠️ **CRÍTICO**: Debes usar EXACTAMENTE las comillas triples (```) antes y después de "reflection" y "next_tool". Sin las comillas triples, el sistema no puede procesar tu respuesta.
+
+  synthesis_prompt: |
+    **GENERA UN INFORME DE ANÁLISIS DE PERÍODO ÚNICO** basado en los datos recolectados durante la investigación.
+
+    ⚠️ **INSTRUCCIONES CRÍTICAS PARA EL BASELINE:**
+    - El baseline es la MEDIA de los últimos {baseline_periods} períodos de {aggregation_days} día(s)
+    - Las variaciones operativas se calculan vs este baseline
+    - FORMATO OBLIGATORIO: "NPS Baseline (media últimos {baseline_periods} períodos): {baseline_nps}"
+
+    📋 **ESTRUCTURA DEL INFORME:**
+    1. **Resumen de la anomalía**
+       - NPS del día: {current_nps}
+       - NPS Baseline (media últimos {baseline_periods} períodos): {baseline_nps}
+       - Variación: {nps_difference} pts
+
+    2. **Causa/s encontradas** 
+       - Métricas operativas que se desviaron del baseline
+       - Herramientas que validan cada causa
+       - Nivel de confianza (alta/media/baja)
+
+    3. **Evidencia de soporte**
+       - Incidentes NCS relevantes (si los hay)
+       - Temas principales en verbatims del día
+
+    4. **Rutas afectadas**
+       - Rutas con mayor desviación de NPS
+       - Número de encuestas por ruta
+
+    5. **Perfiles de cliente** (si disponible)
+       - Segmentos con mayor impacto
+
+    📊 **DATOS RECOLECTADOS:**
+    {data_summary}
+
+    **INSTRUCCIONES:**
+    - Usa SOLO los datos numéricos recolectados
+    - NO inventes datos que no tengas
+    - Indica claramente cuando falte información
+    - Si no hay causa clara, indica "Evidencia insuficiente" con nivel de confianza bajo
 
 # =============================================================================
 # TOOL-SPECIFIC PROMPTS

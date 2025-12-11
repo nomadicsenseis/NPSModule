@@ -1373,23 +1373,33 @@ class CausalExplanationAgent:
         node_path: str,
         start_date: str, 
         end_date: str,
-        nps_context: str = ""
+        nps_context: str = "",
+        current_nps: str = "N/A",
+        baseline_nps: str = "N/A",
+        nps_difference: str = "N/A",
+        baseline_periods: int = 7,
+        aggregation_days: int = 1
     ) -> str:
         """Generate final synthesis for single period analysis"""
         try:
             # Build data summary for single period
             data_summary = self._build_single_period_data_summary()
             
-            # Get synthesis prompt from YAML config
-            synthesis_prompt_template = self.config.get('single_period_prompts', {}).get('synthesis_prompt', 
+            # Get synthesis prompt from YAML config (single_prompts section)
+            synthesis_prompt_template = self.config.get('single_prompts', {}).get('synthesis_prompt', 
                 "Basándote en el análisis de {node_path} para el período {start_date} a {end_date}, proporciona una síntesis integral.")
             
-            # Create synthesis prompt for single period with specific format
+            # Create synthesis prompt for single period with all required parameters
             synthesis_prompt = synthesis_prompt_template.format(
                 node_path=node_path,
                 start_date=start_date,
                 end_date=end_date,
-                data_summary=data_summary
+                data_summary=data_summary,
+                current_nps=current_nps,
+                baseline_nps=baseline_nps,
+                nps_difference=nps_difference,
+                baseline_periods=baseline_periods,
+                aggregation_days=aggregation_days
             )
             
             # Get LLM response using message history with synthesis prompt
@@ -1399,9 +1409,13 @@ class CausalExplanationAgent:
             synthesis_messages.append(HumanMessage(content=synthesis_prompt))
             response = await self.llm(synthesis_messages)
             
-            if response and hasattr(response, 'content'):
+            if response and hasattr(response, 'content') and response.content:
+                # Log the synthesis to tracker so it's included in JSON export
+                self.tracker.log_message("AI", f"FINAL_SYNTHESIS: {response.content}")
+                self.logger.info("🎯 Single period synthesis completed successfully")
                 return f"🤖 **ANÁLISIS PERIODO ÚNICO**\n\n{response.content}"
             else:
+                self.logger.warning("⚠️ Empty response from LLM in single period synthesis")
                 return "🤖 **ANÁLISIS PERIODO ÚNICO**\n\nAnálisis completado pero la síntesis falló."
                 
         except Exception as e:
@@ -1761,7 +1775,16 @@ class CausalExplanationAgent:
             try:
                 self.logger.info("🎯 Iniciando síntesis final para análisis de período único...")
                 final_response = await self._generate_single_period_synthesis(
-                    message_history, node_path, start_date, end_date, nps_context
+                    message_history=message_history, 
+                    node_path=node_path, 
+                    start_date=start_date, 
+                    end_date=end_date, 
+                    nps_context=nps_context,
+                    current_nps=current_nps,
+                    baseline_nps=baseline_nps,
+                    nps_difference=nps_difference,
+                    baseline_periods=baseline_periods,
+                    aggregation_days=aggregation_days
                 )
                 
                 # Export conversation log
