@@ -483,6 +483,9 @@ class AnomalySummaryAgent:
             response3, _, _ = await self.agent.invoke(messages=message_history_step3.get_messages())
             final_report = response3.content if hasattr(response3, 'content') else str(response3)
             
+            # Add assistant response to message history for export
+            message_history_step3.create_and_add_message(content=final_report, message_type=MessageType.AI)
+            
             self.logger.info(f"✅ Step 3 complete: Final report generated")
             
             # =========================================================
