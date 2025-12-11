@@ -553,10 +553,18 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
                 print(f"   explanations keys: {list(explanations.keys()) if explanations else None}", file=sys.stderr)
                 print(f"   segment: {segment}", file=sys.stderr)
 
+                # Generate comparison context for interpreter
+                interpreter_comparison_context = generate_comparison_context(
+                    analysis_data.get('anomaly_detection_mode', 'mean'),
+                    analysis_data.get('aggregation_days', 1),
+                    analysis_data.get('baseline_periods', 7)
+                )
+
                 try:
                     print("🔍 DEBUG: Calling build_ai_input_string...", file=sys.stderr)
                     ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                                     parent_interpretations, explanations, date_range, segment, period_nps_values)
+                                                     parent_interpretations, explanations, date_range, segment, period_nps_values,
+                                                     comparison_context=interpreter_comparison_context)
                     print("🔍 DEBUG: build_ai_input_string returned successfully", file=sys.stderr)
                     print(f"🔍 DEBUG: Received ai_input of length: {len(ai_input) if ai_input else 0}", file=sys.stderr)
                 except Exception as build_e:
@@ -974,7 +982,8 @@ def generate_parent_interpretations(anomalies: dict) -> dict:
     return interpretations
 
 def build_ai_input_string(period: int, anomalies: dict, deviations: dict, 
-                         interpretations: dict, explanations: dict, date_range: tuple, segment_filter: str = "Global", nps_values: dict = None) -> str:
+                         interpretations: dict, explanations: dict, date_range: tuple, segment_filter: str = "Global", nps_values: dict = None,
+                         comparison_context: str = None) -> str:
     """Build comprehensive input string for AI interpretation, filtered by segment"""
     
     # Normalize segment_filter to match the tree structure
@@ -1014,6 +1023,10 @@ def build_ai_input_string(period: int, anomalies: dict, deviations: dict,
         ai_input = f"NPS ANOMALY ANALYSIS - PERIOD {period} ({start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')})\n\n"
     else:
         ai_input = f"NPS ANOMALY ANALYSIS - PERIOD {period}\n\n"
+    
+    # Add comparison context (baseline reference) if available
+    if comparison_context:
+        ai_input += f"BASELINE REFERENCE:\n{comparison_context}\n\n"
     
     # Count actual anomalies vs normal variations
     actual_anomalies = [node for node, state in filtered_anomalies.items() if state in ['+', '-']]
@@ -2074,9 +2087,17 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
             print("-" * 40)
             
             try:
+                # Generate comparison context for interpreter
+                interpreter_comparison_context = generate_comparison_context(
+                    analysis_data.get('anomaly_detection_mode', 'mean'),
+                    analysis_data.get('aggregation_days', 1),
+                    analysis_data.get('baseline_periods', 7)
+                )
+                
                 # Always use the complete tree format with integrated causal explanations
                 ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                                 parent_interpretations, explanations, date_range, segment, period_nps_values)
+                                                 parent_interpretations, explanations, date_range, segment, period_nps_values,
+                                                 comparison_context=interpreter_comparison_context)
                 
                 debug_print(f"AI input string length: {len(ai_input)} characters")
                 debug_print(f"AI input preview: {ai_input[:500]}...")
@@ -2327,9 +2348,17 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
             print("-" * 40)
             
             try:
+                # Generate comparison context for interpreter
+                interpreter_comparison_context = generate_comparison_context(
+                    analysis_data.get('anomaly_detection_mode', 'mean'),
+                    analysis_data.get('aggregation_days', 1),
+                    analysis_data.get('baseline_periods', 7)
+                )
+                
                 # Always use the complete tree format with integrated causal explanations
                 ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                               parent_interpretations, explanations, date_range, segment, None)
+                                               parent_interpretations, explanations, date_range, segment, None,
+                                               comparison_context=interpreter_comparison_context)
                 
                 print(f"🔍 Using complete tree format with integrated explanations: {len(ai_input)} characters")
                 
