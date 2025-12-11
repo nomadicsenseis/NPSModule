@@ -49,19 +49,19 @@ async def generate_consolidated_summary(agent, consolidated_data: List[Dict], da
         # Daily data is already formatted
         daily_single_analyses = daily_data
         
-        # Call generate_comprehensive_summary
+        # Call generate_comprehensive_summary_stratified (3-step approach)
         try:
             comprehensive_summary = await asyncio.wait_for(
-                agent.generate_comprehensive_summary(
+                agent.generate_comprehensive_summary_stratified(
                     weekly_comparative_analysis=weekly_comparative_analysis,
                     daily_single_analyses=daily_single_analyses,
                     date_flight_local=date_flight_local
                 ),
-                timeout=600.0
+                timeout=900.0  # Increased timeout for 3-step process
             )
             return comprehensive_summary
         except Exception as e:
-            print(f"❌ Error in generate_comprehensive_summary: {e}")
+            print(f"❌ Error in generate_comprehensive_summary_stratified: {e}")
             import traceback
             traceback.print_exc()
             return f"❌ Error generating comprehensive summary: {str(e)}"

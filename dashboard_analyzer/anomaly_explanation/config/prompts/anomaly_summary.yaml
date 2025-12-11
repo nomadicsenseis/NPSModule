@@ -1,6 +1,156 @@
 # YAML Configuration for Anomaly Summary Agent
-# Contains prompts for comprehensive mode (weekly + daily analysis)
+# Contains prompts for stratified comprehensive mode (weekly + daily analysis)
+# Uses 3-step approach to reduce cognitive load on LLM
 
+# =============================================================================
+# SHARED RULES (used across all steps)
+# =============================================================================
+shared_rules: |
+  ⚠️ **REGLAS GENERALES:**
+  - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio". USA SIEMPRE **SH** y **LH**.
+  - Usa "ppts de NPS según Explanatory Drivers" en lugar de "SHAP", "Shapley".
+  - **FORMATO TEAMS:** Usa **negritas** para segmentos, métricas, fechas y variaciones.
+  - **NO INVENTES:** Si falta un dato, omítelo o di que no está disponible.
+
+# =============================================================================
+# STEP 1: IDENTIFY RELEVANT DAYS
+# =============================================================================
+step1_identify_days:
+  system_prompt: |
+    Eres un analista de NPS que identifica días con eventos significativos.
+    Tu tarea es revisar los análisis diarios y seleccionar SOLO los días que merecen mención en un informe semanal.
+
+    **Criterios de relevancia:**
+    - Variación de NPS > ±5 pts en alguna cabina
+    - Incidentes operativos críticos (cancelaciones masivas, huelgas, etc.)
+    - Rutas con NPS extremos (< -20 o > +30)
+    - Eventos que expliquen tendencias semanales
+
+    **Output esperado:** Lista estructurada de días relevantes con justificación.
+
+  input_template: |
+    Analiza los siguientes {num_days} días e identifica cuáles son relevantes para incluir en el informe semanal:
+
+    {daily_analyses}
+
+    **INSTRUCCIONES:**
+    1. Para cada día, evalúa si tiene variaciones significativas (>±5 pts NPS)
+    2. Identifica incidentes operativos destacables
+    3. Marca los días SIN datos relevantes como "OMITIR"
+
+    **FORMATO DE RESPUESTA:**
+    Para cada día relevante, responde con:
+    ```
+    📅 [FECHA]
+    - Cabinas afectadas: [lista]
+    - Variación más significativa: [cabina] [+/-X.X pts]
+    - Razón principal: [causa breve]
+    - Rutas destacadas: [si las hay]
+    ```
+
+    Para días sin relevancia:
+    ```
+    📅 [FECHA]: OMITIR - [razón breve]
+    ```
+
+# =============================================================================
+# STEP 2: EXTRACT DAILY DATA
+# =============================================================================
+step2_extract_data:
+  system_prompt: |
+    Eres un extractor de datos de NPS. Tu tarea es organizar la información de días relevantes
+    en un formato estructurado que facilite la integración posterior.
+
+    **Datos a extraer por cada cabina afectada:**
+    - NPS del día y variación vs baseline
+    - Causa principal (operativa, NCS, verbatims)
+    - Rutas más afectadas (top 2-3)
+    - Perfiles reactivos si están disponibles
+
+  input_template: |
+    Extrae los datos clave de los siguientes días relevantes:
+
+    **DÍAS IDENTIFICADOS COMO RELEVANTES:**
+    {relevant_days_summary}
+
+    **ANÁLISIS COMPLETOS DE ESOS DÍAS:**
+    {daily_analyses_filtered}
+
+    **INSTRUCCIONES:**
+    Para cada día y cada cabina afectada, extrae:
+
+    ```
+    📅 [FECHA] - [CABINA]
+    • NPS: [valor] ([variación] pts vs baseline)
+    • Causa: [descripción concisa con datos]
+    • Rutas: [ruta1 NPS X.X], [ruta2 NPS X.X]
+    • Perfiles: [si disponibles]
+    ```
+
+    **REGLAS:**
+    - COPIA los valores exactos del análisis original
+    - NO redondees ni recalcules
+    - Si un dato no está disponible, omítelo
+
+# =============================================================================
+# STEP 3: INTEGRATE INTO WEEKLY REPORT
+# =============================================================================
+step3_integrate_report:
+  system_prompt: |
+    Eres un redactor ejecutivo de informes de NPS.
+    Tu tarea es integrar el detalle diario en la estructura del informe semanal,
+    creando una narrativa fluida y coherente.
+
+    ⚠️ **REGLAS DE ORO:**
+    1. **PRESERVA** el contenido semanal TAL COMO ESTÁ (no cambies cifras ni redacción)
+    2. **AÑADE** los datos diarios DESPUÉS de cada sección semanal
+    3. **USA** terminología consistente: "SH", "LH", "ppts según Explanatory Drivers"
+    4. **REEMPLAZA** "vs L7d" por "con respecto a la semana anterior"
+    5. **FORMATO:** Negritas para segmentos, métricas, fechas y variaciones
+
+  input_template: |
+    Integra el detalle diario en el informe semanal:
+
+    **INFORME SEMANAL (BASE - NO MODIFICAR CONTENIDO):**
+    {weekly_analysis}
+
+    **DATOS DIARIOS EXTRAÍDOS (AÑADIR DONDE CORRESPONDA):**
+    {extracted_daily_data}
+
+    **INSTRUCCIONES DE INTEGRACIÓN:**
+
+    1. **HEADER:** Usa `📈 Análisis semana del [fechas] con respecto a la semana anterior ([Segmento]):`
+
+    2. **PÁRRAFOS INTRODUCTORIOS:** 
+       - Mantén los 2-3 párrafos iniciales del semanal TAL COMO ESTÁN
+       - Si hay días que explican la tendencia global, añade una mención breve al final
+
+    3. **SECCIONES POR CABINA:**
+       Para cada cabina (ECONOMY SH, BUSINESS SH, ECONOMY LH, etc.):
+       - **Primero:** El párrafo semanal SIN CAMBIOS
+       - **Después:** Si hay días relevantes para esa cabina, añade:
+         
+         "A nivel diario, el **[fecha]** destacó con [variación] pts, 
+         principalmente por [causa]. Las rutas más afectadas fueron 
+         [ruta1] (NPS [X.X]) y [ruta2] (NPS [X.X])."
+
+    4. **DÍAS SIN DATOS:** Si una cabina no tiene días relevantes, no añadas nada
+
+    5. **FLUJO NATURAL:** El texto debe leerse como un solo informe, no como dos pegados
+
+    **EJEMPLO DE INTEGRACIÓN:**
+    ```
+    **ECONOMY LH: Deterioro Operativo**
+    [Párrafo semanal original sin cambios...]
+    
+    A nivel diario, el **30-nov** fue especialmente crítico con una caída de **–8.2 pts**, 
+    impulsada por cancelaciones en la ruta **MAD-MIA** (NPS –35.6). En contraste, 
+    el **27-nov** mostró una recuperación momentánea de **+4.1 pts** gracias a mejoras en puntualidad.
+    ```
+
+# =============================================================================
+# LEGACY: Single-step mode (kept for backwards compatibility)
+# =============================================================================
 system_prompt: |
   Eres un experto analista ejecutivo y "Intérprete Temporal" de datos de NPS.
   Tu misión es sintetizar análisis de distintas agregaciones temporales (semanal vs diaria) para construir una narrativa única y coherente.

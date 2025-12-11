@@ -373,6 +373,179 @@ class AnomalySummaryAgent:
         except Exception as e:
             self.logger.error(f"❌ Error generating comprehensive summary: {str(e)}")
             return f"❌ Error generating comprehensive summary: {str(e)}"
+
+    async def generate_comprehensive_summary_stratified(
+        self, 
+        weekly_comparative_analysis: str, 
+        daily_single_analyses: List[Dict[str, Any]],
+        date_flight_local: str = None,
+        execution_metadata: Optional[Dict[str, Any]] = None,
+        weekly_analysis_params: Optional[Dict[str, Any]] = None,
+        daily_analysis_params: Optional[Dict[str, Any]] = None,
+        date_ranges: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate a comprehensive summary using a 3-step stratified approach.
+        
+        This method reduces cognitive load on the LLM by:
+        1. First identifying which days are relevant
+        2. Then extracting key data from those days
+        3. Finally integrating into the weekly structure
+        
+        Args:
+            weekly_comparative_analysis: String containing the weekly comparative analysis
+            daily_single_analyses: List of daily single analysis results
+            date_flight_local: Local flight date for context
+            execution_metadata: Metadata about the execution (for S3 upload)
+            weekly_analysis_params: Parameters used for weekly analysis (for S3 upload)
+            daily_analysis_params: Parameters used for daily analysis (for S3 upload)
+            date_ranges: Date range information (for S3 upload)
+        
+        Returns:
+            Comprehensive summary string
+        """
+        try:
+            if not weekly_comparative_analysis and not daily_single_analyses:
+                return "⚠️ No data provided for comprehensive summary generation"
+            
+            # Format daily analyses for step 1
+            daily_analyses_formatted = []
+            for daily_analysis in daily_single_analyses:
+                date = daily_analysis.get('date', 'Unknown')
+                analysis = daily_analysis.get('analysis', '')
+                text = (analysis or '').strip()
+                if text:
+                    daily_analyses_formatted.append(f"📅 {date}:\n{text}")
+            
+            daily_analyses_combined = "\n\n---\n\n".join(daily_analyses_formatted)
+            num_days = len(daily_analyses_formatted)
+            
+            self.logger.info(f"🔄 Starting stratified summary: {num_days} days to analyze")
+            
+            # =========================================================
+            # STEP 1: Identify relevant days
+            # =========================================================
+            self.logger.info("📋 STEP 1: Identifying relevant days...")
+            
+            step1_config = self.config.get('step1_identify_days', {})
+            step1_system = step1_config.get('system_prompt', '')
+            step1_input = step1_config.get('input_template', '').format(
+                num_days=num_days,
+                daily_analyses=daily_analyses_combined
+            )
+            
+            message_history_step1 = MessageHistory()
+            message_history_step1.create_and_add_message(content=step1_system, message_type=MessageType.SYSTEM)
+            message_history_step1.create_and_add_message(content=step1_input, message_type=MessageType.USER)
+            
+            response1, _, _ = await self.agent.invoke(messages=message_history_step1.get_messages())
+            relevant_days_summary = response1.content if hasattr(response1, 'content') else str(response1)
+            
+            self.logger.info(f"✅ Step 1 complete: Identified relevant days")
+            
+            # =========================================================
+            # STEP 2: Extract data from relevant days
+            # =========================================================
+            self.logger.info("📊 STEP 2: Extracting data from relevant days...")
+            
+            step2_config = self.config.get('step2_extract_data', {})
+            step2_system = step2_config.get('system_prompt', '')
+            step2_input = step2_config.get('input_template', '').format(
+                relevant_days_summary=relevant_days_summary,
+                daily_analyses_filtered=daily_analyses_combined
+            )
+            
+            message_history_step2 = MessageHistory()
+            message_history_step2.create_and_add_message(content=step2_system, message_type=MessageType.SYSTEM)
+            message_history_step2.create_and_add_message(content=step2_input, message_type=MessageType.USER)
+            
+            response2, _, _ = await self.agent.invoke(messages=message_history_step2.get_messages())
+            extracted_daily_data = response2.content if hasattr(response2, 'content') else str(response2)
+            
+            self.logger.info(f"✅ Step 2 complete: Extracted daily data")
+            
+            # =========================================================
+            # STEP 3: Integrate into weekly report
+            # =========================================================
+            self.logger.info("📝 STEP 3: Integrating into weekly report...")
+            
+            step3_config = self.config.get('step3_integrate_report', {})
+            step3_system = step3_config.get('system_prompt', '')
+            step3_input = step3_config.get('input_template', '').format(
+                weekly_analysis=weekly_comparative_analysis,
+                extracted_daily_data=extracted_daily_data
+            )
+            
+            message_history_step3 = MessageHistory()
+            message_history_step3.create_and_add_message(content=step3_system, message_type=MessageType.SYSTEM)
+            message_history_step3.create_and_add_message(content=step3_input, message_type=MessageType.USER)
+            
+            response3, _, _ = await self.agent.invoke(messages=message_history_step3.get_messages())
+            final_report = response3.content if hasattr(response3, 'content') else str(response3)
+            
+            self.logger.info(f"✅ Step 3 complete: Final report generated")
+            
+            # =========================================================
+            # Save debug files and export conversation
+            # =========================================================
+            try:
+                os.makedirs("dashboard_analyzer/summary_reports", exist_ok=True)
+                dbg_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+                debug_path = f"dashboard_analyzer/summary_reports/summary_stratified_{dbg_ts}.md"
+                with open(debug_path, 'w', encoding='utf-8') as dbg:
+                    dbg.write("===== STEP 1: IDENTIFY RELEVANT DAYS =====\n\n")
+                    dbg.write(f"INPUT:\n{step1_input}\n\n")
+                    dbg.write(f"OUTPUT:\n{relevant_days_summary}\n\n")
+                    dbg.write("===== STEP 2: EXTRACT DAILY DATA =====\n\n")
+                    dbg.write(f"OUTPUT:\n{extracted_daily_data}\n\n")
+                    dbg.write("===== STEP 3: FINAL REPORT =====\n\n")
+                    dbg.write(final_report)
+                self.logger.info(f"📝 Saved stratified debug to: {debug_path}")
+            except Exception as e:
+                self.logger.warning(f"Could not write debug file: {e}")
+            
+            # Export final conversation (step 3 only for JSON)
+            conversation_file = await self.export_conversation(message_history_step3, date_flight_local)
+            if conversation_file:
+                self.logger.info(f"🗂️ Summary conversation saved: {conversation_file}")
+            
+            # Upload to S3 if metadata is provided
+            if final_report and execution_metadata and weekly_analysis_params and daily_analysis_params and date_ranges:
+                try:
+                    self.logger.info("📤 Uploading comprehensive report to S3...")
+                    s3_key = await self.s3_uploader.upload_comprehensive_report(
+                        execution_date=datetime.now(),
+                        analysis_date=execution_metadata.get('analysis_date', ''),
+                        segment=execution_metadata.get('segment', 'Global'),
+                        explanation_mode=execution_metadata.get('explanation_mode', 'agent'),
+                        causal_filter=execution_metadata.get('causal_filter', 'vs L7d'),
+                        weekly_analysis_params=weekly_analysis_params,
+                        daily_analysis_params=daily_analysis_params,
+                        date_ranges=date_ranges,
+                        final_synthesis=final_report,
+                        comparison_start_date=date_ranges.get('comparison_start_date'),
+                        comparison_end_date=date_ranges.get('comparison_end_date')
+                    )
+                    if s3_key:
+                        self.logger.info(f"✅ Report uploaded to S3: {s3_key}")
+                except Exception as e:
+                    self.logger.error(f"❌ Error uploading to S3: {str(e)}")
+            
+            return final_report
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error in stratified summary: {str(e)}")
+            # Fallback to legacy method
+            self.logger.info("⚠️ Falling back to legacy single-step method...")
+            return await self.generate_comprehensive_summary(
+                weekly_comparative_analysis=weekly_comparative_analysis,
+                daily_single_analyses=daily_single_analyses,
+                date_flight_local=date_flight_local,
+                execution_metadata=execution_metadata,
+                weekly_analysis_params=weekly_analysis_params,
+                daily_analysis_params=daily_analysis_params,
+                date_ranges=date_ranges
+            )
     
     def _format_periods_for_summary(self, periods_data: List[Dict[str, Any]]) -> str:
         """Format periods data into a structured text for AI analysis."""
