@@ -97,16 +97,37 @@ step2_extract_data:
 # =============================================================================
 step3_integrate_report:
   system_prompt: |
-    Eres un redactor ejecutivo de informes de NPS.
+    Eres un experto analista ejecutivo y redactor de informes de NPS.
     Tu tarea es integrar el detalle diario en la estructura del informe semanal,
     creando una narrativa fluida y coherente.
 
-    ⚠️ **REGLAS DE ORO:**
+    ⚠️ **REGLAS DE ORO (CRÍTICAS):**
     1. **PRESERVA** el contenido semanal TAL COMO ESTÁ (no cambies cifras ni redacción)
     2. **AÑADE** los datos diarios DESPUÉS de cada sección semanal
-    3. **USA** terminología consistente: "SH", "LH", "ppts según Explanatory Drivers"
-    4. **REEMPLAZA** "vs L7d" por "con respecto a la semana anterior"
-    5. **FORMATO:** Negritas para segmentos, métricas, fechas y variaciones
+    3. **ATRIBUCIÓN TOTAL:** Cada dato (NPS, OTP, variación) debe especificar el **Segmento**
+       - *Mal:* "El NPS cayó a 20.5 (-5 pts)."
+       - *Bien:* "El NPS de **Economy LH** cayó a 20.5 (**–5.0 pts**)."
+    4. **TERMINOLOGÍA OBLIGATORIA:**
+       - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio". USA SIEMPRE **SH** y **LH**.
+       - "SHAP", "Shapley" → "**ppts de NPS según Explanatory Drivers**"
+       - REEMPLAZA "vs L7d" por "con respecto a la semana anterior"
+    5. **FORMATO TEAMS:**
+       - Usa **negritas** para: segmentos, métricas, fechas y variaciones
+       - Usa listas (`•`) para enumerar días clave
+       - Usa saltos de línea dobles para separar párrafos
+    6. **FORMATO DE NÚMEROS:** Todos los números con exactamente UN decimal (ej: 19.8, -4.4, 93.5%)
+    7. **NO INVENTES:** Si falta un dato, omítelo. NO calcules promedios.
+    8. **ESTILO EJECUTIVO:** Evita la palabra "anomalía". Texto fluido, no técnico.
+    9. **NO** añadas recomendaciones adicionales
+
+    ⚠️ **ADAPTABILIDAD:**
+    - Si el análisis es solo de **LH**, los subsegmentos son sus cabinas (**Economy LH**, **Business LH**, **Premium LH**). NO inventes nodos fuera del alcance.
+    - Si el análisis es solo de **SH**, trata **IB** y **YW** con claridad, separando sus métricas.
+    - Tu objetivo es explicar CÓMO los eventos diarios construyen el resultado semanal.
+    - Si un día específico explica el 80% de la caída semanal, dilo claramente.
+
+    **Ejemplo de Estilo:**
+    "En **Economy SH**, la puntualidad (**–4.5 ppts de NPS según Explanatory Drivers**) lastró el resultado semanal. Sin embargo, el **03-dic** hubo un repunte (**+10.0 pts**) gracias a una operativa limpia con **OTP 95.0%**."
 
   input_template: |
     Integra el detalle diario en el informe semanal:
@@ -128,13 +149,14 @@ step3_integrate_report:
     3. **SECCIONES POR CABINA:**
        Para cada cabina (ECONOMY SH, BUSINESS SH, ECONOMY LH, etc.):
        - **Primero:** El párrafo semanal SIN CAMBIOS
-       - **Después:** Si hay días relevantes para esa cabina, añade:
-         
-         "A nivel diario, el **[fecha]** destacó con [variación] pts, 
-         principalmente por [causa]. Las rutas más afectadas fueron 
-         [ruta1] (NPS [X.X]) y [ruta2] (NPS [X.X])."
+       - **Después:** Si hay días relevantes para esa cabina, añade un párrafo con:
+         • Día(s) destacado(s) con variación
+         • Causa principal con datos
+         • Rutas afectadas (top 2-3)
+       - **Para SH:** Menciona IB e YW por separado si hay diferencias significativas
+       - **Si no hay días relevantes:** Indica estabilidad diaria o no añadas nada
 
-    4. **DÍAS SIN DATOS:** Si una cabina no tiene días relevantes, no añadas nada
+    4. **ORDEN CRONOLÓGICO:** Los días deben aparecer en orden de fecha
 
     5. **FLUJO NATURAL:** El texto debe leerse como un solo informe, no como dos pegados
 
@@ -143,7 +165,7 @@ step3_integrate_report:
     **ECONOMY LH: Deterioro Operativo**
     [Párrafo semanal original sin cambios...]
     
-    A nivel diario, el **30-nov** fue especialmente crítico con una caída de **–8.2 pts**, 
+    A nivel diario, el **30-nov** fue especialmente crítico con una caída de **–8.2 pts** en **Economy LH**, 
     impulsada por cancelaciones en la ruta **MAD-MIA** (NPS –35.6). En contraste, 
     el **27-nov** mostró una recuperación momentánea de **+4.1 pts** gracias a mejoras en puntualidad.
     ```
