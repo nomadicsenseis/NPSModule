@@ -130,45 +130,33 @@ step3_integrate_report:
     "En **Economy SH**, la puntualidad (**–4.5 ppts de NPS según Explanatory Drivers**) lastró el resultado semanal. Sin embargo, el **03-dic** hubo un repunte (**+10.0 pts**) gracias a una operativa limpia con **OTP 95.0%**."
 
   input_template: |
-    Integra el detalle diario en el informe semanal:
+    Completa el análisis comprehensivo:
 
-    **INFORME SEMANAL (BASE - NO MODIFICAR CONTENIDO):**
+    **ANÁLISIS SEMANAL COMPARATIVO:**
     {weekly_analysis}
 
-    **DATOS DIARIOS EXTRAÍDOS (AÑADIR DONDE CORRESPONDA):**
+    **ANÁLISIS DIARIO SINGLE:**
     {extracted_daily_data}
 
-    **INSTRUCCIONES DE INTEGRACIÓN:**
-
-    1. **HEADER:** Usa `📈 Análisis semana del [fechas] con respecto a la semana anterior ([Segmento]):`
-
-    2. **PÁRRAFOS INTRODUCTORIOS:** 
-       - Mantén los 2-3 párrafos iniciales del semanal TAL COMO ESTÁN
-       - Si hay días que explican la tendencia global, añade una mención breve al final
-
-    3. **SECCIONES POR CABINA:**
-       Para cada cabina (ECONOMY SH, BUSINESS SH, ECONOMY LH, etc.):
-       - **Primero:** El párrafo semanal SIN CAMBIOS
-       - **Después:** Si hay días relevantes para esa cabina, añade un párrafo con:
-         • Día(s) destacado(s) con variación
-         • Causa principal con datos
-         • Rutas afectadas (top 2-3)
-       - **Para SH:** Menciona IB e YW por separado si hay diferencias significativas
-       - **Si no hay días relevantes:** Indica estabilidad diaria o no añadas nada
-
-    4. **ORDEN CRONOLÓGICO:** Los días deben aparecer en orden de fecha
-
-    5. **FLUJO NATURAL:** El texto debe leerse como un solo informe, no como dos pegados
-
-    **EJEMPLO DE INTEGRACIÓN:**
-    ```
-    **ECONOMY LH: Deterioro Operativo**
-    [Párrafo semanal original sin cambios...]
-    
-    A nivel diario, el **30-nov** fue especialmente crítico con una caída de **–8.2 pts** en **Economy LH**, 
-    impulsada por cancelaciones en la ruta **MAD-MIA** (NPS –35.6). En contraste, 
-    el **27-nov** mostró una recuperación momentánea de **+4.1 pts** gracias a mejoras en puntualidad.
-    ```
+    TAREA:
+    1. Usa el header: **📈 Análisis semana del ([fechas]) con respecto a la semana anterior ([Segmento Principal]):**
+    2. Copia el contenido del análisis semanal del interpreter TAL COMO ESTÁ
+    3. Para cada sección (Párrafo 1, Párrafo 2, y cada sección de cabina/radio):
+       - Mantén el contenido semanal TAL COMO ESTÁ
+       - Añade DESPUÉS un párrafo adicional con el detalle diario correspondiente
+       - Integra de forma fluida y natural, sin títulos ni separadores
+       - El análisis diario debe fluir naturalmente después del análisis semanal
+    4. Orden de integración: Segmento Principal (párrafos 1 y 2), luego subsegmentos según jerarquía
+    5. Identifica días especialmente reseñables en el detalle diario (en orden cronológico)
+    6. NO cambies el contenido del análisis semanal del interpreter (ni cifras ni redondeos)
+    7. **TERMINOLOGÍA:** Reemplaza TODAS las menciones de "vs L7d", "vs L7D", "vs L7 días" por "con respecto a la semana anterior"
+    8. NO añadas recomendaciones adicionales
+    9. Haz el texto fluido y ejecutivo, no técnico, evitando la palabra "anomalía"
+    10. Solo incluye días que tengan análisis relevantes (con caídas/subidas o datos significativos)
+    11. Para cabinas/radio con "sin datos": REDACTA como estabilidad semanal y añade, si existen, las oscilaciones diarias relevantes a continuación
+    12. **CRÍTICO**: Si hay datos en "ANÁLISIS DIARIO SINGLE", DEBES usarlos. NO digas que "no están disponibles" si están presentes en el input.
+    13. **FORMATO DE NÚMEROS**: Todos los números, porcentajes, métricas y valores NPS deben mostrarse con exactamente UN decimal (ej: 19.8, -4.4, 93.5%)
+    14. **ATRIBUCIÓN DE SEGMENTO**: Siempre que menciones un dato, indica a qué segmento pertenece (ej: "NPS 19.8 (Economy LH)", "OTP –4.0 pts (Business SH)")
 
 # =============================================================================
 # LEGACY: Single-step mode (kept for backwards compatibility)
