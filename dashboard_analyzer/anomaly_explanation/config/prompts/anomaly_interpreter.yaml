@@ -330,7 +330,8 @@ hierarchical_diagnostic_helpers:
     
     **⚠️ REGLAS DE LENGUAJE EJECUTIVO:**
     - NUNCA uses términos técnicos internos: "nodo", "árbol", "NMA", "burbujeo", "jerarquía", "agregación"
-    - USA lenguaje de negocio: "segmento", "cabina", "radio", "compañía"
+    - USA "LH" y "SH" (NO "Largo Radio" ni "Corto Radio")
+    - USA lenguaje de negocio: "segmento", "cabina", "compañía"
     - Escribe como si fuera un informe para dirección ejecutiva
     - **NO ENUMERES las causas** (nada de "CAUSA 1:", "CAUSA 2:"). Nárralas de forma fluida.
     
@@ -351,9 +352,9 @@ hierarchical_diagnostic_helpers:
     - Los perfiles de cliente más reactivos
     
     **Ejemplo de narrativa fluida:**
-    "La principal causa del deterioro fue el aumento de cancelaciones en Long Haul, donde el NPS cayó de 17.9 a 12.1 (–5.7 pts vs L7d). Este impacto se evidenció en un empeoramiento de la puntualidad (–1.1 ppts según Explanatory Drivers), un incremento de +17 cancelaciones y +4 limitaciones de aeronave, afectando especialmente las rutas MAD–MCO (NPS –32.0, 17 pax) y JFK–MAD (NPS –14.5, 78 pax). Los pasajeros más sensibles fueron aquellos agrupados por región de residencia (spread 142.4 pts) y en vuelos code-share (spread 72.2 pts).
+    "La principal causa del deterioro fue el aumento de cancelaciones en LH, donde el NPS cayó de 17.9 a 12.1 (–5.7 pts vs L7d). Este impacto se evidenció en un empeoramiento de la puntualidad (–1.1 ppts según Explanatory Drivers), un incremento de +17 cancelaciones y +4 limitaciones de aeronave, afectando especialmente las rutas MAD–MCO (NPS –32.0, 17 pax) y JFK–MAD (NPS –14.5, 78 pax), aunque rutas como LIM-MAD (+10.4, 104 pax) mantuvieron buen rendimiento. Los pasajeros más sensibles fueron aquellos agrupados por región de residencia (spread 142.4 pts) y en vuelos code-share (spread 72.2 pts).
     
-    En contraste, el corto radio mostró una dinámica opuesta..."
+    En contraste, SH mostró una dinámica opuesta..."
     
     ---
     
@@ -365,10 +366,14 @@ hierarchical_diagnostic_helpers:
     - EMPIEZA DIRECTAMENTE CON "📈 **SÍNTESIS EJECUTIVA:**"
     - El párrafo introductorio debe ser MUY BREVE (2-3 líneas)
     - El desarrollo de causas debe ser NARRATIVO, no enumerado
-    - USA LAS EVIDENCIAS DEL PASO 4B - no inventes datos
+    - **INCLUYE TODOS LOS DATOS DEL PASO 4B** - no omitas ninguna evidencia:
+      • TODOS los SHAP de cada segmento (incluidos los de YW si existen)
+      • TODAS las rutas (tanto negativas como positivas, para dar contraste)
+      • TODOS los verbatims/feedback (incluso si contradicen la tendencia)
+      • TODOS los perfiles reactivos
     - **ATRIBUCIÓN OBLIGATORIA:** Cada métrica debe indicar a qué segmento pertenece
     - **TERMINOLOGÍA DE COMPARACIÓN:** Usa "vs L7d", "vs semana anterior", etc. según aparezca en los datos
-    - **PARA CABINAS SH:** Menciona valores NPS de IB y YW por separado
+    - **PARA CABINAS SH:** Menciona valores NPS de IB y YW por separado, incluyendo SHAP de ambos
     - Si una cabina no tiene variaciones significativas, indica "mantuvo desempeño estable"
     
     **📊 TRADUCCIÓN DE TERMINOLOGÍA (INPUT → OUTPUT):**
