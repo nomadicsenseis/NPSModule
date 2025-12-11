@@ -811,7 +811,7 @@ class CausalExplanationAgent:
                     node_path=node_path,
                     start_date=start_date_str,
                     end_date=end_date_str,
-                    min_surveys=3,
+                    min_surveys=1,  # Process all routes, just show survey count
                     anomaly_type=getattr(self, 'current_anomaly_type', 'unknown')
                 )
             elif tool_name == "verbatims_tool":
@@ -825,7 +825,7 @@ class CausalExplanationAgent:
                     node_path=node_path,
                     start_date=start_date_str,
                     end_date=end_date_str,
-                    min_surveys=3,
+                    min_surveys=1,  # Process all profiles, just show survey count
                     mode="single"
                 )
             else:
@@ -1164,8 +1164,13 @@ class CausalExplanationAgent:
             else:
                 end_dt = end_date
             
-            # Get NCS data for the specific period only (without await - it's synchronous)
-            ncs_data = self.ncs_collector.collect_ncs_data_for_date_range(
+            # Import and create fresh NCS collector (same as comparative mode)
+            from ....data_collection.ncs_collector import NCSDataCollector
+            temp_creds_file = "dashboard_analyzer/temp_aws_credentials.env"
+            ncs_collector = NCSDataCollector(temp_env_file=temp_creds_file)
+            
+            # Get NCS data for the specific period only
+            ncs_data = ncs_collector.collect_ncs_data_for_date_range(
                 start_date=start_dt,
                 end_date=end_dt
             )
@@ -1711,7 +1716,8 @@ class CausalExplanationAgent:
                             message_type=MessageType.AI,
                             agent=AgentName.CONVERSATIONAL
                         )
-                        self.tracker.log_message("AI", f"REFLECTION: {reflection}")
+                        # Include tool_name in metadata so it appears in tools_used
+                        self.tracker.log_message("AI", f"REFLECTION: {reflection}", metadata={"tool_name": current_tool})
                         self.logger.info(f"💭 Reflection captured for {current_tool}")
                         
                         # Execute next tool code if provided
@@ -2027,7 +2033,8 @@ class CausalExplanationAgent:
                             message_type=MessageType.AI,
                             agent=AgentName.CONVERSATIONAL
                         )
-                        self.tracker.log_message("AI", f"REFLECTION: {reflection}")
+                        # Include tool_name in metadata so it appears in tools_used
+                        self.tracker.log_message("AI", f"REFLECTION: {reflection}", metadata={"tool_name": current_tool})
                         self.logger.info(f"💭 Reflection captured for {current_tool}")
 
                         # Execute next tool code if provided
@@ -2163,7 +2170,7 @@ class CausalExplanationAgent:
                     node_path=node_path,
                     start_date=start_date,
                     end_date=end_date,
-                    min_surveys=3,
+                    min_surveys=1,  # Process all routes, just show survey count
                     anomaly_type=getattr(self, 'current_anomaly_type', 'unknown')
                 )
             elif tool_name == "operative_data_tool":
@@ -2192,7 +2199,7 @@ class CausalExplanationAgent:
                     node_path=node_path,
                     start_date=start_date,
                     end_date=end_date,
-                    min_surveys=3,
+                    min_surveys=1,  # Process all profiles, just show survey count
                     mode="comparative"
                 )
             else:
@@ -4406,7 +4413,7 @@ class CausalExplanationAgent:
                         df_filtered = df
                     
                     if df_filtered.empty:
-                        results.append(f"❌ {dimension}: No segments with sufficient surveys (>={min_surveys})")
+                        results.append(f"❌ {dimension}: No data available for this period")
                         continue
                     
                     # Find category column for profile names (after cleaning)

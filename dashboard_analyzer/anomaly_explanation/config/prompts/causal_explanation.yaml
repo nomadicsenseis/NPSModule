@@ -127,15 +127,29 @@ single_prompts:
     **TRES OBJETIVOS** —en este orden—:
 
     1. **CAUSA TANGIBLE** · ¿Qué métricas operativas del día se desviaron significativamente del baseline? ¿Correlacionan con la anomalía de NPS?
-    2. **EVIDENCIA DE SOPORTE** · ¿Hubo incidentes NCS o feedback en verbatims que confirmen la causa operativa?
-    3. **RUTAS/PERFILES AFECTADOS** · ¿Qué rutas específicas y perfiles de cliente mostraron mayor desviación?
+    2. **HIPÓTESIS ALTERNATIVAS** · Si operative_data NO encuentra causa → buscar en NCS/verbatims nuevas hipótesis (incidentes específicos, quejas recurrentes)
+    3. **VALIDACIÓN EN RUTAS/PERFILES** · Si NCS identifica incidentes en rutas específicas → verificar si esas rutas tienen mal NPS en routes_tool
 
     **Metodología**: Una herramienta por iteración, reflexiona y elige la siguiente. Máximo 5 iteraciones.
+
+    **Flujo de Investigación** 🔍
+    ▸ **CASO A**: operative_data encuentra correlación → NCS/verbatims confirman → rutas/perfiles validan
+    ▸ **CASO B**: operative_data NO encuentra correlación → NCS puede revelar incidentes puntuales → verificar rutas de esos incidentes → customer_profile identifica perfiles afectados
+    ▸ **CASO C**: NCS vacío pero verbatims mencionan problemas → investigar rutas mencionadas
 
     **Criterios de Análisis** ⚖️
     ▸ Desviación operativa significativa: variación > 3 pts vs baseline
     ▸ Coherencia: Si NPS bajó, buscar métricas operativas que empeoraron vs baseline
     ▸ Si NPS subió, buscar métricas operativas que mejoraron vs baseline
+    ▸ **Si no hay correlación operativa**: buscar patrones en NCS/verbatims como fuente de hipótesis
+
+    **Relaciones Métricas-NPS** 📊
+    ▸ OTP15 (puntualidad): DIRECTA → OTP↓ = NPS↓, OTP↑ = NPS↑
+    ▸ Mishandling: INVERSA → Mishandling↑ = NPS↓, Mishandling↓ = NPS↑
+    ▸ Misconex: INVERSA → Misconex↑ = NPS↓, Misconex↓ = NPS↑
+    ▸ **Load Factor: INVERSA** → Load Factor↑ (más ocupación) = NPS↓ (peor experiencia)
+      · Si NPS bajó pero Load Factor también bajó → NO correlaciona (descartar como causa)
+      · Si NPS bajó y Load Factor subió → SÍ correlaciona (posible causa)
 
     **Flujo de Trabajo** (se ejecuta automáticamente):
     ▸ `operative_data_tool` → Analiza métricas operativas del día vs baseline
@@ -144,9 +158,14 @@ single_prompts:
     ▸ `routes_tool` → Identifica rutas con mayor desviación
     ▸ `customer_profile_tool` → Analiza impacto por perfil de cliente
 
+    **IMPORTANTE - Ejecutar TODAS las herramientas** 🔧
+    ▸ Ejecuta SIEMPRE todas las herramientas del flujo, incluso con pocos datos
+    ▸ No filtres por número mínimo de encuestas - procesa las que haya
+    ▸ El número de encuestas se mostrará en el output para evaluar confiabilidad
+
     **Reglas de Terminación** 🏁
     ▸ Máximo 5 iteraciones
-    ▸ Si no hay más herramientas relevantes → termina
+    ▸ Termina SOLO después de ejecutar todas las herramientas relevantes
     ▸ Si no hay evidencia clara → termina con hipótesis débil indicando nivel de confianza
 
   input_template: |
@@ -305,9 +324,13 @@ tools_prompts:
     single: |
       **ANÁLISIS COMPLETADO**: Se analizaron las métricas operativas del día.
 
+      **EVALUACIÓN**:
+      - Si HAY correlación operativa → `ncs_tool` confirmará incidentes
+      - Si NO HAY correlación operativa → `ncs_tool` puede revelar incidentes puntuales que generen nueva hipótesis
+
       **PRÓXIMO PASO**: Ejecuta `ncs_tool` para revisar los incidentes reportados en este día.
 
-      **OBJETIVO**: Entender qué incidentes operativos específicos influyeron en el NPS del día.
+      **OBJETIVO**: Buscar incidentes específicos. Si hay incidentes en rutas concretas, anota esas rutas para verificar su NPS en `routes_tool`.
 
   ncs_tool:
     comparative:
@@ -341,9 +364,13 @@ tools_prompts:
     single: |
       **ANÁLISIS COMPLETADO**: Se revisaron los incidentes NCS del día.
 
+      **HIPÓTESIS GENERADA** (si aplica):
+      - Si hay incidentes en rutas específicas → **ANOTA esas rutas** para verificar en `routes_tool`
+      - Si no hay incidentes → buscar pistas en verbatims
+
       **PRÓXIMO PASO**: Ejecuta `verbatims_tool` para obtener feedback cualitativo de los clientes.
 
-      **OBJETIVO**: Entender las opiniones específicas de los clientes sobre su experiencia en este día.
+      **OBJETIVO**: Buscar menciones de problemas específicos (retrasos, equipaje, tripulación) que puedan generar hipótesis alternativas.
 
   verbatims_tool:
     comparative:
@@ -395,9 +422,16 @@ tools_prompts:
     single: |
       **ANÁLISIS COMPLETADO**: Se obtuvo feedback cualitativo de los clientes del día.
 
+      **HIPÓTESIS CONSOLIDADA**:
+      - Si verbatims mencionan problemas específicos (retrasos, equipaje, tripulación) → NUEVA HIPÓTESIS
+      - Si NCS identificó rutas con incidentes → verificar NPS de esas rutas en `routes_tool`
+      - Si todo positivo → posible variabilidad estadística normal
+
       **PRÓXIMO PASO**: Ejecuta `routes_tool` para identificar las rutas específicas con mayor impacto.
 
-      **OBJETIVO**: Mapear qué rutas específicas dentro del segmento tuvieron mayor impacto en el NPS del día.
+      **OBJETIVO**: 
+      1. Verificar si las rutas con incidentes NCS tienen mal NPS
+      2. Identificar rutas con NPS bajo que puedan explicar la anomalía
 
   routes_tool:
     comparative:
@@ -431,9 +465,14 @@ tools_prompts:
     single: |
       **ANÁLISIS COMPLETADO**: Se identificaron las rutas específicas con mayor impacto en el NPS del día.
 
-      **PRÓXIMO PASO**: Ejecuta `customer_profile_tool` para analizar el impacto por perfil de cliente filtrando por las rutas específicas afectadas.
+      **VALIDACIÓN DE HIPÓTESIS**:
+      - Si NCS identificó rutas con incidentes → ¿Esas rutas tienen NPS bajo? → HIPÓTESIS VALIDADA
+      - Si verbatims mencionaron problemas → ¿Las rutas afectadas tienen NPS bajo? → HIPÓTESIS VALIDADA
+      - Si rutas con mal NPS no tienen incidentes → problema no captado en NCS/operativo
 
-      **OBJETIVO**: Entender qué perfiles de cliente dentro del segmento reaccionaron con mayor intensidad en este día.
+      **PRÓXIMO PASO**: Ejecuta `customer_profile_tool` para analizar el impacto por perfil de cliente.
+
+      **OBJETIVO**: Identificar qué perfiles (Business/Leisure, Fleet, Region, CodeShare) tienen peor NPS en las rutas afectadas.
 
   customer_profile_tool:
     comparative: |
@@ -449,14 +488,12 @@ tools_prompts:
     single: |
       **ANÁLISIS COMPLETADO**: Se analizó el impacto por perfil de cliente sobre las principales rutas afectadas del segmento.
 
-      **INVESTIGACIÓN COMPLETA**: Se han cumplido los objetivos principales:
-      1. ✅ FACTORES IDENTIFICADOS
-      2. ✅ MÉTRICAS OPERATIVAS analizadas
-      3. ✅ FEEDBACK DE CLIENTES obtenido
-      4. ✅ RUTAS AFECTADAS mapeadas
-      5. ✅ IMPACTO POR PERFIL analizado
+      **EVALUACIÓN FINAL**:
+      - **CASO A** (Hipótesis operativa): Métricas operativas correlacionan + NCS/verbatims confirman + rutas/perfiles validan → CONFIANZA ALTA
+      - **CASO B** (Hipótesis alternativa): Operative sin correlación PERO NCS/verbatims revelan incidentes + rutas confirman → CONFIANZA MEDIA
+      - **CASO C** (Sin hipótesis clara): Ninguna fuente revela causa → CONFIANZA BAJA, posible variabilidad estadística
 
-      **DECISIÓN**: TERMINAR la investigación.
+      **DECISIÓN**: TERMINAR la investigación e indicar nivel de confianza.
 
 # =============================================================================
 # INITIAL DECISION PROMPTS
