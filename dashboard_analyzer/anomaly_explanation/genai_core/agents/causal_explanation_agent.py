@@ -5253,15 +5253,37 @@ class CausalExplanationAgent:
             summary_parts.append(f"🔍 **EXPLANATORY DRIVERS EJECUTADO:**")
             if isinstance(drivers_data, dict):
                 summary_parts.append(f"   📊 Encuestas analizadas: {drivers_data.get('survey_count', 'N/A')}")
-                significant_drivers = drivers_data.get('significant_drivers', [])
-                if significant_drivers:
-                    summary_parts.append(f"   🎯 Drivers significativos: {significant_drivers}")
+                
+                # Get all drivers with SHAP values
+                all_drivers = drivers_data.get('all_drivers', [])
                 operational_drivers = drivers_data.get('operational_drivers', [])
-                if operational_drivers:
-                    summary_parts.append(f"   ⚙️ Drivers operacionales: {operational_drivers}")
                 product_drivers = drivers_data.get('product_drivers', [])
-                if product_drivers:
-                    summary_parts.append(f"   🛎️ Drivers de producto/servicio: {product_drivers}")
+                
+                # Show operational drivers with SHAP values
+                if operational_drivers and all_drivers:
+                    summary_parts.append(f"   ⚙️ **Drivers OPERATIVOS (con valores SHAP):**")
+                    for driver_name in operational_drivers:
+                        driver_data = next((d for d in all_drivers if d.get('touchpoint') == driver_name), None)
+                        if driver_data:
+                            shap = driver_data.get('shap_value', 0)
+                            sat_diff = driver_data.get('satisfaction_diff', 'N/A')
+                            sig = "⭐" if abs(shap) > 0.1 else "⚪"
+                            summary_parts.append(f"      {sig} {driver_name}: SHAP={shap:.3f}, Sat_diff={sat_diff}")
+                        else:
+                            summary_parts.append(f"      • {driver_name}: (sin datos SHAP)")
+                
+                # Show product drivers with SHAP values
+                if product_drivers and all_drivers:
+                    summary_parts.append(f"   🛎️ **Drivers de PRODUCTO (con valores SHAP):**")
+                    for driver_name in product_drivers:
+                        driver_data = next((d for d in all_drivers if d.get('touchpoint') == driver_name), None)
+                        if driver_data:
+                            shap = driver_data.get('shap_value', 0)
+                            sat_diff = driver_data.get('satisfaction_diff', 'N/A')
+                            sig = "⭐" if abs(shap) > 0.1 else "⚪"
+                            summary_parts.append(f"      {sig} {driver_name}: SHAP={shap:.3f}, Sat_diff={sat_diff}")
+                        else:
+                            summary_parts.append(f"      • {driver_name}: (sin datos SHAP)")
             else:
                 summary_parts.append(f"   {drivers_data}")
         
