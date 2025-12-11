@@ -209,13 +209,47 @@ Investigates root causes of individual segment anomalies.
 | `customer_profile_tool` | ✅ Segment reactivity | ✅ Absolute NPS | Customer sensitivity |
 
 ### **🌳 Anomaly Interpreter Agent**
-Analyzes patterns across the hierarchical segment tree.
+Analyzes patterns across the hierarchical segment tree using a multi-step conversational methodology.
 
-**Capabilities:**
-- Generation-by-generation hierarchical analysis
-- Parent-child anomaly correlation detection
-- Cross-level trend identification
-- Pattern propagation analysis
+**Hierarchical Bubbling Logic:**
+The interpreter uses a sophisticated "bubbling" algorithm to determine how anomalies propagate through the tree:
+
+| Scenario | Pattern | Interpretation |
+|----------|---------|----------------|
+| **SINERGIA** | `(+,+ \| +)` or `(-,- \| -)` | Both children push same direction → Use parent's explanation |
+| **CANCELACIÓN** | `(+,- \| N)` or `(-,+ \| N)` | Opposite effects cancel out → Report both causes separately |
+| **DOMINANCIA** | `(+,- \| +)` or `(-,+ \| -)` | One child wins → Use dominant child's explanation |
+| **DILUCIÓN** | `(+,N \| N)` or `(-,N \| N)` | Anomaly absorbed by Normal → Report anomalous child |
+| **TRANSFERENCIA** | `(+,N \| +)` or `(-,N \| -)` | One child infects parent → Use anomalous child's explanation |
+
+**Multi-Step Analysis Flow:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1-3: BUBBLING LOGIC                                        │
+│   Determine aggregation dynamics at each tree level             │
+│   (Company → Cabin → Radio → Global)                            │
+├─────────────────────────────────────────────────────────────────┤
+│ STEP 4: NMA IDENTIFICATION                                      │
+│   Identify "Nodo Máximo Afectado" (highest affected node)       │
+│   for each cause based on bubbling rules                        │
+├─────────────────────────────────────────────────────────────────┤
+│ STEP 4B: EVIDENCE EXTRACTION ⭐ Key Innovation                  │
+│   Forces the model to RE-READ the initial context and           │
+│   extract ALL evidence data textually for each NMA              │
+│   (Solves the "data loss in multi-turn" problem)                │
+├─────────────────────────────────────────────────────────────────┤
+│ STEP 5: EXECUTIVE SYNTHESIS                                     │
+│   Generate narrative summary with fresh evidence from 4B        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Evidence Sources Extracted:**
+- 📈 **Explanatory Drivers** (SHAP values)
+- 📊 **Operative Data** (OTP, Load Factor, Mishandling)
+- 🚨 **NCS Incidents** (Cancellations, Delays, Aircraft limitations)
+- 💬 **Customer Verbatims** (Feedback themes)
+- ✈️ **Routes** (Top affected routes with NPS)
+- 👥 **Customer Profiles** (Reactive segments with spread)
 
 ### **📋 Anomaly Summary Agent**
 Consolidates multi-period analysis into executive reports.
@@ -446,9 +480,19 @@ AI agent prompts are configured via YAML files in `config/prompts/`:
 
 | File | Agent | Purpose |
 |------|-------|---------|
-| `causal_explanation.yaml` | Causal Agent | Root cause investigation prompts |
-| `anomaly_interpreter.yaml` | Interpreter Agent | Hierarchical analysis prompts |
+| `causal_explanation.yaml` | Causal Agent | Root cause investigation prompts (comparative & single modes) |
+| `anomaly_interpreter.yaml` | Interpreter Agent | 6-step hierarchical analysis (bubbling + evidence extraction) |
 | `anomaly_summary.yaml` | Summary Agent | Executive summary prompts |
+
+**Interpreter Steps (in `anomaly_interpreter.yaml`):**
+| Step | Name | Purpose |
+|------|------|---------|
+| 1 | `step1_company_level_diagnosis` | Analyze IB/YW dynamics in SH cabins |
+| 2 | `step2_cabin_level_diagnosis` | Analyze cabin interactions within radios |
+| 3 | `step3_radio_global_diagnosis` | Analyze LH/SH dynamics at Global level |
+| 4 | `step4_nma_identification` | Identify highest affected nodes per cause |
+| 4B | `step4b_evidence_extraction` | **Re-read context & extract all evidence** |
+| 5 | `step5_executive_synthesis` | Generate executive narrative with evidence |
 
 ### **🗃️ DAX Query Templates**
 
