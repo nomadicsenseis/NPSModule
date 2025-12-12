@@ -101,81 +101,102 @@ async def run_weekly_comprehensive_analysis(
 
     generated_reports = []
 
-    # --- 1. Weekly Comparative Analysis ---
+    # --- PARALLEL EXECUTION: Weekly + Daily Analysis ---
     print("\n" + "=" * 40)
-    print("📊 STEP 1: Running Weekly Comparative Analysis")
+    print("🚀 PARALLEL EXECUTION: Weekly Comparative + Daily Single Analyses")
     print("=" * 40)
     
     # Determine anomaly detection mode based on causal filter
     comp_start_str = comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date and hasattr(comparison_start_date, 'strftime') else str(comparison_start_date) if comparison_start_date else None
     comp_end_str = comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date and hasattr(comparison_end_date, 'strftime') else str(comparison_end_date) if comparison_end_date else None
     anomaly_mode, baseline_desc = determine_anomaly_mode_for_vslast(causal_filter, comp_start_str, comp_end_str)
-    print(f"🎯 Anomaly Detection Mode: {anomaly_mode} (baseline: {baseline_desc})")
+    print(f"🎯 Weekly Anomaly Detection Mode: {anomaly_mode} (baseline: {baseline_desc})")
+    print(f"🎯 Daily Anomaly Detection Mode: {daily_anomaly_detection_mode} (periods: {daily_periods})")
     
-    try:
-        weekly_report_path = await execute_analysis_flow(
-            analysis_date=analysis_date,
-            date_parameter=date_parameter,
-            segment=segment,
-            anomaly_detection_mode=anomaly_mode,
-            baseline_periods=7,
-            aggregation_days=7,
-            periods=1,
-            causal_filter=causal_filter,
-            comparison_start_date=comparison_start_date,
-            comparison_end_date=comparison_end_date,
-            date_flight_local=date_flight_local,
-            study_mode="comparative",
-            environment=environment
-        )
-        
-        # Add weekly report to generated_reports
-        if weekly_report_path and "Error" not in str(weekly_report_path):
-            generated_reports.append({
-                'type': 'weekly',
-                'data': weekly_report_path
-            })
-            print(f"✅ Weekly analysis completed. Data length: {len(str(weekly_report_path))} chars")
-        else:
-            print(f"⚠️ Weekly analysis did not generate a report (error or insufficient data).")
-
-    except Exception as e:
-        print(f"❌ CRITICAL ERROR during weekly analysis: {e}")
-        import traceback
-        traceback.print_exc()
-
-    # --- 2. Daily Analysis ---
+    async def run_weekly_analysis():
+        """Execute weekly comparative analysis"""
+        print("\n📊 [PARALLEL] Starting Weekly Comparative Analysis...")
+        try:
+            result = await execute_analysis_flow(
+                analysis_date=analysis_date,
+                date_parameter=date_parameter,
+                segment=segment,
+                anomaly_detection_mode=anomaly_mode,
+                baseline_periods=7,
+                aggregation_days=7,
+                periods=1,
+                causal_filter=causal_filter,
+                comparison_start_date=comparison_start_date,
+                comparison_end_date=comparison_end_date,
+                date_flight_local=date_flight_local,
+                study_mode="comparative",
+                environment=environment
+            )
+            if result and "Error" not in str(result):
+                print(f"✅ [PARALLEL] Weekly analysis completed. Data length: {len(str(result))} chars")
+                return {'type': 'weekly', 'data': result, 'success': True}
+            else:
+                print(f"⚠️ [PARALLEL] Weekly analysis did not generate a report.")
+                return {'type': 'weekly', 'data': None, 'success': False}
+        except Exception as e:
+            print(f"❌ [PARALLEL] Weekly analysis error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'type': 'weekly', 'data': None, 'success': False, 'error': str(e)}
+    
+    async def run_daily_analysis():
+        """Execute daily single analysis for each of the last N days"""
+        print(f"\n📊 [PARALLEL] Starting Daily Analysis ({daily_periods} days)...")
+        try:
+            result = await execute_analysis_flow(
+                analysis_date=analysis_date,
+                date_parameter=date_parameter,
+                segment=segment,
+                anomaly_detection_mode=daily_anomaly_detection_mode,
+                baseline_periods=daily_baseline_periods,
+                aggregation_days=daily_aggregation_days,
+                periods=daily_periods,
+                causal_filter=None,
+                comparison_start_date=None,
+                comparison_end_date=None,
+                date_flight_local=date_flight_local,
+                study_mode="single",
+                environment=environment
+            )
+            if result and "Error" not in str(result):
+                print(f"✅ [PARALLEL] Daily analysis completed. Data length: {len(str(result))} chars")
+                return {'type': 'daily', 'data': result, 'success': True}
+            else:
+                print(f"❌ [PARALLEL] Daily analysis failed. Reason: {result}")
+                return {'type': 'daily', 'data': None, 'success': False}
+        except Exception as e:
+            print(f"❌ [PARALLEL] Daily analysis error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'type': 'daily', 'data': None, 'success': False, 'error': str(e)}
+    
+    # Execute both analyses in parallel
+    print("\n⚡ Launching parallel analysis tasks...")
+    parallel_results = await asyncio.gather(
+        run_weekly_analysis(),
+        run_daily_analysis(),
+        return_exceptions=True
+    )
+    
+    # Process parallel results
     print("\n" + "=" * 40)
-    print("📊 STEP 2: Running Daily Analysis")
+    print("📋 PARALLEL EXECUTION RESULTS")
     print("=" * 40)
-    try:
-        daily_report_path = await execute_analysis_flow(
-            analysis_date=analysis_date,
-            date_parameter=date_parameter,
-            segment=segment,
-            anomaly_detection_mode=daily_anomaly_detection_mode,
-            baseline_periods=daily_baseline_periods,
-            aggregation_days=daily_aggregation_days,
-            periods=daily_periods,
-            causal_filter=None,
-            comparison_start_date=None,
-            comparison_end_date=None,
-            date_flight_local=date_flight_local,
-            study_mode="single",
-            environment=environment
-        )
-        if daily_report_path and "Error" not in str(daily_report_path):
+    
+    for result in parallel_results:
+        if isinstance(result, Exception):
+            print(f"❌ Task failed with exception: {result}")
+        elif isinstance(result, dict) and result.get('success') and result.get('data'):
             generated_reports.append({
-                'type': 'daily',
-                'data': daily_report_path
+                'type': result['type'],
+                'data': result['data']
             })
-            print(f"✅ Daily analysis completed. Data length: {len(str(daily_report_path))} chars")
-        else:
-            print(f"❌ Daily analysis failed. Reason: {daily_report_path}")
-    except Exception as e:
-        print(f"❌ CRITICAL ERROR during daily analysis: {e}")
-        import traceback
-        traceback.print_exc()
+            print(f"✅ {result['type'].capitalize()} analysis: SUCCESS")
 
     # --- 3. Final Summary ---
     print("\n" + "=" * 40)

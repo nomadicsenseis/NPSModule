@@ -286,12 +286,255 @@ async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7
         print(f"      • 💬 Customer verbatims sentiment")
         print(f"      • 📅 Date-filtered data for specific periods")
 
+async def process_single_period(
+    period: int,
+    analysis_data: dict,
+    segment: str,
+    causal_filter: str,
+    comparison_start_date: datetime,
+    comparison_end_date: datetime,
+    environment: str,
+    study_mode: str,
+    pbi_collector,
+    ai_agent,
+    ai_available: bool,
+    period_semaphore: asyncio.Semaphore
+) -> dict:
+    """
+    Process a single period's analysis - designed to run in parallel with other periods.
+    
+    Args:
+        period: Period number to analyze
+        analysis_data: Dict containing detector, data_folder, aggregation_days, etc.
+        segment: Segment to analyze
+        causal_filter: Causal comparison filter
+        comparison_start_date: Start date for comparison period
+        comparison_end_date: End date for comparison period
+        environment: Environment (local/prod)
+        study_mode: "single" or "comparative"
+        pbi_collector: Shared PBI data collector
+        ai_agent: AI interpreter agent (can be None)
+        ai_available: Whether AI agent is available
+        period_semaphore: Semaphore to limit concurrent period processing
+    
+    Returns:
+        Dict with period analysis results
+    """
+    async with period_semaphore:
+        detector = analysis_data['detector']
+        data_folder = analysis_data['data_folder']
+        aggregation_days = analysis_data['aggregation_days']
+        
+        print(f"\n{'='*60}")
+        print(f"⚡ PERIOD {period} ANALYSIS (PARALLEL)")
+        print("="*60)
+        
+        # Create isolated interpreter for this period
+        interpreter = FlexibleAnomalyInterpreter(
+            data_folder, 
+            pbi_collector=pbi_collector, 
+            causal_filter=causal_filter, 
+            detection_mode=detector.detection_mode, 
+            comparison_start_date=comparison_start_date, 
+            comparison_end_date=comparison_end_date, 
+            environment=environment
+        )
+        
+        # Get anomalies for this period
+        analyze_result = await detector.analyze_period(data_folder, period, analysis_data.get('analysis_date'))
+        period_anomalies, period_deviations, _, period_nps_values = analyze_result
+        
+        # Get date range for this period
+        date_range = interpreter._get_period_date_range(period, aggregation_days)
+        if date_range:
+            start_date, end_date = date_range
+            date_range_str = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+            print(f"📅 Period {period}: {date_range_str}")
+        else:
+            date_range_str = "Unknown dates"
+        
+        # Generate parent interpretations
+        parent_interpretations = generate_parent_interpretations(period_anomalies)
+        
+        # Collect explanations for anomalous nodes
+        explanations = {}
+        nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
+
+        # ENHANCEMENT: Always include root segment
+        root_segment = normalize_segment_to_root(segment)
+        root_state = period_anomalies.get(root_segment, "?")
+        root_deviation = period_deviations.get(root_segment, 0.0)
+        
+        if root_deviation > 0:
+            root_state = "+"
+        elif root_deviation < 0:
+            root_state = "-"
+        else:
+            root_state = "N"
+        period_anomalies[root_segment] = root_state
+        
+        if root_segment not in nodes_with_anomalies and root_state != "?":
+            nodes_with_anomalies.append(root_segment)
+        
+        if root_segment in nodes_with_anomalies:
+            nodes_with_anomalies.remove(root_segment)
+            nodes_with_anomalies.insert(0, root_segment)
+
+        detailed_tree_data = {}
+        
+        if nodes_with_anomalies:
+            total_nodes = len(nodes_with_anomalies)
+            successful_explanations = 0
+            print(f"      📊 Period {period}: Processing {total_nodes} nodes...")
+            
+            # Semaphore for node-level concurrency within this period
+            node_sem = asyncio.Semaphore(5)
+            
+            async def process_node_anomaly(i, node_path):
+                async with node_sem:
+                    try:
+                        node_interpreter = FlexibleAnomalyInterpreter(
+                            data_folder, 
+                            pbi_collector=pbi_collector, 
+                            causal_filter=causal_filter, 
+                            detection_mode=detector.detection_mode, 
+                            comparison_start_date=comparison_start_date, 
+                            comparison_end_date=comparison_end_date, 
+                            environment=environment
+                        )
+                        
+                        anomaly_state = period_anomalies.get(node_path, "?")
+                        deviation_value = period_deviations.get(node_path, 0.0)
+                        
+                        if node_path == "Global" and anomaly_state == "?":
+                            if deviation_value > 0:
+                                anomaly_state = "+"
+                            elif deviation_value < 0:
+                                anomaly_state = "-"
+                            else:
+                                anomaly_state = "N"
+                        
+                        # Calculate date range
+                        node_start_date, node_end_date = None, None
+                        analysis_date_local = analysis_data.get('analysis_date')
+                        if analysis_date_local:
+                            node_start_date, node_end_date = calculate_period_date_range(analysis_date_local, period, aggregation_days)
+                        
+                        # Build NPS context
+                        nps_context = ""
+                        comparison_context_local = ""
+                        if period_nps_values and node_path in period_nps_values:
+                            nps_data = period_nps_values[node_path]
+                            if isinstance(nps_data, dict):
+                                current_nps = nps_data.get('current', 'N/A')
+                                baseline_nps = nps_data.get('baseline', 'N/A')
+                                nps_context = f"Current NPS: {current_nps}, Baseline NPS: {baseline_nps}"
+                                baseline_description = nps_data.get('baseline_description', None)
+                                comparison_context_local = generate_comparison_context(
+                                    analysis_data.get('anomaly_detection_mode', 'target'), 
+                                    analysis_data.get('aggregation_days', 7),
+                                    analysis_data.get('baseline_periods', 7),
+                                    baseline_description
+                                )
+                            else:
+                                nps_context = f"NPS: {nps_data}"
+                        
+                        explanation = await asyncio.wait_for(
+                            node_interpreter.explain_anomaly(
+                                node_path=node_path,
+                                target_period=period,
+                                aggregation_days=aggregation_days,
+                                anomaly_state=anomaly_state,
+                                start_date=node_start_date,
+                                end_date=node_end_date,
+                                anomaly_magnitude=deviation_value,
+                                nps_context=nps_context,
+                                causal_filter=causal_filter,
+                                anomaly_detection_mode=analysis_data.get('anomaly_detection_mode', 'target'),
+                                comparison_context=comparison_context_local,
+                                baseline_periods=analysis_data.get('baseline_periods', 7)
+                            ),
+                            timeout=600.0
+                        )
+                        
+                        investigation_log = []
+                        if hasattr(node_interpreter, 'get_last_causal_log'):
+                            investigation_log = node_interpreter.get_last_causal_log()
+                        
+                        return node_path, explanation, investigation_log, True
+                    except Exception as e:
+                        return node_path, f"Analysis failed: {e}", [], False
+
+            # Process nodes in parallel
+            tasks = [process_node_anomaly(i, node) for i, node in enumerate(nodes_with_anomalies, 1)]
+            
+            for task in asyncio.as_completed(tasks):
+                node_path, result, log, success = await task
+                explanations[node_path] = result
+                if success and log:
+                    detailed_tree_data[node_path] = {"explanation": result, "tool_trace": log}
+                if success:
+                    successful_explanations += 1
+            
+            print(f"      ✅ Period {period}: {successful_explanations}/{total_nodes} explanations collected")
+        
+        # AI Interpretation
+        ai_interpretation = None
+        if ai_available and ai_agent and nodes_with_anomalies:
+            try:
+                interpreter_comparison_context = generate_comparison_context(
+                    analysis_data.get('anomaly_detection_mode', 'mean'),
+                    analysis_data.get('aggregation_days', 1),
+                    analysis_data.get('baseline_periods', 7)
+                )
+
+                ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
+                                                 parent_interpretations, explanations, date_range, segment, period_nps_values,
+                                                 comparison_context=interpreter_comparison_context)
+                
+                date_param = None
+                if date_range and len(date_range) >= 2:
+                    range_start_date, range_end_date = date_range
+                    if range_start_date and range_end_date:
+                        date_param = f"{range_start_date.strftime('%Y-%m-%d')} to {range_end_date.strftime('%Y-%m-%d')}"
+                
+                ai_interpretation = await asyncio.wait_for(
+                    ai_agent.interpret_anomaly_tree(ai_input, date_param, segment),
+                    timeout=600.0
+                )
+                print(f"      🤖 Period {period}: AI interpretation completed")
+                
+            except Exception as e:
+                ai_interpretation = f"AI interpretation failed: {str(e)}"
+                print(f"      ⚠️ Period {period}: AI interpretation failed: {e}")
+        
+        # Return period results (JSON saving and tree printing will be done in consolidation phase)
+        return {
+            'period': period,
+            'date_range': date_range,
+            'date_range_str': date_range_str,
+            'period_anomalies': period_anomalies,
+            'period_deviations': period_deviations,
+            'period_nps_values': period_nps_values,
+            'parent_interpretations': parent_interpretations,
+            'explanations': explanations,
+            'detailed_tree_data': detailed_tree_data,
+            'ai_interpretation': ai_interpretation,
+            'nodes_with_anomalies': nodes_with_anomalies,
+            'segment': segment,
+            'aggregation_days': aggregation_days
+        }
+
+
 async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None):
-    """Show trees for all periods analyzed INCLUDING explanations and parent interpretations"""
+    """Show trees for all periods analyzed INCLUDING explanations and parent interpretations.
+    
+    PARALLEL EXECUTION: All periods are processed concurrently for faster results.
+    """
     if not analysis_data:
         return
     
-    print(f"\n🌳 ANOMALY PERIOD ANALYSIS")
+    print(f"\n🌳 ANOMALY PERIOD ANALYSIS (PARALLEL MODE)")
     print("-" * 50)
     
     detector = analysis_data['detector']
@@ -335,216 +578,58 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     # Collect data for all periods for summary
     all_periods_data = []
     
-    # Show all periods with anomalies (remove the [:3] limit)
+    # Show all periods with anomalies
     periods_with_anomalies = [p for p in periods_analyzed if p in anomaly_periods]
     
-    # Show detailed analysis for all periods with anomalies
-    for period in periods_with_anomalies:
-        print(f"\n{'='*60}")
-        print(f"PERIOD {period} ANALYSIS")
-        print("="*60)
+    print(f"\n⚡ PARALLEL EXECUTION: Processing {len(periods_with_anomalies)} periods concurrently...")
+    
+    # Create semaphore to limit concurrent period processing (to avoid overwhelming APIs)
+    period_semaphore = asyncio.Semaphore(3)  # Process max 3 periods at a time
+    
+    # Create tasks for parallel execution
+    period_tasks = [
+        process_single_period(
+            period=period,
+            analysis_data=analysis_data,
+            segment=segment,
+            causal_filter=causal_filter,
+            comparison_start_date=comparison_start_date,
+            comparison_end_date=comparison_end_date,
+            environment=environment,
+            study_mode=study_mode,
+            pbi_collector=pbi_collector,
+            ai_agent=ai_agent if ai_available else None,
+            ai_available=ai_available,
+            period_semaphore=period_semaphore
+        )
+        for period in periods_with_anomalies
+    ]
+    
+    # Execute all periods in parallel
+    period_results = await asyncio.gather(*period_tasks, return_exceptions=True)
+    
+    print(f"\n{'='*60}")
+    print("📋 CONSOLIDATING PARALLEL RESULTS")
+    print("="*60)
+    
+    # Process results and save JSON files / print trees
+    for result in period_results:
+        if isinstance(result, Exception):
+            print(f"❌ Period task failed: {result}")
+            continue
         
-        # Get anomalies for this period (silently)
-        print(f"🔍 DEBUG ANALYZE_PERIOD: About to call detector.analyze_period", file=sys.stderr)
-        analyze_result = await detector.analyze_period(data_folder, period, analysis_data.get('analysis_date'))
-        print(f"🔍 DEBUG ANALYZE_PERIOD: Result type: {type(analyze_result)}", file=sys.stderr)
-        print(f"🔍 DEBUG ANALYZE_PERIOD: Result length: {len(analyze_result) if hasattr(analyze_result, '__len__') else 'No length'}", file=sys.stderr)
+        period = result['period']
+        date_range_str = result['date_range_str']
+        period_anomalies = result['period_anomalies']
+        period_deviations = result['period_deviations']
+        period_nps_values = result['period_nps_values']
+        parent_interpretations = result['parent_interpretations']
+        explanations = result['explanations']
+        detailed_tree_data = result['detailed_tree_data']
+        ai_interpretation = result['ai_interpretation']
+        date_range = result['date_range']
         
-        period_anomalies, period_deviations, _, period_nps_values = analyze_result
-        print(f"🔍 DEBUG ANALYZE_PERIOD: period_nps_values type: {type(period_nps_values)}", file=sys.stderr)
-        print(f"🔍 DEBUG ANALYZE_PERIOD: period_nps_values content: {period_nps_values}", file=sys.stderr)
-        
-        # DEBUG: Check if NPS values are available
-        print(f"🔍 DEBUG: NPS values available: {list(period_nps_values.keys()) if period_nps_values else 'None'}")
-        if period_nps_values:
-            for node, nps_data in list(period_nps_values.items())[:3]:  # Show first 3
-                print(f"   {node}: {nps_data}")
-        
-        # Get date range for this period
-        date_range = interpreter._get_period_date_range(period, aggregation_days)
-        if date_range:
-            start_date, end_date = date_range
-            print(f"📅 Date Range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
-            date_range_str = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
-        else:
-            date_range_str = "Unknown dates"
-        
-        # Generate parent interpretations
-        parent_interpretations = generate_parent_interpretations(period_anomalies)
-        
-        # Collect explanations for anomalous nodes (quietly, no verbose output)
-        explanations = {}
-        nodes_with_anomalies = [node for node, state in period_anomalies.items() if state in ['+', '-']]
-
-        # ENHANCEMENT: Always include root segment (--segment parameter) in causal analysis
-        # Get the root segment for the analysis
-        root_segment = normalize_segment_to_root(segment)
-        print(f"🔍 DEBUG ROOT SEGMENT: segment='{segment}' -> root_segment='{root_segment}'")
-        
-        # Check if root segment has valid data (not "?" or missing)
-        root_state = period_anomalies.get(root_segment, "?")
-        print(f"🔍 DEBUG ROOT STATE: root_state='{root_state}', period_anomalies keys: {list(period_anomalies.keys())}")
-        
-        # Always recalculate root segment's anomaly state based on deviation (override detector's decision)
-        root_deviation = period_deviations.get(root_segment, 0.0)
-        print(f"🔍 DEBUG ROOT CALCULATION: root_deviation={root_deviation}")
-        if root_deviation > 0:
-            root_state = "+"  # Positive anomaly
-        elif root_deviation < 0:
-            root_state = "-"  # Negative anomaly
-        else:
-            root_state = "N"  # Neutral (only when deviation is exactly 0)
-        # Always update root segment in period_anomalies with calculated state
-        period_anomalies[root_segment] = root_state
-        print(f"      🔍 DEBUG ROOT: Override {root_segment} state='{root_state}' based on deviation={root_deviation}")
-        
-        # Always add root segment to the analysis, even if no other anomalies exist
-        if root_segment not in nodes_with_anomalies and root_state != "?":
-            nodes_with_anomalies.append(root_segment)
-            if len(nodes_with_anomalies) == 1:
-                print(f"      🔍 ENHANCED: Analyzing root segment {root_segment} (state '{root_state}', no child anomalies)")
-            else:
-                print(f"      🔍 ENHANCED: Analyzing {len(nodes_with_anomalies)} segments (added {root_segment} with state '{root_state}' + {len([n for n in nodes_with_anomalies if n != root_segment])} anomalous nodes)")
-        elif root_segment in nodes_with_anomalies:
-            print(f"      📊 Analyzing {len(nodes_with_anomalies)} anomalous segments (including {root_segment})")
-        else:
-            print(f"      📊 Analyzing {len(nodes_with_anomalies)} anomalous segments ({root_segment} has no valid data)")
-        
-        # PRIORITY: Move root segment to the front to ensure it's always processed first
-        if root_segment in nodes_with_anomalies:
-            nodes_with_anomalies.remove(root_segment)
-            nodes_with_anomalies.insert(0, root_segment)
-            print(f"      🎯 PRIORITY: {root_segment} moved to front of processing queue")
-
-        if nodes_with_anomalies:
-            # Collect explanations for anomalous nodes
-            total_nodes = len(nodes_with_anomalies)
-            successful_explanations = 0
-
-            print(f"      📊 Processing {total_nodes} anomalous nodes for causal explanations (PARALLEL EXECUTION)...")
-            
-            # Semaphore to limit concurrent agents (prevent API rate limits or resource exhaustion)
-            concurrency_limit = 5
-            sem = asyncio.Semaphore(concurrency_limit)
-            
-            async def process_node_anomaly(i, node_path):
-                async with sem:
-                    try:
-                        # Create an ISOLATED interpreter for this task to prevent state conflicts
-                        # FlexibleAnomalyInterpreter is not thread/async-safe for shared use because it resets self.causal_agent
-                        node_interpreter = FlexibleAnomalyInterpreter(
-                            data_folder, 
-                            pbi_collector=pbi_collector, 
-                            causal_filter=causal_filter, 
-                            detection_mode=detector.detection_mode, 
-                            comparison_start_date=comparison_start_date, 
-                            comparison_end_date=comparison_end_date, 
-                            environment=environment
-                        )
-                        
-                        anomaly_state = period_anomalies.get(node_path, "?")
-                        deviation_value = period_deviations.get(node_path, 0.0)  # Get actual deviation
-                        # Debug logs removed to reduce noise in parallel execution
-                        
-                        # For Global node, determine anomaly state based on sign of change
-                        if node_path == "Global" and anomaly_state == "?":
-                            if deviation_value > 0:
-                                anomaly_state = "+"
-                            elif deviation_value < 0:
-                                anomaly_state = "-"
-                            else:
-                                anomaly_state = "N"
-                        
-                        print(f"      ⏳ [{i}/{total_nodes}] Starting analysis for {node_path}...")
-                        
-                        # Calculate correct date range if analysis_date is available
-                        start_date, end_date = None, None
-                        analysis_date = analysis_data.get('analysis_date')
-                        if analysis_date:
-                            start_date, end_date = calculate_period_date_range(analysis_date, period, aggregation_days)
-                        
-                        # Build enriched NPS context for the causal agent
-                        nps_context = ""
-                        comparison_context = ""
-                        if period_nps_values and node_path in period_nps_values:
-                            nps_data = period_nps_values[node_path]
-                            if isinstance(nps_data, dict):
-                                current_nps = nps_data.get('current', 'N/A')
-                                baseline_nps = nps_data.get('baseline', 'N/A')
-                                nps_context = f"Current NPS: {current_nps}, Baseline NPS: {baseline_nps}"
-                                
-                                # Generate comparison context
-                                baseline_description = nps_data.get('baseline_description', None)
-                                comparison_context = generate_comparison_context(
-                                    analysis_data.get('anomaly_detection_mode', 'target'), 
-                                    analysis_data.get('aggregation_days', 7),
-                                    analysis_data.get('baseline_periods', 7),
-                                    baseline_description
-                                )
-                            else:
-                                nps_context = f"NPS: {nps_data}"
-                        
-                        explanation = await asyncio.wait_for(
-                            node_interpreter.explain_anomaly(
-                                node_path=node_path,
-                                target_period=period,
-                                aggregation_days=aggregation_days,
-                                anomaly_state=anomaly_state,
-                                start_date=start_date,
-                                end_date=end_date,
-                                anomaly_magnitude=deviation_value,
-                                nps_context=nps_context,
-                                causal_filter=causal_filter,
-                                anomaly_detection_mode=analysis_data.get('anomaly_detection_mode', 'target'),
-                                comparison_context=comparison_context,
-                                baseline_periods=analysis_data.get('baseline_periods', 7)
-                            ),
-                            timeout=600.0
-                        )
-                        
-                        # Capture logs
-                        investigation_log = []
-                        if hasattr(node_interpreter, 'get_last_causal_log'):
-                            investigation_log = node_interpreter.get_last_causal_log()
-                            
-                        print(f"         ✅ [{i}/{total_nodes}] FINISHED: {node_path} ({len(explanation)} chars)")
-                        return node_path, explanation, investigation_log, True
-                    except Exception as e:
-                        error_details = f"Type: {type(e).__name__}, Message: '{str(e)}'"
-                        print(f"         ❌ [{i}/{total_nodes}] FAILED: {node_path} - {error_details}")
-                        import traceback
-                        traceback.print_exc()
-                        return node_path, f"Analysis failed: {error_details}", [], False
-
-            # Create tasks
-            tasks = [process_node_anomaly(i, node) for i, node in enumerate(nodes_with_anomalies, 1)]
-            
-            # Initialize detailed data structure
-            detailed_tree_data = {}
-            
-            # Run tasks and process as they complete
-            for task in asyncio.as_completed(tasks):
-                node_path, result, log, success = await task
-                explanations[node_path] = result
-                
-                # Store structured log
-                if success and log:
-                    detailed_tree_data[node_path] = {
-                        "explanation": result,
-                        "tool_trace": log
-                    }
-                
-                if success:
-                    successful_explanations += 1
-            
-            print(f"      📋 Summary: {successful_explanations}/{total_nodes} explanations collected successfully")
-        
-        # Debug: Print collected explanations
-        debug_print(f"📊 Collected {len(explanations)} explanations:")
-        for node_path, explanation in explanations.items():
-            debug_print(f"  {node_path}: {explanation[:200] if explanation else 'None'}...")
-        
-        # Show the enhanced tree with explanations and parent interpretations
+        # Print tree for this period
         analysis_date = analysis_data.get('analysis_date')
         date_parameter = analysis_data.get('date_parameter')
         await print_enhanced_tree_with_explanations_and_interpretations(
@@ -552,138 +637,49 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             aggregation_days, period, date_range, segment, analysis_date, date_parameter, period_nps_values
         )
         
-        # AI Interpretation (ensure it completes)
-        ai_interpretation = None
-        if ai_available and nodes_with_anomalies:
-            print(f"\n🤖 AI INTERPRETATION:")
+        # Print AI interpretation if available
+        if ai_interpretation and "AI interpretation failed" not in ai_interpretation:
+            print(f"\n🤖 Period {period} AI INTERPRETATION:")
             print("-" * 40)
-            
-            try:
-                # Always use the complete tree format with integrated causal explanations
-                print("🔍 DEBUG: About to call build_ai_input_string", file=sys.stderr)
-                print(f"   period: {period}", file=sys.stderr)
-                print(f"   period_anomalies keys: {list(period_anomalies.keys()) if period_anomalies else None}", file=sys.stderr)
-                print(f"   explanations keys: {list(explanations.keys()) if explanations else None}", file=sys.stderr)
-                print(f"   segment: {segment}", file=sys.stderr)
-
-                # Generate comparison context for interpreter
-                interpreter_comparison_context = generate_comparison_context(
-                    analysis_data.get('anomaly_detection_mode', 'mean'),
-                    analysis_data.get('aggregation_days', 1),
-                    analysis_data.get('baseline_periods', 7)
-                )
-
-                try:
-                    print("🔍 DEBUG: Calling build_ai_input_string...", file=sys.stderr)
-                    ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                                     parent_interpretations, explanations, date_range, segment, period_nps_values,
-                                                     comparison_context=interpreter_comparison_context)
-                    print("🔍 DEBUG: build_ai_input_string returned successfully", file=sys.stderr)
-                    print(f"🔍 DEBUG: Received ai_input of length: {len(ai_input) if ai_input else 0}", file=sys.stderr)
-                except Exception as build_e:
-                    print(f"🔍 DEBUG: build_ai_input_string failed with exception: {build_e}", file=sys.stderr)
-                    import traceback
-                    traceback.print_exc()
-                    raise
-                
-                print(f"🔍 Using complete tree format with integrated explanations: {len(ai_input)} characters")
-                
-                print("🔍 DEBUG: About to call ai_agent.interpret_anomaly_tree", file=sys.stderr)
-                
-                # Extract date from date_range if available
-                date_param = None
-                if date_range and len(date_range) >= 2:
-                    range_start_date, range_end_date = date_range
-                    if range_start_date and range_end_date:
-                        date_param = f"{range_start_date.strftime('%Y-%m-%d')} to {range_end_date.strftime('%Y-%m-%d')}"
-                
-                try:
-                    ai_interpretation = await asyncio.wait_for(
-                        ai_agent.interpret_anomaly_tree(ai_input, date_param, segment),
-                        timeout=600.0
-                    )
-                    print("🔍 DEBUG: ai_agent.interpret_anomaly_tree completed successfully", file=sys.stderr)
-                except asyncio.TimeoutError:
-                    print("🔍 DEBUG: ai_agent.interpret_anomaly_tree timed out after 600 seconds", file=sys.stderr)
-                    raise
-                except Exception as interp_e:
-                    print(f"🔍 DEBUG: ai_agent.interpret_anomaly_tree failed: {interp_e}", file=sys.stderr)
-                    import traceback
-                    traceback.print_exc()
-                    raise
-                
-                print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
-                
-                # Extract only the executive synthesis section
-                if "📋 SÍNTESIS EJECUTIVA FINAL" in ai_interpretation:
-                    # Find the synthesis section
-                    synthesis_start = ai_interpretation.find("📋 SÍNTESIS EJECUTIVA FINAL")
-                    if synthesis_start != -1:
-                        # Find the end (next major section or end of text)
-                        synthesis_section = ai_interpretation[synthesis_start:]
-                        end_markers = ["---", "✅ **ANÁLISIS COMPLETADO**", "*Este análisis utiliza"]
-                        
-                        synthesis_end = len(synthesis_section)
-                        for marker in end_markers:
-                            marker_pos = synthesis_section.find(marker)
-                            if marker_pos != -1:
-                                synthesis_end = min(synthesis_end, marker_pos)
-                        
-                        final_synthesis = synthesis_section[:synthesis_end].strip()
-                        print("=" * 80)
-                        print(final_synthesis)
-                        print("=" * 80)
-                    else:
-                        print("⚠️ No se encontró la sección de síntesis ejecutiva")
-                        print(ai_interpretation[:1000] + "..." if len(ai_interpretation) > 1000 else ai_interpretation)
-                else:
-                    print("⚠️ Formato de interpretación inesperado")
-                    print(ai_interpretation[:1000] + "..." if len(ai_interpretation) > 1000 else ai_interpretation)
-                
-            except Exception as e:
-                ai_interpretation = f"AI interpretation failed: {str(e)}"
-                print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
-                print(ai_interpretation)
+            if "📋 SÍNTESIS EJECUTIVA FINAL" in ai_interpretation:
+                synthesis_start = ai_interpretation.find("📋 SÍNTESIS EJECUTIVA FINAL")
+                if synthesis_start != -1:
+                    synthesis_section = ai_interpretation[synthesis_start:]
+                    end_markers = ["---", "✅ **ANÁLISIS COMPLETADO**", "*Este análisis utiliza"]
+                    synthesis_end = len(synthesis_section)
+                    for marker in end_markers:
+                        marker_pos = synthesis_section.find(marker)
+                        if marker_pos != -1:
+                            synthesis_end = min(synthesis_end, marker_pos)
+                    final_synthesis = synthesis_section[:synthesis_end].strip()
+                    print("=" * 80)
+                    print(final_synthesis)
+                    print("=" * 80)
         
-        # Save detailed structured JSON
+        # Save detailed JSON
         try:
-            # Construct hierarchical JSON
-            # Normalize root segment name for tree construction
             root_name = segment
             root_node = {"name": root_name, "children": []}
             
-            # Helper to find or create node in tree
             def find_or_create_node(current_node, path_parts):
                 if not path_parts:
                     return current_node
-                
                 target_name = path_parts[0]
-                # Check if child exists
                 found_child = None
                 if "children" not in current_node:
                     current_node["children"] = []
-                    
                 for child in current_node["children"]:
                     if child["name"] == target_name:
                         found_child = child
                         break
-                
                 if not found_child:
                     found_child = {"name": target_name, "children": []}
                     current_node["children"].append(found_child)
-                    
                 return find_or_create_node(found_child, path_parts[1:])
 
-            # Populate tree with all nodes involved in the analysis
-            # Combine period_anomalies keys and detailed_tree_data keys
             all_node_paths = set(list(period_anomalies.keys()) + list(detailed_tree_data.keys()))
             
             for node_path in sorted(list(all_node_paths)):
-                # Handle path parsing based on whether it starts with segment or not
-                # If segment is "Global", paths like "Global/LH" work fine
-                # If segment is "Global/LH", we need to handle "Global/LH/Business" correctly
-                
-                path_parts = []
                 if node_path == root_name:
                     target_node = root_node
                 elif node_path.startswith(root_name + "/"):
@@ -691,22 +687,16 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
                     path_parts = rel_path.split("/")
                     target_node = find_or_create_node(root_node, path_parts)
                 else:
-                    # Node path doesn't start with segment (shouldn't happen usually but robust check)
-                    # Treat as separate tree or skip? Let's skip for now to maintain hierarchy
                     continue
                 
-                # Add data to the node
                 target_node["anomaly_state"] = period_anomalies.get(node_path, "?")
                 target_node["deviation"] = period_deviations.get(node_path, 0.0)
                 
-                # Attach causal analysis if available
                 if node_path in detailed_tree_data:
                     target_node["causal_analysis"] = detailed_tree_data[node_path]
                 elif node_path in explanations:
-                     # Fallback for nodes that have explanation but no structured log (e.g. failures or non-agent)
-                     target_node["causal_analysis"] = {"explanation": explanations[node_path]}
+                    target_node["causal_analysis"] = {"explanation": explanations[node_path]}
 
-            # Add metadata
             json_output = {
                 "metadata": {
                     "date_range": date_range_str,
@@ -719,52 +709,41 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
                 "ai_interpretation": ai_interpretation
             }
             
-            # Save file
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            # Create safe filename
             safe_date = date_range_str.replace(" ", "_").replace(":", "-").replace("to", "_")
             safe_segment = segment.replace("/", "_")
             
-            # Logic for saving based on environment
             saved_successfully = False
             
             if environment == "prod":
                 try:
                     s3_filename = f"detailed_tree_{safe_date}_{safe_segment}_{timestamp_str}.json"
-                    # Initialize uploader
                     s3_uploader = S3ReportUploader(environment=environment)
                     s3_key = await s3_uploader.upload_mapped_info(json_output, s3_filename)
-                    
                     if s3_key:
-                        print(f"      ☁️ Uploaded detailed hierarchical analysis to S3: {s3_key}")
+                        print(f"      ☁️ Period {period}: Uploaded to S3: {s3_key}")
                         saved_successfully = True
-                    else:
-                        print(f"      ⚠️ S3 upload failed, falling back to local file")
                 except Exception as s3_error:
-                    print(f"      ⚠️ S3 upload error: {s3_error}")
+                    print(f"      ⚠️ Period {period}: S3 upload error: {s3_error}")
             
-            # Local save (if env is local OR if prod upload failed)
             if not saved_successfully:
                 filename = f"logs/detailed_tree_{safe_date}_{safe_segment}_{timestamp_str}.json"
-                
                 os.makedirs("logs", exist_ok=True)
                 with open(filename, 'w', encoding='utf-8') as f:
                     json.dump(json_output, f, indent=2, ensure_ascii=False)
-                print(f"      💾 Saved detailed hierarchical analysis to: {filename}")
+                print(f"      💾 Period {period}: Saved to: {filename}")
             
         except Exception as e:
-            print(f"      ⚠️ Failed to save detailed JSON: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"      ⚠️ Period {period}: Failed to save JSON: {e}")
 
-        # Collect period data
+        # Collect period data for summary
         period_data = {
             'period': period,
             'date_range': date_range_str,
             'ai_interpretation': ai_interpretation or "No AI interpretation available"
         }
         all_periods_data.append(period_data)
-    
+
     # Summary of all 7 periods
     print(f"\n📋 SUMMARY OF 7 PERIODS ANALYZED:")
     print("-" * 40)
