@@ -60,8 +60,8 @@ def generate_comparison_context(anomaly_detection_mode: str, aggregation_days: i
         if baseline_description:
             # For weekly analysis, don't use "media" terminology
             if aggregation_days >= 7:
-            return f"• **Comparación**: vs {baseline_description}"
-        else:
+                return f"• **Comparación**: vs {baseline_description}"
+            else:
                 # For daily analysis, use "media" terminology
                 return f"• **Comparación**: vs media de los {baseline_description}"
         else:
