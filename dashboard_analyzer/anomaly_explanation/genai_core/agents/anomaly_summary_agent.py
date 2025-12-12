@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from ..agents.agent import Agent
 from ..llms.openai_llm import OpenAiLLM
 from ..llms.aws_llm import AWSLLM
-from ..utils.enums import LLMType, MessageType, get_default_llm_type
+from ..utils.enums import LLMType, MessageType, AgentName, get_default_llm_type
 from ..message_history import MessageHistory
 
 # Import S3 uploader
@@ -408,7 +408,7 @@ class AnomalySummaryAgent:
             if not weekly_comparative_analysis and not daily_single_analyses:
                 return "⚠️ No data provided for comprehensive summary generation"
             
-            # Format daily analyses for step 1
+            # Format daily analyses
             daily_analyses_formatted = []
             for daily_analysis in daily_single_analyses:
                 date = daily_analysis.get('date', 'Unknown')
@@ -423,70 +423,86 @@ class AnomalySummaryAgent:
             self.logger.info(f"🔄 Starting stratified summary: {num_days} days to analyze")
             
             # =========================================================
-            # STEP 1: Identify relevant days
+            # Parse weekly analysis into sections
             # =========================================================
-            self.logger.info("📋 STEP 1: Identifying relevant days...")
+            sections = self._parse_weekly_sections(weekly_comparative_analysis)
+            self.logger.info(f"📊 Parsed {len(sections)} sections from weekly analysis")
             
-            step1_config = self.config.get('step1_identify_days', {})
+            # =========================================================
+            # STEP 1: Analyze connections for each section
+            # =========================================================
+            self.logger.info("📋 STEP 1: Analyzing section connections...")
+            
+            step1_config = self.config.get('step1_analyze_section', {})
             step1_system = step1_config.get('system_prompt', '')
-            step1_input = step1_config.get('input_template', '').format(
-                num_days=num_days,
-                daily_analyses=daily_analyses_combined
-            )
+            step1_template = step1_config.get('input_template', '')
             
-            message_history_step1 = MessageHistory()
-            message_history_step1.create_and_add_message(content=step1_system, message_type=MessageType.SYSTEM)
-            message_history_step1.create_and_add_message(content=step1_input, message_type=MessageType.USER)
+            daily_context_paragraphs = {}
             
-            response1, _, _ = await self.agent.invoke(messages=message_history_step1.get_messages())
-            relevant_days_summary = response1.content if hasattr(response1, 'content') else str(response1)
+            for section_name, section_content in sections.items():
+                self.logger.info(f"   📌 Analyzing: {section_name}")
+                
+                # Filter daily analyses for this section
+                daily_for_section = self._filter_daily_for_section(
+                    daily_analyses_combined, 
+                    section_name
+                )
+                
+                step1_input = step1_template.format(
+                    section_name=section_name,
+                    weekly_section=section_content,
+                    daily_analyses_for_section=daily_for_section
+                )
+                
+                message_history = MessageHistory()
+                message_history.create_and_add_message(content=step1_system, message_type=MessageType.SYSTEM)
+                message_history.create_and_add_message(content=step1_input, message_type=MessageType.USER)
+                
+                response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+                paragraph = response.content if hasattr(response, 'content') else str(response)
+                
+                daily_context_paragraphs[section_name] = paragraph.strip()
+                self.logger.info(f"   ✅ Generated context for {section_name}: {len(paragraph)} chars")
             
-            self.logger.info(f"✅ Step 1 complete: Identified relevant days")
+            self.logger.info(f"✅ Step 1 complete: Generated {len(daily_context_paragraphs)} context paragraphs")
             
             # =========================================================
-            # STEP 2: Extract data from relevant days
+            # STEP 2: Integrate into final report
             # =========================================================
-            self.logger.info("📊 STEP 2: Extracting data from relevant days...")
+            self.logger.info("📝 STEP 2: Integrating into final report...")
             
-            step2_config = self.config.get('step2_extract_data', {})
+            # Format the context paragraphs for Step 2
+            context_formatted = "\n\n".join([
+                f"**{name}:**\n{para}" 
+                for name, para in daily_context_paragraphs.items()
+            ])
+            
+            step2_config = self.config.get('step2_integrate_final', {})
             step2_system = step2_config.get('system_prompt', '')
             step2_input = step2_config.get('input_template', '').format(
-                relevant_days_summary=relevant_days_summary,
-                daily_analyses_filtered=daily_analyses_combined
-            )
-            
-            message_history_step2 = MessageHistory()
-            message_history_step2.create_and_add_message(content=step2_system, message_type=MessageType.SYSTEM)
-            message_history_step2.create_and_add_message(content=step2_input, message_type=MessageType.USER)
-            
-            response2, _, _ = await self.agent.invoke(messages=message_history_step2.get_messages())
-            extracted_daily_data = response2.content if hasattr(response2, 'content') else str(response2)
-            
-            self.logger.info(f"✅ Step 2 complete: Extracted daily data")
-            
-            # =========================================================
-            # STEP 3: Integrate into weekly report
-            # =========================================================
-            self.logger.info("📝 STEP 3: Integrating into weekly report...")
-            
-            step3_config = self.config.get('step3_integrate_report', {})
-            step3_system = step3_config.get('system_prompt', '')
-            step3_input = step3_config.get('input_template', '').format(
                 weekly_analysis=weekly_comparative_analysis,
-                extracted_daily_data=extracted_daily_data
+                daily_context_paragraphs=context_formatted
             )
             
-            message_history_step3 = MessageHistory()
-            message_history_step3.create_and_add_message(content=step3_system, message_type=MessageType.SYSTEM)
-            message_history_step3.create_and_add_message(content=step3_input, message_type=MessageType.USER)
+            message_history_final = MessageHistory()
+            message_history_final.create_and_add_message(content=step2_system, message_type=MessageType.SYSTEM)
+            message_history_final.create_and_add_message(content=step2_input, message_type=MessageType.USER)
             
-            response3, _, _ = await self.agent.invoke(messages=message_history_step3.get_messages())
-            final_report = response3.content if hasattr(response3, 'content') else str(response3)
+            response_final, _, _ = await self.agent.invoke(messages=message_history_final.get_messages())
+            polished_report = response_final.content if hasattr(response_final, 'content') else str(response_final)
+            
+            if not polished_report or len(polished_report.strip()) == 0:
+                self.logger.warning(f"⚠️ Step 2 returned empty response!")
+                polished_report = weekly_comparative_analysis
             
             # Add assistant response to message history for export
-            message_history_step3.create_and_add_message(content=final_report, message_type=MessageType.AI)
+            message_history_final.create_and_add_message(
+                content=polished_report, 
+                message_type=MessageType.AI,
+                agent=AgentName.CONVERSATIONAL
+            )
             
-            self.logger.info(f"✅ Step 3 complete: Final report generated")
+            self.logger.info(f"✅ Step 2 complete: Final report generated ({len(polished_report)} chars)")
             
             # =========================================================
             # Save debug files and export conversation
@@ -496,24 +512,22 @@ class AnomalySummaryAgent:
                 dbg_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
                 debug_path = f"dashboard_analyzer/summary_reports/summary_stratified_{dbg_ts}.md"
                 with open(debug_path, 'w', encoding='utf-8') as dbg:
-                    dbg.write("===== STEP 1: IDENTIFY RELEVANT DAYS =====\n\n")
-                    dbg.write(f"INPUT:\n{step1_input}\n\n")
-                    dbg.write(f"OUTPUT:\n{relevant_days_summary}\n\n")
-                    dbg.write("===== STEP 2: EXTRACT DAILY DATA =====\n\n")
-                    dbg.write(f"OUTPUT:\n{extracted_daily_data}\n\n")
-                    dbg.write("===== STEP 3: FINAL REPORT =====\n\n")
-                    dbg.write(final_report)
+                    dbg.write("===== STEP 1: SECTION CONNECTIONS =====\n\n")
+                    for section_name, paragraph in daily_context_paragraphs.items():
+                        dbg.write(f"--- {section_name} ---\n{paragraph}\n\n")
+                    dbg.write("===== STEP 2: FINAL REPORT =====\n\n")
+                    dbg.write(polished_report)
                 self.logger.info(f"📝 Saved stratified debug to: {debug_path}")
             except Exception as e:
                 self.logger.warning(f"Could not write debug file: {e}")
             
-            # Export final conversation (step 3 only for JSON)
-            conversation_file = await self.export_conversation(message_history_step3, date_flight_local)
+            # Export final conversation
+            conversation_file = await self.export_conversation(message_history_final, date_flight_local)
             if conversation_file:
                 self.logger.info(f"🗂️ Summary conversation saved: {conversation_file}")
             
             # Upload to S3 if metadata is provided
-            if final_report and execution_metadata and weekly_analysis_params and daily_analysis_params and date_ranges:
+            if polished_report and execution_metadata and weekly_analysis_params and daily_analysis_params and date_ranges:
                 try:
                     self.logger.info("📤 Uploading comprehensive report to S3...")
                     s3_key = await self.s3_uploader.upload_comprehensive_report(
@@ -525,7 +539,7 @@ class AnomalySummaryAgent:
                         weekly_analysis_params=weekly_analysis_params,
                         daily_analysis_params=daily_analysis_params,
                         date_ranges=date_ranges,
-                        final_synthesis=final_report,
+                        final_synthesis=polished_report,
                         comparison_start_date=date_ranges.get('comparison_start_date'),
                         comparison_end_date=date_ranges.get('comparison_end_date')
                     )
@@ -534,7 +548,7 @@ class AnomalySummaryAgent:
                 except Exception as e:
                     self.logger.error(f"❌ Error uploading to S3: {str(e)}")
             
-            return final_report
+            return polished_report
             
         except Exception as e:
             self.logger.error(f"❌ Error in stratified summary: {str(e)}")
@@ -549,6 +563,97 @@ class AnomalySummaryAgent:
                 daily_analysis_params=daily_analysis_params,
                 date_ranges=date_ranges
             )
+    
+    def _parse_weekly_sections(self, weekly_analysis: str) -> Dict[str, str]:
+        """
+        Parse the weekly analysis into sections (Global, Economy SH, Business SH, etc.)
+        
+        Returns:
+            Dictionary mapping section names to their content
+        """
+        import re
+        
+        sections = {}
+        
+        # Define section patterns to look for
+        section_patterns = [
+            (r'GLOBAL', r'(?:📈\s*\*\*SÍNTESIS EJECUTIVA|Durante la semana)'),
+            (r'ECONOMY SH', r'\*\*ECONOMY SH[:\s]'),
+            (r'BUSINESS SH', r'\*\*BUSINESS SH[:\s]'),
+            (r'ECONOMY LH', r'\*\*ECONOMY LH[:\s]'),
+            (r'BUSINESS LH', r'\*\*BUSINESS LH[:\s]'),
+            (r'PREMIUM LH', r'\*\*PREMIUM LH[:\s]'),
+        ]
+        
+        # Find all section headers and their positions
+        section_positions = []
+        for section_name, pattern in section_patterns:
+            matches = list(re.finditer(pattern, weekly_analysis, re.IGNORECASE))
+            for match in matches:
+                section_positions.append((match.start(), section_name, match.group()))
+        
+        # Sort by position
+        section_positions.sort(key=lambda x: x[0])
+        
+        # Extract content for each section
+        for i, (pos, section_name, _) in enumerate(section_positions):
+            # Find end of this section (start of next section or end of text)
+            if i + 1 < len(section_positions):
+                end_pos = section_positions[i + 1][0]
+            else:
+                end_pos = len(weekly_analysis)
+            
+            content = weekly_analysis[pos:end_pos].strip()
+            
+            # Only keep if we don't already have this section (avoid duplicates)
+            if section_name not in sections:
+                sections[section_name] = content
+        
+        # If no sections found, use the whole text as GLOBAL
+        if not sections:
+            sections['GLOBAL'] = weekly_analysis
+        
+        self.logger.info(f"📊 Parsed sections: {list(sections.keys())}")
+        return sections
+    
+    def _filter_daily_for_section(self, daily_analyses: str, section_name: str) -> str:
+        """
+        Filter daily analyses to show only content relevant to a specific section.
+        
+        For GLOBAL, returns all daily analyses.
+        For specific cabins (Economy SH, Business LH, etc.), filters to show
+        only paragraphs/sections mentioning that cabin.
+        """
+        if section_name == 'GLOBAL':
+            # For global, return all daily analyses
+            return daily_analyses
+        
+        # Map section names to keywords to search for
+        keyword_map = {
+            'ECONOMY SH': ['economy sh', 'economy de sh', 'sh economy', 'short haul economy'],
+            'BUSINESS SH': ['business sh', 'business de sh', 'sh business', 'short haul business'],
+            'ECONOMY LH': ['economy lh', 'economy de lh', 'lh economy', 'long haul economy'],
+            'BUSINESS LH': ['business lh', 'business de lh', 'lh business', 'long haul business'],
+            'PREMIUM LH': ['premium lh', 'premium de lh', 'lh premium', 'long haul premium'],
+        }
+        
+        keywords = keyword_map.get(section_name, [section_name.lower()])
+        
+        # Split into daily entries
+        daily_entries = daily_analyses.split('---')
+        
+        # Filter entries that mention this section
+        relevant_entries = []
+        for entry in daily_entries:
+            entry_lower = entry.lower()
+            if any(kw in entry_lower for kw in keywords):
+                relevant_entries.append(entry.strip())
+        
+        if relevant_entries:
+            return "\n\n---\n\n".join(relevant_entries)
+        else:
+            # If no specific entries found, return all (better than nothing)
+            return daily_analyses
     
     def _format_periods_for_summary(self, periods_data: List[Dict[str, Any]]) -> str:
         """Format periods data into a structured text for AI analysis."""

@@ -13,84 +13,113 @@ shared_rules: |
   - **NO INVENTES:** Si falta un dato, omítelo o di que no está disponible.
 
 # =============================================================================
-# STEP 1: IDENTIFY RELEVANT DAYS
+# STEP 1: ANALYZE SECTION CONNECTIONS (se ejecuta N veces, una por sección)
 # =============================================================================
-step1_identify_days:
+step1_analyze_section:
   system_prompt: |
-    Eres un analista de NPS que identifica días con eventos significativos.
-    Tu tarea es revisar los análisis diarios y seleccionar SOLO los días que merecen mención en un informe semanal.
-
-    **Criterios de relevancia:**
-    - Variación de NPS > ±5 pts en alguna cabina
-    - Incidentes operativos críticos (cancelaciones masivas, huelgas, etc.)
-    - Rutas con NPS extremos (< -20 o > +30)
-    - Eventos que expliquen tendencias semanales
-
-    **Output esperado:** Lista estructurada de días relevantes con justificación.
+    Eres un analista de NPS que conecta el análisis semanal con los eventos diarios.
+    
+    Tu tarea es:
+    1. Leer el análisis SEMANAL de una cabina/segmento específico
+    2. Revisar los análisis DIARIOS de esa misma cabina
+    3. Identificar qué días son relevantes y POR QUÉ en relación al semanal
+    4. Generar UN PÁRRAFO de contexto diario listo para añadir al informe
 
   input_template: |
-    Analiza los siguientes {num_days} días e identifica cuáles son relevantes para incluir en el informe semanal:
+    **ANÁLISIS SEMANAL DE {section_name}:**
+    {weekly_section}
 
-    {daily_analyses}
+    ---
 
-    **INSTRUCCIONES:**
-    1. Para cada día, evalúa si tiene variaciones significativas (>±5 pts NPS)
-    2. Identifica incidentes operativos destacables
-    3. Marca los días SIN datos relevantes como "OMITIR"
+    **ANÁLISIS DIARIOS DE {section_name}:**
+    {daily_analyses_for_section}
 
+    ---
+
+    **TU TAREA:**
+    
+    Analiza la conexión entre el semanal y los días. Identifica:
+    
+    1. **¿Hay un día que explique la mayor parte del resultado semanal?**
+       - Si sí, detállalo con: fecha, variación, causa, ruta/evidencia
+       - Ejemplo: "El **30-nov** concentró la mayor caída (–26.4 pts) tras 32 incidentes operativos, afectando especialmente EZE–MAD (–15.1)"
+    
+    2. **¿Hay incidentes del semanal que se puedan conectar con días específicos?**
+       - Huelgas, casos de equipaje, cancelaciones masivas mencionadas en el semanal
+       - Indica en qué días ocurrieron
+       - Ejemplo: "La huelga en Italia mencionada se materializó el **27-nov** y **28-nov**, impactando MAD–MXP y BLQ–MAD"
+    
+    3. **¿Hay días con repuntes que NO se reflejan en el semanal (se diluyeron)?**
+       - Ejemplo: "El repunte del **24-nov** (+11.3 pts) fue compensado por las caídas posteriores"
+    
+    4. **¿Hay días con variaciones extremas (>±20 pts) que destacar?**
+       - Ejemplo: "Destaca el **29-nov** (+55.4 pts) por calidad de servicio en BOG–MAD (NPS 100.0)"
+
+    ---
+
+    **GENERA UN PÁRRAFO** (máximo 3-4 frases) que:
+    - Conecte el resultado semanal con los días clave
+    - Use datos concretos (fechas, variaciones, rutas, causas)
+    - Sea fluido y ejecutivo (NO uses jerga como "patrón de dominancia")
+    - Preserve la terminología de comparación del interpreter (puede ser "con respecto a la semana anterior" para análisis semanales o "con respecto a la media de los últimos 7 días" para análisis diarios)
+    
     **FORMATO DE RESPUESTA:**
-    Para cada día relevante, responde con:
     ```
-    📅 [FECHA]
-    - Cabinas afectadas: [lista]
-    - Variación más significativa: [cabina] [+/-X.X pts]
-    - Razón principal: [causa breve]
-    - Rutas destacadas: [si las hay]
+    A nivel diario, [conexión principal]. [Detalle de días clave con datos]. [Contraste o dilución si aplica].
     ```
-
-    Para días sin relevancia:
-    ```
-    📅 [FECHA]: OMITIR - [razón breve]
-    ```
+    
+    **EJEMPLO DE PÁRRAFO BUENO:**
+    "A nivel diario, este deterioro se concentró principalmente en el **30-nov**, cuando 32 incidentes operativos —incluyendo el caso SDQ–MAD con 159 maletas retenidas— hundieron el NPS en –26.4 pts. La huelga en Italia mencionada se manifestó el **27-nov** y **28-nov**, afectando las rutas MAD–MXP y BLQ–MAD. El repunte inicial del **24-nov** (+11.3 pts por confort y servicio) quedó eclipsado por estas caídas."
 
 # =============================================================================
-# STEP 2: EXTRACT DAILY DATA
+# STEP 2: INTEGRATE FINAL REPORT
 # =============================================================================
-step2_extract_data:
+step2_integrate_final:
   system_prompt: |
-    Eres un extractor de datos de NPS. Tu tarea es organizar la información de días relevantes
-    en un formato estructurado que facilite la integración posterior.
-
-    **Datos a extraer por cada cabina afectada:**
-    - NPS del día y variación vs baseline
-    - Causa principal (operativa, NCS, verbatims)
-    - Rutas más afectadas (top 2-3)
-    - Perfiles reactivos si están disponibles
+    Eres un editor ejecutivo de informes de NPS.
+    
+    Tu tarea es INTEGRAR los párrafos de contexto diario en el informe semanal,
+    PRESERVANDO todo el contenido semanal intacto.
 
   input_template: |
-    Extrae los datos clave de los siguientes días relevantes:
+    **INFORME SEMANAL COMPLETO:**
+    {weekly_analysis}
 
-    **DÍAS IDENTIFICADOS COMO RELEVANTES:**
-    {relevant_days_summary}
+    ---
 
-    **ANÁLISIS COMPLETOS DE ESOS DÍAS:**
-    {daily_analyses_filtered}
+    **PÁRRAFOS DE CONTEXTO DIARIO (uno por sección):**
+    {daily_context_paragraphs}
 
-    **INSTRUCCIONES:**
-    Para cada día y cada cabina afectada, extrae:
+    ---
 
+    **TU TAREA:**
+    
+    1. **COPIA** el informe semanal PALABRA POR PALABRA (no cambies nada)
+    2. **AÑADE** al final de cada sección el párrafo de contexto diario correspondiente
+    3. **MANTÉN** el formato Teams (negritas, saltos de línea, emojis)
+    
+    **ESTRUCTURA ESPERADA:**
     ```
-    📅 [FECHA] - [CABINA]
-    • NPS: [valor] ([variación] pts vs baseline)
-    • Causa: [descripción concisa con datos]
-    • Rutas: [ruta1 NPS X.X], [ruta2 NPS X.X]
-    • Perfiles: [si disponibles]
+    **ECONOMY LH: Deterioro por Cancelaciones**
+    [PÁRRAFO SEMANAL INTACTO - palabra por palabra]
+    
+    [PÁRRAFO DE CONTEXTO DIARIO - del input anterior]
     ```
 
-    **REGLAS:**
-    - COPIA los valores exactos del análisis original
-    - NO redondees ni recalcules
-    - Si un dato no está disponible, omítelo
+    **REGLAS ESTRICTAS:**
+    ❌ NO modifiques el contenido semanal
+    ❌ NO cambies cifras, SHAP values, rutas o perfiles
+    ❌ NO resumas ni condenses
+    ❌ NO añadas información que no esté en los inputs
+    
+    ✅ Copia el semanal exactamente
+    ✅ Añade cada párrafo diario al final de su sección correspondiente
+    ✅ Mantén formato Teams (negritas, saltos de línea)
+    ✅ Preserva la terminología de comparación del interpreter
+
+    ---
+
+    **GENERA EL INFORME FINAL:**
 
 # =============================================================================
 # STEP 3: INTEGRATE INTO WEEKLY REPORT
@@ -110,7 +139,8 @@ step3_integrate_report:
     4. **TERMINOLOGÍA OBLIGATORIA:**
        - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio". USA SIEMPRE **SH** y **LH**.
        - "SHAP", "Shapley" → "**ppts de NPS según Explanatory Drivers**"
-       - REEMPLAZA "vs L7d" por "con respecto a la semana anterior"
+       - **PRESERVA** la terminología de comparación que viene del interpreter (ej: "con respecto a la media de los últimos 7 días", "con respecto a la media de los últimos 7 períodos", etc.)
+       - **NUNCA** uses abreviaturas como "vs baseline", "vs L7d" o similares
     5. **FORMATO TEAMS:**
        - Usa **negritas** para: segmentos, métricas, fechas y variaciones
        - Usa listas (`•`) para enumerar días clave
@@ -149,7 +179,7 @@ step3_integrate_report:
     4. Orden de integración: Segmento Principal (párrafos 1 y 2), luego subsegmentos según jerarquía
     5. Identifica días especialmente reseñables en el detalle diario (en orden cronológico)
     6. NO cambies el contenido del análisis semanal del interpreter (ni cifras ni redondeos)
-    7. **TERMINOLOGÍA:** Reemplaza TODAS las menciones de "vs L7d", "vs L7D", "vs L7 días" por "con respecto a la semana anterior"
+    7. **TERMINOLOGÍA:** Preserva la terminología de comparación del interpreter. NO la cambies.
     8. NO añadas recomendaciones adicionales
     9. Haz el texto fluido y ejecutivo, no técnico, evitando la palabra "anomalía"
     10. Solo incluye días que tengan análisis relevantes (con caídas/subidas o datos significativos)
@@ -157,6 +187,101 @@ step3_integrate_report:
     12. **CRÍTICO**: Si hay datos en "ANÁLISIS DIARIO SINGLE", DEBES usarlos. NO digas que "no están disponibles" si están presentes en el input.
     13. **FORMATO DE NÚMEROS**: Todos los números, porcentajes, métricas y valores NPS deben mostrarse con exactamente UN decimal (ej: 19.8, -4.4, 93.5%)
     14. **ATRIBUCIÓN DE SEGMENTO**: Siempre que menciones un dato, indica a qué segmento pertenece (ej: "NPS 19.8 (Economy LH)", "OTP –4.0 pts (Business SH)")
+
+# =============================================================================
+# STEP 4: POLISH AND NARRATIVE COHERENCE
+# =============================================================================
+step4_polish_narrative:
+  system_prompt: |
+    Eres un editor ejecutivo especializado en informes de NPS.
+    
+    Recibirás un informe que tiene DOS partes:
+    1. **NARRATIVA SEMANAL**: El análisis semanal completo (NO TOCAR)
+    2. **BULLETS DIARIOS**: Listas de días con variaciones (INTEGRAR)
+    
+    Tu tarea es INYECTAR los bullets diarios dentro de la narrativa semanal,
+    de forma contextual y ejecutiva, SIN ALTERAR el contenido semanal existente.
+
+  input_template: |
+    **INFORME A PROCESAR:**
+    {draft_report}
+
+    ---
+
+    **TU TAREA:**
+    
+    El informe tiene:
+    - Párrafos de análisis semanal (con SHAP, rutas, perfiles, métricas...)
+    - Listas de bullets diarios (• **2025-11-24** – ...)
+    
+    Debes:
+    1. **COPIAR** todo el contenido semanal TAL CUAL (palabra por palabra, número por número)
+    2. **ELIMINAR** las listas de bullets diarios
+    3. **AÑADIR** al final de cada sección de cabina un párrafo que conecte el análisis semanal con los días relevantes
+
+    ---
+
+    **CÓMO CONECTAR SEMANAL CON DIARIO:**
+
+    ## 1. SI HAY UN DÍA DOMINANTE (explica >50% de la variación)
+    Cuéntalo con detalle: fecha, variación, causa principal, y datos del segmento.
+    
+    **Ejemplo:**
+    "Este deterioro se concentró principalmente en el **30-nov**, cuando 32 incidentes operativos —incluyendo el caso SDQ–MAD con 159 maletas retenidas— hundieron el NPS en –26.4 pts, afectando especialmente la ruta EZE–MAD (–15.1)."
+
+    ## 2. SI HAY UN INCIDENTE ESPECÍFICO EN EL SEMANAL (huelga, caso de equipaje, etc.)
+    Conecta ese incidente con los días en que se manifestó.
+    
+    **Ejemplo:**
+    "La huelga en Italia, identificada en el análisis semanal, se materializó principalmente el **27-nov** y **28-nov**, impactando las rutas MAD–MXP y BLQ–MAD con caídas de –10.4 pts."
+
+    ## 3. SI HAY DÍAS CON VARIACIONES EXTREMAS (>±20 pts)
+    Menciónalos brevemente con causa y evidencia.
+    
+    **Ejemplo:**
+    "Destaca el repunte excepcional del **29-nov** (+55.4 pts), donde la calidad de servicio y amabilidad de tripulación compensaron los incidentes operativos, especialmente en BOG–MAD (NPS 100.0)."
+
+    ## 4. SI LOS DÍAS MUESTRAN COMPENSACIÓN
+    Explica cómo se construyó el resultado semanal.
+    
+    **Ejemplo:**
+    "El resultado semanal (+1.9 pts) se construyó con dinámicas opuestas: los avances del **24-nov** (+4.2 pts) y **29-nov** (+21.1 pts) compensaron la caída del **28-nov** (–7.6 pts)."
+
+    ---
+
+    **REGLAS DE REDACCIÓN:**
+
+    ❌ **NO USAR:**
+    - Jerga técnica como "patrón de DOMINANCIA", "SINERGIA", "CANCELACIÓN"
+    - Frases genéricas como "hubo altibajos" o "dinámica temporal"
+    - Listas de bullets
+    
+    ✅ **SÍ USAR:**
+    - Lenguaje ejecutivo y fluido
+    - Datos concretos (fechas, variaciones, rutas, causas)
+    - Conexiones causales ("debido a", "como consecuencia de", "afectando especialmente")
+    - Referencias al análisis semanal ("la huelga mencionada anteriormente", "los incidentes identificados")
+
+    ---
+
+    **REGLAS ESTRICTAS:**
+
+    ❌ **PROHIBIDO:**
+    - Modificar, resumir o reescribir el contenido semanal
+    - Cambiar cifras, SHAP values, rutas o perfiles
+    - Omitir información del análisis semanal
+    - Dejar bullets diarios como lista
+    - Usar jerga técnica de patrones temporales
+    
+    ✅ **OBLIGATORIO:**
+    - Copiar el contenido semanal PALABRA POR PALABRA
+    - Añadir 1-2 frases de contexto diario al final de cada sección
+    - Conectar incidentes del semanal con días específicos
+    - Usar datos concretos (fechas, variaciones, rutas, causas)
+
+    ---
+
+    **GENERA EL INFORME FINAL:**
 
 # =============================================================================
 # LEGACY: Single-step mode (kept for backwards compatibility)
@@ -172,6 +297,8 @@ system_prompt: |
   2. **TERMINOLOGÍA OBLIGATORIA:**
      - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio" o similares. USA SIEMPRE **SH** y **LH**.
      - "SHAT", "Shapley" o "impacto en drivers" se traduce SIEMPRE como "**ppts de NPS según Explanatory Drivers**".
+     - **PRESERVA** la terminología de comparación del interpreter (ej: "con respecto a la media de los últimos 7 días")
+     - **NUNCA** uses abreviaturas como "vs baseline", "vs L7d" o similares.
   3. **NO INVENTES:** Si falta un dato, omítelo o di que no está disponible. NO calcules promedios si no se dan.
   4. **FORMATO TEAMS:**
      - Usa **negritas** para: **Segmentos**, **Métricas** (NPS, OTP, etc.), **Fechas** y **Variaciones** (números).
@@ -220,7 +347,7 @@ input_template: |
   4. Orden de integración: Segmento Principal (párrafos 1 y 2), luego subsegmentos según jerarquía
   5. Identifica días especialmente reseñables en el detalle diario (en orden cronológico)
   6. NO cambies el contenido del análisis semanal del interpreter (ni cifras ni redondeos)
-  7. **TERMINOLOGÍA:** Reemplaza TODAS las menciones de "vs L7d", "vs L7D", "vs L7 días" por "con respecto a la semana anterior"
+  7. **TERMINOLOGÍA:** Preserva la terminología de comparación del interpreter. NO la cambies.
   6. NO añadas recomendaciones adicionales
   7. Haz el texto fluido y ejecutivo, no técnico, evitando la palabra "anomalía"
   8. Solo incluye días que tengan análisis relevantes (con caídas/subidas o datos significativos)

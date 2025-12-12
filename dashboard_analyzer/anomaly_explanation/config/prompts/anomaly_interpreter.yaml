@@ -351,8 +351,8 @@ hierarchical_diagnostic_helpers:
     - Las rutas más afectadas
     - Los perfiles de cliente más reactivos
     
-    **Ejemplo de narrativa fluida:**
-    "La principal causa del deterioro fue el aumento de cancelaciones en LH, donde el NPS cayó de 17.9 a 12.1 (–5.7 pts vs L7d). Este impacto se evidenció en un empeoramiento de la puntualidad (–1.1 ppts según Explanatory Drivers), un incremento de +17 cancelaciones y +4 limitaciones de aeronave, afectando especialmente las rutas MAD–MCO (NPS –32.0, 17 pax) y JFK–MAD (NPS –14.5, 78 pax), aunque rutas como LIM-MAD (+10.4, 104 pax) mantuvieron buen rendimiento. Los pasajeros más sensibles fueron aquellos agrupados por región de residencia (spread 142.4 pts) y en vuelos code-share (spread 72.2 pts).
+    **Ejemplo de narrativa fluida (análisis SEMANAL):**
+    "La principal causa del deterioro fue el aumento de cancelaciones en LH, donde el NPS cayó de 17.9 a 12.1 (–5.7 pts con respecto a la semana anterior). Este impacto se evidenció en un empeoramiento de la puntualidad (–1.1 ppts según Explanatory Drivers), un incremento de +17 cancelaciones y +4 limitaciones de aeronave, afectando especialmente las rutas MAD–MCO (NPS –32.0, 17 pax) y JFK–MAD (NPS –14.5, 78 pax), aunque rutas como LIM-MAD (+10.4, 104 pax) mantuvieron buen rendimiento. Los pasajeros más sensibles fueron aquellos agrupados por región de residencia (spread 142.4 pts) y en vuelos code-share (spread 72.2 pts).
     
     En contraste, SH mostró una dinámica opuesta..."
     
@@ -372,7 +372,16 @@ hierarchical_diagnostic_helpers:
       • TODOS los verbatims/feedback (incluso si contradicen la tendencia)
       • TODOS los perfiles reactivos
     - **ATRIBUCIÓN OBLIGATORIA:** Cada métrica debe indicar a qué segmento pertenece
-    - **TERMINOLOGÍA DE COMPARACIÓN:** Usa "vs L7d", "vs semana anterior", etc. según aparezca en los datos
+    - **TERMINOLOGÍA DE COMPARACIÓN (CRÍTICO):** 
+      • Lee el "BASELINE REFERENCE" del contexto inicial (<tree_data>)
+      • USA EXACTAMENTE esa terminología para expresar las variaciones. Ejemplos:
+        - Si dice "vs semana anterior" → escribe "con respecto a la semana anterior"
+        - Si dice "vs últimos 7 días" → escribe "con respecto a los últimos 7 días"
+        - Si dice "vs media de los últimos 7 días" → escribe "con respecto a la media de los últimos 7 días"
+      • NUNCA uses abreviaturas como "vs L7d", "vs baseline" o similares
+      • La terminología debe ser explícita y ejecutiva
+      • Para análisis SEMANALES: usa "con respecto a la semana anterior" (sin "media")
+      • Para análisis DIARIOS: usa "con respecto a la media de los últimos 7 días" (con "media")
     - **PARA CABINAS SH:** Menciona valores NPS de IB y YW por separado, incluyendo SHAP de ambos
     - Si una cabina no tiene variaciones significativas, indica "mantuvo desempeño estable"
     

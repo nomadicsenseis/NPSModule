@@ -43,26 +43,39 @@ def generate_comparison_context(anomaly_detection_mode: str, aggregation_days: i
     
     Returns:
         String explaining the comparison context
+        
+    IMPORTANT TERMINOLOGY:
+    - For WEEKLY analysis (aggregation_days >= 7): "vs semana anterior" or "vs últimos X días" (NO "media")
+    - For DAILY analysis (aggregation_days == 1): "vs media de los últimos X días" (WITH "media")
     """
     if anomaly_detection_mode == 'vslast':
         if aggregation_days == 7:
-            return "• **Comparación**: vs última semana (período previo de 7 días)"
+            return "• **Comparación**: vs semana anterior"
         elif aggregation_days == 1:
-            return "• **Comparación**: vs día anterior (período previo de 1 día)"
+            return "• **Comparación**: vs día anterior"
         else:
             return f"• **Comparación**: vs período previo ({aggregation_days} días)"
     elif anomaly_detection_mode == 'vslast_dynamic':
-        # Use dynamic baseline description
+        # Use dynamic baseline description if provided
         if baseline_description:
-            return f"• **Comparación**: vs {baseline_description}"
+            # For weekly analysis, don't use "media" terminology
+            if aggregation_days >= 7:
+                return f"• **Comparación**: vs {baseline_description}"
+            else:
+                # For daily analysis, use "media" terminology
+                return f"• **Comparación**: vs media de los {baseline_description}"
         else:
-            # Fallback to traditional vslast behavior
-            return f"• **Comparación**: vs período previo ({aggregation_days} días)"
+            # Fallback based on aggregation days
+            if aggregation_days >= 7:
+                return f"• **Comparación**: vs semana anterior"
+            else:
+                return f"• **Comparación**: vs media de los últimos {baseline_periods} días"
     elif anomaly_detection_mode == 'mean':
         if aggregation_days == 1:
             return f"• **Comparación**: vs media de los últimos {baseline_periods} días"
         else:
-            return f"• **Comparación**: vs media de los últimos {baseline_periods} períodos ({aggregation_days} días cada uno)"
+            # For weekly/multi-day periods, don't use "media" - compare against previous period
+            return f"• **Comparación**: vs período anterior ({baseline_periods} períodos de {aggregation_days} días)"
     elif anomaly_detection_mode == 'target':
         return "• **Comparación**: vs target mensual establecido"
     else:
