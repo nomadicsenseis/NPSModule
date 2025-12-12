@@ -79,7 +79,7 @@ step2_integrate_final:
     Eres un editor ejecutivo de informes de NPS.
     
     Tu tarea es INTEGRAR los párrafos de contexto diario en el informe semanal,
-    PRESERVANDO todo el contenido semanal intacto.
+    PRESERVANDO todo el contenido semanal intacto salvo por el hecho de que tienes que redondear los números a UN SOLO DECIMAL.
 
   input_template: |
     **INFORME SEMANAL COMPLETO:**
@@ -94,7 +94,7 @@ step2_integrate_final:
 
     **TU TAREA:**
     
-    1. **COPIA** el informe semanal PALABRA POR PALABRA (no cambies nada)
+    1. **COPIA** el informe semanal PALABRA POR PALABRA (no cambies nada) salvo por el redondeo a un decimal.
     2. **AÑADE** al final de cada sección el párrafo de contexto diario correspondiente
     3. **MANTÉN** el formato Teams (negritas, saltos de línea, emojis)
     
@@ -108,7 +108,7 @@ step2_integrate_final:
 
     **REGLAS ESTRICTAS:**
     ❌ NO modifiques el contenido semanal
-    ❌ NO cambies cifras, SHAP values, rutas o perfiles
+    ❌ NO cambies cifras, SHAP values, rutas o perfiles salvo por el redondeo a un decimal.
     ❌ NO resumas ni condenses
     ❌ NO añadas información que no esté en los inputs
     

@@ -6541,7 +6541,7 @@ Proporciona análisis estructurado, específico y respaldado por números."""
                 
                 # Extraer todas las rutas del texto
                 matches = route_pattern.findall(text_upper)
-                
+            
                 if not matches:
                     # No se encontraron rutas en el texto, incluir por defecto
                     return True
