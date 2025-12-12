@@ -261,6 +261,7 @@ step4_polish_narrative:
     - Datos concretos (fechas, variaciones, rutas, causas)
     - Conexiones causales ("debido a", "como consecuencia de", "afectando especialmente")
     - Referencias al análisis semanal ("la huelga mencionada anteriormente", "los incidentes identificados")
+    - **UN SOLO DECIMAL** en todas las cifras (ej: –5.7 pts, +10.2 pts, NPS 45.3). NUNCA más de un decimal.
 
     ---
 
