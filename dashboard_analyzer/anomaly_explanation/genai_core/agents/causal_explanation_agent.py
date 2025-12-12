@@ -2658,36 +2658,40 @@ class CausalExplanationAgent:
             # Extract filters from node_path
             filters = self._get_chatbot_filters_from_node_path(node_path)
             
-            # OPTION 1: Try chatbot (preferred)
-            if self.chatbot_collector:
-                self.logger.info("🤖 Using chatbot for comparative verbatims analysis...")
-                
-                # Test connection
-                connection_success, connection_message = self.chatbot_collector.test_connection()
-                self.logger.info(f"🔍 Connection: {connection_message}")
-                
-                if connection_success:
-                    try:
-                        result = await self._analyze_verbatims_comparative_chatbot(
-                            node_path=node_path,
-                            target_start=start_date,
-                            target_end=end_date,
-                            comparison_start=comparison_start,
-                            comparison_end=comparison_end,
-                            filters=filters
-                        )
-                        
-                        if result:
-                            self.collected_data['verbatims'] = result
-                            self.logger.info("✅ Chatbot comparative analysis completed")
-                            return result
-                        else:
-                            self.logger.warning("⚠️ Chatbot analysis returned empty, falling back to PBI")
+            # In PROD environment, go directly to PBI (skip chatbot)
+            if self.environment == "prod":
+                self.logger.info("📊 PROD environment: Using PBI directly for comparative verbatims analysis...")
+            else:
+                # OPTION 1: Try chatbot (preferred) - only in non-prod environments
+                if self.chatbot_collector:
+                    self.logger.info("🤖 Using chatbot for comparative verbatims analysis...")
+                    
+                    # Test connection
+                    connection_success, connection_message = self.chatbot_collector.test_connection()
+                    self.logger.info(f"🔍 Connection: {connection_message}")
+                    
+                    if connection_success:
+                        try:
+                            result = await self._analyze_verbatims_comparative_chatbot(
+                                node_path=node_path,
+                                target_start=start_date,
+                                target_end=end_date,
+                                comparison_start=comparison_start,
+                                comparison_end=comparison_end,
+                                filters=filters
+                            )
                             
-                    except Exception as e:
-                        self.logger.warning(f"⚠️ Chatbot analysis failed: {e}, falling back to PBI")
+                            if result:
+                                self.collected_data['verbatims'] = result
+                                self.logger.info("✅ Chatbot comparative analysis completed")
+                                return result
+                            else:
+                                self.logger.warning("⚠️ Chatbot analysis returned empty, falling back to PBI")
+                                
+                        except Exception as e:
+                            self.logger.warning(f"⚠️ Chatbot analysis failed: {e}, falling back to PBI")
             
-            # OPTION 2: Fallback to PBI
+            # OPTION 2: PBI (default for prod, fallback for other environments)
             self.logger.info("📊 Using PBI for comparative verbatims analysis...")
             
             result = await self._analyze_verbatims_comparative_pbi(
@@ -2729,34 +2733,38 @@ class CausalExplanationAgent:
             # Extract filters from node_path
             filters = self._get_chatbot_filters_from_node_path(node_path)
             
-            # OPTION 1: Try chatbot (preferred)
-            if self.chatbot_collector:
-                self.logger.info("🤖 Using chatbot for single period verbatims analysis...")
-                
-                # Test connection
-                connection_success, connection_message = self.chatbot_collector.test_connection()
-                self.logger.info(f"🔍 Connection: {connection_message}")
-                
-                if connection_success:
-                    try:
-                        result = await self._analyze_verbatims_single_chatbot(
-                            node_path=node_path,
-                            start_date=start_date,
-                            end_date=end_date,
-                            filters=filters
-                        )
-                        
-                        if result:
-                            self.collected_data['verbatims'] = result
-                            self.logger.info("✅ Chatbot single period analysis completed")
-                            return result
-                        else:
-                            self.logger.warning("⚠️ Chatbot analysis returned empty, falling back to PBI")
+            # In PROD environment, go directly to PBI (skip chatbot)
+            if self.environment == "prod":
+                self.logger.info("📊 PROD environment: Using PBI directly for single period verbatims analysis...")
+            else:
+                # OPTION 1: Try chatbot (preferred) - only in non-prod environments
+                if self.chatbot_collector:
+                    self.logger.info("🤖 Using chatbot for single period verbatims analysis...")
+                    
+                    # Test connection
+                    connection_success, connection_message = self.chatbot_collector.test_connection()
+                    self.logger.info(f"🔍 Connection: {connection_message}")
+                    
+                    if connection_success:
+                        try:
+                            result = await self._analyze_verbatims_single_chatbot(
+                                node_path=node_path,
+                                start_date=start_date,
+                                end_date=end_date,
+                                filters=filters
+                            )
                             
-                    except Exception as e:
-                        self.logger.warning(f"⚠️ Chatbot analysis failed: {e}, falling back to PBI")
+                            if result:
+                                self.collected_data['verbatims'] = result
+                                self.logger.info("✅ Chatbot single period analysis completed")
+                                return result
+                            else:
+                                self.logger.warning("⚠️ Chatbot analysis returned empty, falling back to PBI")
+                                
+                        except Exception as e:
+                            self.logger.warning(f"⚠️ Chatbot analysis failed: {e}, falling back to PBI")
             
-            # OPTION 2: Fallback to PBI
+            # OPTION 2: PBI (default for prod, fallback for other environments)
             self.logger.info("📊 Using PBI for single period verbatims analysis...")
             
             result = await self._analyze_verbatims_single_pbi(
