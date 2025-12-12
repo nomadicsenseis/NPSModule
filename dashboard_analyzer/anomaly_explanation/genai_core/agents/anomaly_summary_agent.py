@@ -448,6 +448,11 @@ class AnomalySummaryAgent:
                     section_name
                 )
                 
+                # Skip sections without relevant daily data (except GLOBAL which always has data)
+                if not daily_for_section and section_name != 'GLOBAL':
+                    self.logger.info(f"   ⏭️ Skipping {section_name}: no specific daily data found")
+                    continue
+                
                 step1_input = step1_template.format(
                     section_name=section_name,
                     weekly_section=section_content,
@@ -576,13 +581,14 @@ class AnomalySummaryAgent:
         sections = {}
         
         # Define section patterns to look for
+        # Patterns match both "**ECONOMY SH:" and "ECONOMY SH:" formats
         section_patterns = [
-            (r'GLOBAL', r'(?:📈\s*\*\*SÍNTESIS EJECUTIVA|Durante la semana)'),
-            (r'ECONOMY SH', r'\*\*ECONOMY SH[:\s]'),
-            (r'BUSINESS SH', r'\*\*BUSINESS SH[:\s]'),
-            (r'ECONOMY LH', r'\*\*ECONOMY LH[:\s]'),
-            (r'BUSINESS LH', r'\*\*BUSINESS LH[:\s]'),
-            (r'PREMIUM LH', r'\*\*PREMIUM LH[:\s]'),
+            ('GLOBAL', r'(?:📈\s*\*\*SÍNTESIS EJECUTIVA|Durante la semana)'),
+            ('ECONOMY SH', r'(?:\*\*)?ECONOMY SH[:\s]'),
+            ('BUSINESS SH', r'(?:\*\*)?BUSINESS SH[:\s]'),
+            ('ECONOMY LH', r'(?:\*\*)?ECONOMY LH[:\s]'),
+            ('BUSINESS LH', r'(?:\*\*)?BUSINESS LH[:\s]'),
+            ('PREMIUM LH', r'(?:\*\*)?PREMIUM LH[:\s]'),
         ]
         
         # Find all section headers and their positions
@@ -652,8 +658,9 @@ class AnomalySummaryAgent:
         if relevant_entries:
             return "\n\n---\n\n".join(relevant_entries)
         else:
-            # If no specific entries found, return all (better than nothing)
-            return daily_analyses
+            # If no specific entries found for this cabin, return empty
+            # This prevents copying the GLOBAL paragraph to all sections
+            return ""
     
     def _format_periods_for_summary(self, periods_data: List[Dict[str, Any]]) -> str:
         """Format periods data into a structured text for AI analysis."""

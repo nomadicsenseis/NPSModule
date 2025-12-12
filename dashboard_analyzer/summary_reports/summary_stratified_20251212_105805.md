@@ -1,82 +1,24 @@
-# Summary Agent Test Output
-Generated: 2025-12-12T10:58:05.250808
+===== STEP 1: SECTION CONNECTIONS =====
 
-## Weekly Input
+--- GLOBAL ---
+A nivel diario, la subida semanal del NPS con respecto a la semana anterior se sustentó en los repuntes del 26-nov (+7.2 pts por sólido feedback en SH Business y LH Business) y del 25-nov (+5.3 pts), pero fue el 30-nov cuando la caída de –7.3 pts tras 358 incidentes operativos —especialmente en EZE–MAD y SDQ–MAD— moderó ese avance. La huelga en Italia se materializó el 28-nov con reprogramaciones en la ruta BLQ–MAD que tensionaron la Economy SH. Los impulsos del 24-nov (+3.7 pts) y 29-nov (+3.0 pts) no bastaron para contrarrestar el cierre de mes, explicando así la modesta variación semanal.
 
-```
-📈 **SÍNTESIS EJECUTIVA:**
+--- ECONOMY SH ---
+A nivel diario, la subida de 2,9 pts con respecto a la semana anterior se explicó sobre todo por los repuntes del 25-nov (+3,1 pts a 38,53) y del 26-nov (+3,1 pts a 38,53 con respecto a la media de los últimos 7 días), impulsados por un Young Wings destacado y un IB en sólido crecimiento. Estas ganancias compensaron las caídas del 27-nov (–1,9 pts tras 111 retrasos y 88 cancelaciones, especialmente en MAD–MXP) y del 30-nov (–0,9 pts por la merma de IB a 27,27 pts). Además, el alza interna de YW el 28-nov (+11,5 pts tras reprogramaciones por huelga en BLQ–MAD) se neutralizó en el balance semanal.
 
-Durante la semana del 2025-11-24 al 2025-11-30, hemos identificado tres causas principales que explican las variaciones de NPS. El resultado global fue una subida de 0.8135026512014392 pts con respecto a la semana anterior.
+--- BUSINESS SH ---
+A nivel diario, la ligera mejora semanal de Business SH (+1,90 pts con respecto a la semana anterior) oculta contrastes extremos entre IB y YW. El **28-nov** se concentró la mayor caída de YW (–35,4 pts) tras la huelga en Italia, con 72 cancelaciones, 91 retrasos y 143 pérdidas de conexión en BLQ–MAD/MAD–MXP. En paralelo, IB logró subidas de doble dígito, destacando el **29-nov** (+40,8 pts) por elogios a puntualidad y trato en rutas como LHR–MAD y BCN–MAD. Estos picos de IB fueron atenuados por el desplome de YW, explicando el modesto saldo semanal.
 
-El empuje más significativo se observó en SH Business IB, donde el NPS se situó en 51.90476190476191, con una subida de 12.689075630252113 pts con respecto a la semana anterior. Este avance se sustentó en una mejora de la puntualidad (4.266 ppts según Explanatory Drivers) y en un embarque más ágil (3.989 ppts según Explanatory Drivers), mientras que el OTP se mantuvo prácticamente estable (↘️0.0 según métricas operativas) y se registró reducción general de incidentes operativos. El feedback de clientes destacó la puntualidad y la amabilidad de la tripulación, y las rutas LHR-MAD (29 pax), BRU-MAD (9 pax) y MAD-MXP (6 pax) registraron los mejores resultados. Los segmentos más reactivos fueron CodeShare (spread 250.0 pts) y Residence Region (spread 246.7 pts).
+--- ECONOMY LH ---
+A nivel diario, el deterioro semanal de Economy LH se concentró en el 28-nov y 30-nov, cuando brotes de incidentes operativos en rutas como MAD–ORD y EZE–MAD (72 cancelaciones, 91 retrasos y 143 pérdidas de conexión el 28-nov; 68 cancelaciones y 63 retrasos el 30-nov) hundieron el NPS en –12.2 y –28.3 pts con respecto a la media de los últimos 7 días. Estas caídas superaron la mejora puntual del 24-nov (+9.5 pts, impulsada por feedback positivo en LIM–MAD) y diluyeron los repuntes de 25-nov y 26-nov. En conjunto, la acumulación de estos eventos explica la merma de –5.0 pts con respecto a la semana anterior.
 
-En contraste, SH Business YW cayó a un NPS de 20.0, con una disminución de 22.465753424657528 pts con respecto a la semana anterior. El interior de la aeronave empeoró (–6.757 ppts según Explanatory Drivers), el embarque se retrasó (–3.229 ppts según Explanatory Drivers) y la preparación de viaje se resintió (–3.196 ppts según Explanatory Drivers), acompañado de un aumento de mishandling de equipaje (+0.7 según métricas operativas). Aunque los incidentes operativos mostraron una reducción de retrasos (–126 eventos) y cancelaciones (–48 eventos) y un ligero incremento de “LIMITACION_AERONAVE” (+15 eventos) y “OTRAS_INCIDENCIAS” (+2 eventos), el feedback de clientes no reflejó quejas específicas.
+--- BUSINESS LH ---
+A nivel diario, el deterioro de la cabina Business LH que explica la caída semanal se concentró el 29-nov, cuando el NPS se derrumbó a 14.3 (–8.0 pts con respecto a la media de los últimos 7 días) tras 48 retrasos, 18 cancelaciones y 109 pérdidas de conexión en la ruta MAD–SJU. Una oleada inicial de incidentes el 24-nov (58 cancelaciones y 61 retrasos) ya había hundido el NPS hasta 15.6 (–6.7 pts vs media), reforzando el impacto de la caída semanal. Los fuertes repuntes del 26-nov (+24.3 pts a 46.7) y 27-nov (+20.5 pts a 42.9) impulsados por la atención VIP no lograron contrarrestar estas caídas y quedaron diluidos en el promedio semanal.
 
-En LH la caída fue generalizada, con un descenso de 5.741522806478244 pts con respecto a la semana anterior, impactando a Economy (9.485294117647069, –5.029473814842392 pts), Business (27.45098039215687, –4.712762297901609 pts) y Premium (22.80701754385965, –12.43888409548...
-```
+--- PREMIUM LH ---
+A nivel diario, el retroceso de 12.44 pts en el NPS de Premium LH con respecto a la semana anterior se concentró en los días 27 y 30 de noviembre. El 27-nov el NPS cayó a 4.17 (–11.3 pts con respecto a la media de los últimos 7 días) tras 436 incidentes operativos (88 cancelaciones y 111 retrasos, impactando GRU–MAD) y el 30-nov volvió a 4.17 (–11.3 pts) con 358 incidencias (68 cancelaciones y 63 retrasos en EZE–MAD). Aunque hubo repuntes el 25-nov (+23.4 pts en JFK–MAD) y el 26-nov (+42.8 pts en MAD–SCL) por la calidad de servicio, estos picos no alcanzaron para compensar las caídas extremas.
 
-## Daily Inputs (7 days)
-
-### 2025-11-242025-11-24
-```
-📈 **SÍNTESIS EJECUTIVA:**
-
-Durante el día 24 de noviembre de 2025, hemos identificado tres causas principales que explican las variaciones de NPS. El NPS global registró una subida de 3.7 pts con respecto a la media de los últimos 7 días.
-
-El primer hallazgo corresponde a la cabina Economy de SH, donde el NPS cayó –0.6 pts hasta 34.84486873508353 con respecto a la media de los últimos 7 días. Esta variación negativa estuvo concentrada en el subsegmento Young Wings (YW), que perdió –2.7 pts (34.7...
-```
-
-### 2025-11-252025-11-25
-```
-📈 **SÍNTESIS EJECUTIVA:**  
-Durante la semana del 25 de noviembre de 2025, hemos identificado dos fuerzas contrapuestas que explican la variación de NPS. A nivel global, el NPS subió 5.3 pts con respecto a la media de los últimos 7 días, impulsado por un feedback excepcional en determinados segmentos que compensó los efectos de un pico de cancelaciones y retrasos.
-
-En primer lugar, un repunte de incidentes operativos afectó negativamente a segmentos clave. Especialmente en Business LH, el NPS ca...
-```
-
-### 2025-11-262025-11-26
-```
-📈 **SÍNTESIS EJECUTIVA:**
-
-Durante el día 2025-11-26 se identificaron dos factores clave que impulsaron el alza de 7.2 pts del NPS Global con respecto a la media de los últimos 7 días. El segmento SH Business vio una mejora sostenida gracias al feedback de clientes sobre puntualidad y servicio, y el conjunto LH se elevó por un desempeño robusto en sus cabinas Business y Premium, pese a indicadores operativos neutros o levemente negativos.
-
-La atención positiva a bordo en SH Business y la percepc...
-```
-
-### 2025-11-272025-11-27
-```
-📈 **SÍNTESIS EJECUTIVA:**  
-Durante la semana del 27 de noviembre de 2025, hemos identificado cuatro causas principales que explican las variaciones de NPS. El resultado global muestra un incremento de 2.9 pts con respecto a la media de los últimos 7 días, impulsado por una mejora notable en Business LH que superó las caídas registradas en Economy SH y Premium LH.
-
-La cabina Economy de SH sufrió una pérdida de 1.9 pts (NPS 33.53 con respecto a la media de los últimos 7 días) debido al elevado vo...
-```
-
-### 2025-11-282025-11-28
-```
-📈 **SÍNTESIS EJECUTIVA:**  
-Durante la semana del 28 de noviembre de 2025, hemos identificado cuatro causas principales que explican las variaciones de NPS. El NPS Global registró una subida de 0.8 puntos con respecto a la media de los últimos 7 días.
-
-La mejora global oculta una gran divergencia entre LH y SH. En LH, Economy sufrió un fuerte deterioro por un brote de incidentes operativos en rutas clave, mientras que Business mostró una recuperación apoyada en la calidad de servicio a bordo. En...
-```
-
-### 2025-11-292025-11-29
-```
-📈 **SÍNTESIS EJECUTIVA:**
-
-Durante el día 29 de noviembre de 2025, hemos identificado cinco causas principales que explican las variaciones de NPS. El resultado global fue una subida de 3.0 pts con respecto a la media de los últimos 7 días.
-
-A nivel de red, el feedback de clientes centrado en puntualidad, comodidad y atención de la tripulación impulsó positivamente el NPS global. Aunque los indicadores operativos estuvieron dentro de rangos normales (Load Factor ↓ 0.85, OTP ↑ 1.90, Mishandling ↓...
-```
-
-### 2025-11-302025-11-30
-```
-📈 **SÍNTESIS EJECUTIVA:**  
-Durante el día 2025-11-30 hemos identificado tres factores clave que explican la caída de 7.3 pts en el NPS global con respecto a la media de los últimos 7 días. Una oleada de incidentes operativos impactó de forma sistémica a LH, mientras que en SH se observaron dinámicas contrapuestas entre Economy y Business.
-
-El descenso pronunciado en LH, con un NPS de –9.76 (–24.9 pts con respecto a la media de los últimos 7 días), se debe principalmente al elevado volumen de in...
-```
-
-## Final Output
+===== STEP 2: FINAL REPORT =====
 
 📈 **SÍNTESIS EJECUTIVA:**
 
