@@ -38,7 +38,6 @@ step1_analyze_section:
 
     **TU TAREA:**
     
-    Los datos diarios ya están filtrados para **{section_name}**.
     Analiza la conexión entre el semanal y los días. Identifica:
     
     1. **¿Hay un día que explique la mayor parte del resultado semanal?**

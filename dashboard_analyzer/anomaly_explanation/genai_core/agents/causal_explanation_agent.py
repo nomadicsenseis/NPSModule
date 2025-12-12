@@ -6473,7 +6473,14 @@ Proporciona análisis estructurado, específico y respaldado por números."""
 
     async def _filter_using_routes_dictionary(self, ncs_data: pd.DataFrame, target_haul: str, incident_col: str) -> pd.DataFrame:
         """
-        Filtra NCS usando el diccionario de rutas en lugar de keywords hardcodeados
+        Filtra NCS usando el diccionario de rutas de PBI.
+        
+        LÓGICA: Extrae rutas completas (XXX-YYY) del texto del incidente y las busca
+        en el diccionario de PBI para determinar su haul_aggr. Si el incidente menciona
+        una ruta del haul opuesto, se excluye.
+        
+        Ejemplo: Si target_haul='LH' y el incidente menciona 'MAD-BLQ' (que es SH según PBI),
+        el incidente se EXCLUYE del análisis de LH.
         
         Args:
             ncs_data: DataFrame con incidentes NCS
@@ -6483,56 +6490,99 @@ Proporciona análisis estructurado, específico y respaldado por números."""
         Returns:
             DataFrame filtrado por rutas del haul objetivo
         """
+        import re
+        
         try:
             self.logger.info(f"🗺️ Filtering NCS using routes dictionary for haul: {target_haul}")
             
-            # 1. Obtener diccionario de rutas (sin timeout interno, usa el timeout global de 600s+)
+            # 1. Obtener diccionario completo de rutas de PBI
             routes_dict = await self.pbi_collector.collect_routes_dictionary()
             
             if routes_dict.empty:
                 self.logger.warning("❌ Routes dictionary is empty, falling back to original data")
                 return ncs_data
             
-            # 2. Filtrar rutas del haul objetivo
-            target_routes = routes_dict[routes_dict['haul_aggr'] == target_haul]
+            # 2. Crear lookup de ruta → haul_aggr (ambas direcciones: MAD-JFK y JFK-MAD)
+            route_to_haul = {}
+            for _, row in routes_dict.iterrows():
+                route = str(row.get('route', '')).upper().strip()
+                haul = str(row.get('haul_aggr', '')).upper().strip()
+                if route and haul and '-' in route:
+                    route_to_haul[route] = haul
+                    # También añadir la ruta inversa (JFK-MAD si tenemos MAD-JFK)
+                    parts = route.split('-')
+                    if len(parts) == 2:
+                        reverse_route = f"{parts[1]}-{parts[0]}"
+                        route_to_haul[reverse_route] = haul
             
-            if target_routes.empty:
-                self.logger.warning(f"❌ No routes found for haul {target_haul} in dictionary")
-                return ncs_data
+            self.logger.info(f"📊 Built route lookup with {len(route_to_haul)} entries (including reverse routes)")
+            
+            # 3. Determinar el haul opuesto
+            opposite_haul = 'SH' if target_haul == 'LH' else 'LH'
+            
+            # 4. Patrón regex para extraer rutas del texto (formato: 3 letras - 3 letras)
+            route_pattern = re.compile(r'\b([A-Z]{3})\s*[-–]\s*([A-Z]{3})\b', re.IGNORECASE)
+            
+            def incident_belongs_to_target_haul(text):
+                """
+                Determina si un incidente pertenece al haul objetivo.
                 
-            target_route_codes = target_routes['route'].tolist()
-            self.logger.info(f"📊 Found {len(target_route_codes)} routes for {target_haul}")
-            
-            # 3. Extraer códigos de aeropuerto de las rutas (MAD-BCN → MAD, BCN)
-            airport_codes = set()
-            for route in target_route_codes:
-                if '-' in route:
-                    origin, dest = route.split('-', 1)
-                    airport_codes.add(origin.strip().upper())
-                    airport_codes.add(dest.strip().upper())
-            
-            if not airport_codes:
-                self.logger.warning(f"❌ No airport codes extracted from {target_haul} routes")
-                return ncs_data
+                Reglas:
+                1. Extraer todas las rutas mencionadas en el texto
+                2. Buscar cada ruta en el diccionario de PBI
+                3. Si ALGUNA ruta es del haul OPUESTO → EXCLUIR (return False)
+                4. Si ALGUNA ruta es del haul TARGET → INCLUIR (return True)
+                5. Si no se encuentra ninguna ruta en el diccionario → INCLUIR por defecto
+                """
+                if pd.isna(text):
+                    return True  # Incluir por defecto si no hay texto
                 
-            self.logger.info(f"✈️ Extracted {len(airport_codes)} airport codes for {target_haul}: {sorted(list(airport_codes))[:10]}...")
+                text_upper = str(text).upper()
+                
+                # Extraer todas las rutas del texto
+                matches = route_pattern.findall(text_upper)
+                
+                if not matches:
+                    # No se encontraron rutas en el texto, incluir por defecto
+                    return True
+                
+                found_target_route = False
+                found_opposite_route = False
+                
+                for origin, dest in matches:
+                    route = f"{origin}-{dest}"
+                    
+                    if route in route_to_haul:
+                        route_haul = route_to_haul[route]
+                        if route_haul == target_haul:
+                            found_target_route = True
+                        elif route_haul == opposite_haul:
+                            found_opposite_route = True
+                            self.logger.debug(f"🚫 Excluding incident: route {route} is {route_haul}, not {target_haul}")
+                
+                # Si encontramos una ruta del haul opuesto → EXCLUIR
+                if found_opposite_route and not found_target_route:
+                    return False
+                
+                # Si encontramos una ruta del haul objetivo → INCLUIR
+                if found_target_route:
+                    return True
+                
+                # Si no encontramos rutas conocidas → INCLUIR por defecto
+                return True
             
-            # 4. Crear patrón regex con códigos reales del diccionario
-            # Usar \b para word boundaries para evitar falsos positivos
-            pattern = '|'.join([f'\\b{code}\\b' for code in airport_codes])
-            
-            # 5. Filtrar incidentes que contengan estos códigos de aeropuerto
-            mask = ncs_data[incident_col].str.contains(pattern, na=False, regex=True, case=False)
+            # 5. Aplicar filtro a cada incidente
+            mask = ncs_data[incident_col].apply(incident_belongs_to_target_haul)
             filtered_data = ncs_data[mask]
             
             # 6. Log resultados
-            if len(filtered_data) > 0:
-                reduction_rate = (1 - len(filtered_data) / len(ncs_data)) * 100
-                self.logger.info(f"✅ {target_haul} dictionary filtering: {len(filtered_data)}/{len(ncs_data)} incidents ({reduction_rate:.1f}% reduction)")
-                return filtered_data
+            excluded_count = len(ncs_data) - len(filtered_data)
+            if excluded_count > 0:
+                self.logger.info(f"✅ {target_haul} route filtering: kept {len(filtered_data)}/{len(ncs_data)} incidents (excluded {excluded_count} with {opposite_haul} routes)")
             else:
-                self.logger.warning(f"⚠️ No incidents found for {target_haul} airports, returning original data")
-                return ncs_data
+                self.logger.info(f"✅ {target_haul} route filtering: kept all {len(filtered_data)} incidents")
+            
+            return filtered_data
                 
         except (asyncio.TimeoutError, asyncio.CancelledError) as e:
             self.logger.warning(f"⚠️ Timeout/Cancelled in routes filtering: {e}, using unfiltered NCS data")

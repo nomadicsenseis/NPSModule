@@ -620,84 +620,40 @@ class AnomalySummaryAgent:
         """
         Filter daily analyses to show only content relevant to a specific section.
         
-        For GLOBAL, returns the executive synthesis from each day.
-        For specific cabins (Economy SH, Business LH, etc.), extracts ONLY
-        the specific paragraph for that cabin from each day's analysis.
+        For GLOBAL, returns all daily analyses.
+        For specific cabins (Economy SH, Business LH, etc.), filters to show
+        only paragraphs/sections mentioning that cabin.
         """
-        import re
-        
         if section_name == 'GLOBAL':
-            # For global, extract only the executive synthesis (before cabin details)
-            daily_entries = daily_analyses.split('---')
-            global_entries = []
-            for entry in daily_entries:
-                entry = entry.strip()
-                if not entry:
-                    continue
-                # Extract everything before the first cabin section
-                # Look for patterns like "**ECONOMY SH:" or "**BUSINESS LH:"
-                cabin_pattern = r'\*\*(?:ECONOMY|BUSINESS|PREMIUM)\s+(?:SH|LH):'
-                match = re.search(cabin_pattern, entry)
-                if match:
-                    global_part = entry[:match.start()].strip()
-                    if global_part:
-                        global_entries.append(global_part)
-                else:
-                    global_entries.append(entry)
-            return "\n\n---\n\n".join(global_entries) if global_entries else daily_analyses
+            # For global, return all daily analyses
+            return daily_analyses
         
-        # Map section names to header patterns
-        header_patterns = {
-            'ECONOMY SH': r'\*\*ECONOMY\s+SH[:\s]',
-            'BUSINESS SH': r'\*\*BUSINESS\s+SH[:\s]',
-            'ECONOMY LH': r'\*\*ECONOMY\s+LH[:\s]',
-            'BUSINESS LH': r'\*\*BUSINESS\s+LH[:\s]',
-            'PREMIUM LH': r'\*\*PREMIUM\s+LH[:\s]',
+        # Map section names to keywords to search for
+        keyword_map = {
+            'ECONOMY SH': ['economy sh', 'economy de sh', 'sh economy', 'short haul economy'],
+            'BUSINESS SH': ['business sh', 'business de sh', 'sh business', 'short haul business'],
+            'ECONOMY LH': ['economy lh', 'economy de lh', 'lh economy', 'long haul economy'],
+            'BUSINESS LH': ['business lh', 'business de lh', 'lh business', 'long haul business'],
+            'PREMIUM LH': ['premium lh', 'premium de lh', 'lh premium', 'long haul premium'],
         }
         
-        pattern = header_patterns.get(section_name)
-        if not pattern:
-            return "(Sin datos diarios para esta sección)"
+        keywords = keyword_map.get(section_name, [section_name.lower()])
         
         # Split into daily entries
         daily_entries = daily_analyses.split('---')
         
-        # Extract the specific section from each day
-        section_entries = []
+        # Filter entries that mention this section
+        relevant_entries = []
         for entry in daily_entries:
-            entry = entry.strip()
-            if not entry:
-                continue
-            
-            # Find the start of this section
-            match = re.search(pattern, entry, re.IGNORECASE)
-            if match:
-                # Extract from the header to the next section or end
-                start_pos = match.start()
-                # Find the next section header (any cabin)
-                next_section = re.search(
-                    r'\*\*(?:ECONOMY|BUSINESS|PREMIUM)\s+(?:SH|LH)[:\s]',
-                    entry[match.end():],
-                    re.IGNORECASE
-                )
-                if next_section:
-                    end_pos = match.end() + next_section.start()
-                else:
-                    end_pos = len(entry)
-                
-                section_text = entry[start_pos:end_pos].strip()
-                
-                # Also extract the date header if present
-                date_match = re.search(r'📅\s*(\d{4}-\d{2}-\d{2})', entry)
-                if date_match:
-                    section_text = f"📅 {date_match.group(1)}:\n{section_text}"
-                
-                section_entries.append(section_text)
+            entry_lower = entry.lower()
+            if any(kw in entry_lower for kw in keywords):
+                relevant_entries.append(entry.strip())
         
-        if section_entries:
-            return "\n\n---\n\n".join(section_entries)
+        if relevant_entries:
+            return "\n\n---\n\n".join(relevant_entries)
         else:
-            return f"(Sin datos diarios específicos para {section_name})"
+            # If no specific entries found, return all (better than nothing)
+            return daily_analyses
     
     def _format_periods_for_summary(self, periods_data: List[Dict[str, Any]]) -> str:
         """Format periods data into a structured text for AI analysis."""
