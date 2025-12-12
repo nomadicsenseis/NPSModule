@@ -31,30 +31,14 @@ step1_analyze_section:
 
     ---
 
-    **ANÁLISIS DIARIOS (busca SOLO información de {section_name}):**
+    **ANÁLISIS DIARIOS DE {section_name}:**
     {daily_analyses_for_section}
-
-    ---
-
-    **⚠️ IMPORTANTE - FILTRADO DE INFORMACIÓN:**
-    
-    Estás analizando **{section_name}**. Los análisis diarios contienen información de TODAS las cabinas.
-    
-    **DEBES:**
-    - SOLO usar párrafos/secciones que hablen específicamente de **{section_name}**
-    - Buscar encabezados como "**{section_name}:**", "**{section_name}**", o menciones directas
-    - Si {section_name} es una cabina LH (Economy LH, Business LH, Premium LH): IGNORA toda información de SH
-    - Si {section_name} es una cabina SH (Economy SH, Business SH): IGNORA toda información de LH
-    
-    **NO DEBES:**
-    - Mencionar incidentes de otras cabinas (ej: huelga en Italia afecta SH, NO LH)
-    - Usar datos de rutas que no correspondan a {section_name}
-    - Mezclar información de IB/YW en secciones de LH (LH no tiene operadores IB/YW separados)
 
     ---
 
     **TU TAREA:**
     
+    Los datos diarios ya están filtrados para **{section_name}**.
     Analiza la conexión entre el semanal y los días. Identifica:
     
     1. **¿Hay un día que explique la mayor parte del resultado semanal?**
