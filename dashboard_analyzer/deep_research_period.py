@@ -1472,18 +1472,17 @@ async def run_flexible_data_download_silent_with_date(aggregation_days: int, per
     total_success = 0
     total_attempted = 0
     
-    # Suppress all output during data collection
-    with open(os.devnull, 'w') as devnull:
-        with redirect_stdout(devnull), redirect_stderr(devnull):
-            for node_path in node_paths:
-                try:
-                    results = await collector.collect_flexible_data_for_node(
-                        node_path, aggregation_days, target_folder, start_date
-                    )
-                    total_attempted += len(results)
-                    total_success += sum(results.values())
-                except Exception:
-                    pass
+    # Note: Removed redirect_stdout/stderr to avoid "I/O operation on closed file" errors
+    # when running in parallel. The output will be shown but that's acceptable.
+    for node_path in node_paths:
+        try:
+            results = await collector.collect_flexible_data_for_node(
+                node_path, aggregation_days, target_folder, start_date
+            )
+            total_attempted += len(results)
+            total_success += sum(results.values())
+        except Exception:
+            pass
     
     if total_success > 0:
         return target_folder
@@ -1773,32 +1772,27 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
     
     anomaly_periods = []
     
-    # Suppress all output during analysis
-    with open(os.devnull, 'w') as devnull:
-        with redirect_stdout(devnull), redirect_stderr(devnull):
-            try:
-                for period in periods_to_analyze:
-                    period_anomalies, period_deviations, period_explanations, period_nps_values = await detector.analyze_period(data_folder, period, analysis_date, reference_period)
-                    
-                    # Check if any node has an anomaly
-                    has_anomaly = any(state in ['+', '-'] for state in period_anomalies.values())
-                    
-                    # Also check if root segment has valid data (even if no anomalies)
-                    root_segment = normalize_segment_to_root(segment)
-                    root_has_data = root_segment in period_anomalies and period_anomalies[root_segment] != "?"
-                    
-                    # Include period if there are anomalies OR if root segment has valid data
-                    if has_anomaly or root_has_data:
-                        anomaly_periods.append(period)
+    # Note: Removed redirect_stdout/stderr to avoid "I/O operation on closed file" errors
+    # when running in parallel. The output will be shown but that's acceptable.
+    try:
+        for period in periods_to_analyze:
+            period_anomalies, period_deviations, period_explanations, period_nps_values = await detector.analyze_period(data_folder, period, analysis_date, reference_period)
             
-            except Exception as e:
-                # Exception occurred - will handle after exiting silent block
-                exception_occurred = e
-                exception_traceback = __import__('traceback').format_exc()
+            # Check if any node has an anomaly
+            has_anomaly = any(state in ['+', '-'] for state in period_anomalies.values())
+            
+            # Also check if root segment has valid data (even if no anomalies)
+            root_segment = normalize_segment_to_root(segment)
+            root_has_data = root_segment in period_anomalies and period_anomalies[root_segment] != "?"
+            
+            # Include period if there are anomalies OR if root segment has valid data
+            if has_anomaly or root_has_data:
+                anomaly_periods.append(period)
     
-    # Check if exception occurred (must be after silent block)
-    if 'exception_occurred' in locals():
-        print(f"❌ Exception in analysis loop: {exception_occurred}")
+    except Exception as e:
+        print(f"❌ Exception in analysis loop: {e}")
+        import traceback
+        print(traceback.format_exc())
         print(exception_traceback)
         return None
     
