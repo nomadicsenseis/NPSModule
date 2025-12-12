@@ -652,7 +652,8 @@ class AnomalySummaryAgent:
         if relevant_entries:
             return "\n\n---\n\n".join(relevant_entries)
         else:
-            # If no specific entries found, return all (better than nothing)
+            # If no specific entries found, return all daily analyses
+            # The prompt instructs the LLM to filter for the specific section
             return daily_analyses
     
     def _format_periods_for_summary(self, periods_data: List[Dict[str, Any]]) -> str:
