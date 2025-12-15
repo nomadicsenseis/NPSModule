@@ -1,0 +1,158 @@
+{
+  "metadata": {
+    "agent_type": "causal_explanation",
+    "analysis_type": "separated_workflow_investigation",
+    "export_timestamp": "2025-12-15T14:20:44.020633",
+    "node_path": "Global/SH/Business/IB",
+    "start_date": "2025-05-22",
+    "end_date": "2025-05-22",
+    "total_iterations": 4,
+    "llm_type": "O4_MINI",
+    "anomaly_type": "+",
+    "total_messages": 7,
+    "tools_used": [
+      "verbatims_tool",
+      "routes_tool",
+      "ncs_tool",
+      "operative_data_tool"
+    ],
+    "investigation_success": true
+  },
+  "conversation_log": [
+    {
+      "iteration": 0,
+      "type": "SYSTEM",
+      "content": "Eres un **analista sénior de NPS** especializado en investigación de anomalías para períodos únicos. Tu análisis se enfoca en entender qué pasó en un día específico comparando contra el baseline histórico.\n\n⚠️ **CRÍTICO - NO INVENTES DATOS:**\nSi hay algún dato que te falta, NO lo supongas ni inventes. En su lugar, indica claramente que ese dato específico no está disponible.\nPara las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.\nEN NINGÚN CASO CALCULES COSAS QUE NO SE TE PIDEN.\n\n**MODO SINGLE:** Análisis de un período único vs baseline histórico (media de períodos anteriores)\n\n**TRES OBJETIVOS** —en este orden—:\n\n1. **CAUSA TANGIBLE** · ¿Qué métricas operativas del día se desviaron significativamente del baseline? ¿Correlacionan con la anomalía de NPS?\n2. **HIPÓTESIS ALTERNATIVAS** · Si operative_data NO encuentra causa → buscar en NCS/verbatims nuevas hipótesis (incidentes específicos, quejas recurrentes)\n3. **VALIDACIÓN EN RUTAS/PERFILES** · Si NCS identifica incidentes en rutas específicas → verificar si esas rutas tienen mal NPS en routes_tool\n\n**Metodología**: Una herramienta por iteración, reflexiona y elige la siguiente. Máximo 5 iteraciones.\n\n**Flujo de Investigación** 🔍\n▸ **CASO A**: operative_data encuentra correlación → NCS/verbatims confirman → rutas/perfiles validan\n▸ **CASO B**: operative_data NO encuentra correlación → NCS puede revelar incidentes puntuales → verificar rutas de esos incidentes → customer_profile identifica perfiles afectados\n▸ **CASO C**: NCS vacío pero verbatims mencionan problemas → investigar rutas mencionadas\n\n**Criterios de Análisis** ⚖️\n▸ Desviación operativa significativa: variación > 3 pts vs baseline\n▸ Coherencia: Si NPS bajó, buscar métricas operativas que empeoraron vs baseline\n▸ Si NPS subió, buscar métricas operativas que mejoraron vs baseline\n▸ **Si no hay correlación operativa**: buscar patrones en NCS/verbatims como fuente de hipótesis\n\n**Relaciones Métricas-NPS** 📊\n▸ OTP15 (puntualidad): DIRECTA → OTP↓ = NPS↓, OTP↑ = NPS↑\n▸ Mishandling: INVERSA → Mishandling↑ = NPS↓, Mishandling↓ = NPS↑\n▸ Misconex: INVERSA → Misconex↑ = NPS↓, Misconex↓ = NPS↑\n▸ **Load Factor: INVERSA** → Load Factor↑ (más ocupación) = NPS↓ (peor experiencia)\n  · Si NPS bajó pero Load Factor también bajó → NO correlaciona (descartar como causa)\n  · Si NPS bajó y Load Factor subió → SÍ correlaciona (posible causa)\n\n**Flujo de Trabajo** (se ejecuta automáticamente):\n▸ `operative_data_tool` → Analiza métricas operativas del día vs baseline\n▸ `ncs_tool` → Revisa incidentes reportados en el período\n▸ `verbatims_tool` → Obtiene feedback cualitativo del día\n▸ `routes_tool` → Identifica rutas con mayor desviación\n▸ `customer_profile_tool` → Analiza impacto por perfil de cliente\n\n**IMPORTANTE - Ejecutar TODAS las herramientas** 🔧\n▸ Ejecuta SIEMPRE todas las herramientas del flujo, incluso con pocos datos\n▸ No filtres por número mínimo de encuestas - procesa las que haya\n▸ El número de encuestas se mostrará en el output para evaluar confiabilidad\n\n**Reglas de Terminación** 🏁\n▸ Máximo 5 iteraciones\n▸ Termina SOLO después de ejecutar todas las herramientas relevantes\n▸ Si no hay evidencia clara → termina con hipótesis débil indicando nivel de confianza\n",
+      "metadata": {},
+      "timestamp": "14:13:00"
+    },
+    {
+      "iteration": 0,
+      "type": "USER",
+      "content": "**INVESTIGACIÓN DE ANOMALÍA NPS - MODO SINGLE**\n\n📊 **CONTEXTO NPS:**\n• **Segmento**: Global/SH/Business/IB\n• **Período de Análisis**: 2025-05-22 00:00:00 a 2025-05-22 00:00:00\n• **Tipo de Anomalía**: +\n• **Magnitud**: 9.965285610446905 pts\n• **NPS del Día**: 47.22222222222222\n• **NPS Baseline**: 37.256936611775316\n• **Modo de Detección**: mean\n• **Días por Período**: 1\n• **Períodos de Baseline**: 7\n\n📈 **CONTEXTO DE COMPARACIÓN:**\n• **Comparación**: vs media de los últimos 7 días\n\n🎯 **OBJETIVO**: Entender qué factores influyeron en el NPS de este día específico.\n\n**DECIDE QUÉ HERRAMIENTA EJECUTAR PRIMERO** basándote en el contexto NPS y la metodología del flujo de trabajo.\n",
+      "metadata": {},
+      "timestamp": "14:13:00"
+    },
+    {
+      "iteration": 1,
+      "type": "AI",
+      "content": "REFLECTION: En la fecha analizada (2025-05-22) las dos métricas operativas muestran desviaciones por debajo del umbral de 3 puntos establecido:\n- Load Factor: +2.41 vs baseline (no alcanza 3 pts para considerarse significativa).\n- OTP15_adjusted: +1.11 vs baseline (no alcanza 3 pts para considerarse significativa).\n\nSegún nuestros criterios, ninguna de estas variaciones puede explicar de forma significativa la anomalía de NPS. OTP15 incluso mejora ligeramente, lo cual no correlacionaría con un posible descenso de NPS, y la subida de Load Factor es insuficiente para calificarse como causa tangible.\n\nObjetivo 1 (causa tangible) NO cumplido. Procedemos a buscar hipótesis alternativas en los incidentes reportados (NCS).",
+      "metadata": {
+        "tool_name": "operative_data_tool"
+      },
+      "timestamp": "14:15:29"
+    },
+    {
+      "iteration": 2,
+      "type": "AI",
+      "content": "REFLECTION: Los resultados de NCS_TOOL muestran un alto volumen de incidentes operativos en la fecha analizada:  \n- 208 cancelaciones y 66 retrasos, además de otros 141 incidentes diversos, sumando 415 en total.  \n- 50 vuelos afectados, siendo IB0271 el más impactado con 2 incidentes.  \n- Se identifica una ruta con mayor concentración de reportes: GRU-GIG (4 incidentes).  \n\nEvaluación de la iteración:\n1. Hemos identificado incidentes operativos relevantes que podrían explicar la anomalía de NPS (cumple objetivo de generar hipótesis alternativas).  \n2. Aún no disponemos de la percepción de los clientes para confirmar las causas subyacentes.  \n\nDecisión: avanzar a la siguiente herramienta para obtener feedback cualitativo y validar si las cancelaciones, retrasos y cambios de equipo impactaron directamente la satisfacción.",
+      "metadata": {
+        "tool_name": "ncs_tool"
+      },
+      "timestamp": "14:17:04"
+    },
+    {
+      "iteration": 3,
+      "type": "AI",
+      "content": "REFLECTION: Los 47 comentarios del día son mayoritariamente positivos, destacando puntualidad y amabilidad de la tripulación. No aparecen quejas sobre cancelaciones, retrasos o mal manejo de equipaje que correlacionen con los incidentes operativos identificados en NCS. Por tanto, los verbatims no confirman un impacto negativo en la experiencia que explique la anomalía de NPS.  \nObjetivo de esta iteración (validar causas con feedback cualitativo) no se cumple; no se identifican drivers negativos en los verbatims.  \nDecisión: avanzar para mapear rutas específicas afectadas por los incidentes y continuar la investigación.",
+      "metadata": {
+        "tool_name": "verbatims_tool"
+      },
+      "timestamp": "14:19:14"
+    },
+    {
+      "iteration": 4,
+      "type": "AI",
+      "content": "REFLECTION: La herramienta routes_tool muestra que dentro del segmento analizado no hay rutas con incidentes operativos reportados (NCS=0). Solo se observa la ruta MAD-ORY con NPS=50.0 (n=2), pero sin correlación con incidentes. Por tanto, no se ha cumplido el objetivo de identificar rutas específicas afectadas por problemas operativos que expliquen la anomalía de NPS.",
+      "metadata": {
+        "tool_name": "routes_tool"
+      },
+      "timestamp": "14:20:25"
+    },
+    {
+      "iteration": 4,
+      "type": "AI",
+      "content": "FINAL_SYNTHESIS: 1. Resumen de la anomalía  \n   - NPS del día: 47.22222222222222  \n   - NPS Baseline (media últimos 7 períodos): 37.256936611775316  \n   - Variación: 10.0 pts  \n\n2. Causa/s encontradas  \n   - Métricas operativas que se desviaron del baseline: ninguna supera el umbral de ±3 pts  \n     • Load Factor: +2.41 vs 7-días  \n     • OTP15_adjusted: +1.11 vs 7-días  \n     Herramienta: operative_data_tool  \n     Nivel de confianza: baja (evidencia insuficiente)  \n   - Hipótesis alternativas (incidentes operativos): elevado número de cancelaciones y retrasos, pero no confirmado por feedback  \n     • Incidentes: 208 cancelaciones, 66 retrasos, 141 otros (415 totales)  \n     Herramientas: ncs_tool + verbatims_tool  \n     Nivel de confianza: baja (no hay respaldo en verbatims)  \n\n3. Evidencia de soporte  \n   - Incidentes NCS relevantes  \n     • 415 incidentes totales en 2025-05-22  \n     • 50 vuelos afectados; vuelo con más reportes: IB0271 (2)  \n     • Ruta con más incidencias: GRU-GIG (4)  \n   - Temas principales en verbatims del día (47 comentarios)  \n     • Feedback mayoritariamente positivo  \n     • Destacan puntualidad y amabilidad de tripulación  \n     • No se mencionan cancelaciones, retrasos ni mal manejo de equipaje  \n\n4. Rutas afectadas  \n   - No se identifican rutas con desviación negativa de NPS vinculada a incidentes operativos  \n   - Única ruta con datos: MAD-ORY (NPS 50.0, n=2) — sin reportes NCS  \n\n5. Perfiles de cliente  \n   - Información no disponible (no se ejecutó customer_profile_tool)  \n\nConclusión: evidencia insuficiente para atribuir la subida de NPS a causas operativas o a feedback negativo. Nivel de confianza general: baja.",
+      "metadata": {},
+      "timestamp": "14:20:44"
+    }
+  ],
+  "clean_explanations": [
+    "En la fecha analizada (2025-05-22) las dos métricas operativas muestran desviaciones por debajo del umbral de 3 puntos establecido:\n- Load Factor: +2.41 vs baseline (no alcanza 3 pts para considerarse significativa).\n- OTP15_adjusted: +1.11 vs baseline (no alcanza 3 pts para considerarse significativa).\n\nSegún nuestros criterios, ninguna de estas variaciones puede explicar de forma significativa la anomalía de NPS. OTP15 incluso mejora ligeramente, lo cual no correlacionaría con un posible descenso de NPS, y la subida de Load Factor es insuficiente para calificarse como causa tangible.\n\nObjetivo 1 (causa tangible) NO cumplido. Procedemos a buscar hipótesis alternativas en los incidentes reportados (NCS).",
+    "Los resultados de NCS_TOOL muestran un alto volumen de incidentes operativos en la fecha analizada:  \n- 208 cancelaciones y 66 retrasos, además de otros 141 incidentes diversos, sumando 415 en total.  \n- 50 vuelos afectados, siendo IB0271 el más impactado con 2 incidentes.  \n- Se identifica una ruta con mayor concentración de reportes: GRU-GIG (4 incidentes).  \n\nEvaluación de la iteración:\n1. Hemos identificado incidentes operativos relevantes que podrían explicar la anomalía de NPS (cumple objetivo de generar hipótesis alternativas).  \n2. Aún no disponemos de la percepción de los clientes para confirmar las causas subyacentes.  \n\nDecisión: avanzar a la siguiente herramienta para obtener feedback cualitativo y validar si las cancelaciones, retrasos y cambios de equipo impactaron directamente la satisfacción.",
+    "Los 47 comentarios del día son mayoritariamente positivos, destacando puntualidad y amabilidad de la tripulación. No aparecen quejas sobre cancelaciones, retrasos o mal manejo de equipaje que correlacionen con los incidentes operativos identificados en NCS. Por tanto, los verbatims no confirman un impacto negativo en la experiencia que explique la anomalía de NPS.  \nObjetivo de esta iteración (validar causas con feedback cualitativo) no se cumple; no se identifican drivers negativos en los verbatims.  \nDecisión: avanzar para mapear rutas específicas afectadas por los incidentes y continuar la investigación.",
+    "La herramienta routes_tool muestra que dentro del segmento analizado no hay rutas con incidentes operativos reportados (NCS=0). Solo se observa la ruta MAD-ORY con NPS=50.0 (n=2), pero sin correlación con incidentes. Por tanto, no se ha cumplido el objetivo de identificar rutas específicas afectadas por problemas operativos que expliquen la anomalía de NPS."
+  ],
+  "collected_data_summary": "💬 **VERBATIMS EJECUTADO:**\n   📊 ANÁLISIS DE VERBATIMS (PBI)\n\n🎯 SEGMENTO: todos los segmentos - Short Haul - Business Class - Iberia\n📅 PERÍODO: 2025-05-22 a 2025-05-22\n\n  Total: 47 comentarios\n  Ejemplos:\n    - Muy bien servicio, puntualidad...\n    - Me sorprendió mucho lo excelente que fue este vuelo. La tripulación de cabina fue muy amable y servicial. Servían bebidas constantemente e incluso una...\n    - Puntualidad y servicio muy amable a bordo...\n",
+  "conversation_summary": {
+    "SYSTEM": 1,
+    "USER": 1,
+    "AI": 5
+  },
+  "dax_queries": [
+    {
+      "tool_name": "operative_data_tool",
+      "query": "DEFINE\n    VAR __DS0FilterTable =\n        TREATAS({\"Business\"}, 'Cabin_Master'[Cabin_Show])\n    VAR __DS0FilterTable2 =\n        TREATAS({\"IB\"}, 'Company_Master'[Company])\n    VAR __DS0FilterTable3 =\n        TREATAS({\"SH\"}, 'Haul_Master'[Haul_Aggr])\n\tVAR __DS0FilterTable4 = \n\t\tTREATAS({\"RF0\"}, 'Target_file_version_rank'[Version])\n\tVAR __DS0FilterTable5 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),\n            'Date_Master'[Date] >= DATE(2024,1,1) && 'Date_Master'[Date] <= DATE(2025,5,22)\n        )\n\t\tvar _table= ADDCOLUMNS(Date_Master, \"Period_Group\", \n\t\t\tINT(DATEDIFF( 'Date_Master'[Date],DATE(2025,5,22), DAY) / 14) + 1)\n \n    MEASURE 'Measure'[Load_Factor_CATIA] =\nvar lf_economy= divide(sum(Operation_data[pax_economy]),sum(Operation_data[capacity_economy]))\nvar lf_business=divide(sum(Operation_data[pax_business]),sum(Operation_data[capacity_business]))\nvar lf_premium_ec=divide(sum(Operation_data[pax_premium_ec]),sum(Operation_data[capacity_premium_ec]))\nvar lf_economy_and_premium_ec= divide(calculate(SUMx(Operation_data,Operation_data[pax_economy]+Operation_data[pax_premium_ec])),calculate(sumx(Operation_data, Operation_data[capacity_economy] +Operation_data[capacity_premium_ec])))\nVAR lF_OVERALL = DIVIDE(calculate(sumx(Operation_data, Operation_data[pax_business]+ Operation_data[pax_economy] +Operation_data[pax_premium_ec])),CALCULATE(SUMx(Operation_data,Operation_data[capacity_business]+Operation_data[capacity_economy]+Operation_data[capacity_premium_ec])))\nRETURN\nSWITCH(true(),\n    COUNTROWS(Cabin_Master)>1, lF_OVERALL,\n    SELECTEDVALUE(Cabin_Master[Cabin_Show])=\"Economy\",lf_economy,\n    SELECTEDVALUE(Cabin_Master[Cabin_Show])=\"Business\",lf_business,\n    SELECTEDVALUE(Cabin_Master[Cabin_Show])=\"Premium EC\",lf_premium_ec)*100\n\n    MEASURE 'Measure'[Misconex_CATIA] =\nif (DISTINCTCOUNT(Haul_Master[Haul_Aggr])>1 && DISTINCTCOUNT(Cabin_Master[Cabin_Show])>1\n,divide(sum(customer_connections[flag_pax_misc]),sum(customer_connections[flag_pax_conex]))*100, \"\")\n \n    MEASURE 'Measure'[Mishandling_CATIA] =\nvar _misha=divide(sum(f_mishandling[bags]),sum(f_checkin[num_pax_flown]))*1000\nreturn\nif (DISTINCTCOUNT(Haul_Master[Haul_Aggr])>1 && DISTINCTCOUNT(Cabin_Master[Cabin_Show])>1,_misha,\"\")\n\n\tVAR __DS0Core =\n        CALCULATETABLE(SUMMARIZE(\n            _table,[Period_Group],\n            \"Load_Factor\", 'Measure'[Load_Factor_CATIA],\n            \"OTP15_adjusted\", 'Measure'[OTP15_adjusted],\n            \"Misconex\", 'Measure'[Misconex_CATIA],\n            \"Mishandling\", 'Measure'[Mishandling_CATIA],\n            \"Min_Date\", MIN('Date_Master'[Date]),\n            \"Max_Date\", MAX('Date_Master'[Date])\n        ),\n             __DS0FilterTable,\n            __DS0FilterTable2,\n            __DS0FilterTable3,\n            __DS0FilterTable5\n        )\n \nEVALUATE\n    __DS0Core\n    order by [Period_Group] asc",
+      "parameters": {
+        "node_path": "Global/SH/Business/IB",
+        "target_date": "2025-05-22",
+        "comparison_days": 14,
+        "use_flexible": true,
+        "cabins": [
+          "Business"
+        ],
+        "companies": [
+          "IB"
+        ],
+        "hauls": [
+          "SH"
+        ]
+      },
+      "timestamp": "14:14:52",
+      "iteration": 1
+    },
+    {
+      "tool_name": "verbatims_tool_fallback",
+      "query": "DEFINE  \n    VAR __DS0FilterTable =\n        TREATAS({\"Business\"}, 'Cabin_Master'[Cabin_Show])\n \n    VAR __DS0FilterTable2 =\n        TREATAS({\"IB\"}, 'Company_Master'[Company])\n \n    VAR __DS0FilterTable3 =\n        TREATAS({\"SH\"}, 'Haul_Master'[Haul_Aggr])\n \n    VAR __DS0FilterTable4 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),\n            'Date_Master'[Date] >= date(2025,5,22) && 'Date_Master'[Date] <= date(2025,5,22)\n        )\n \n    var __DS0Core= \nADDCOLUMNS(\n    CALCULATETABLE(verbatims_sentiment,\n            __DS0FilterTable,\n            __DS0FilterTable2,\n            __DS0FilterTable3,\n            __DS0FilterTable4), \"Verbatim\", \nCALCULATE(min(surveys_maritz[nps_all_t])))\n \nEVALUATE\n    __DS0Core ",
+      "parameters": {
+        "node_path": "Global/SH/Business/IB",
+        "start_date": "2025-05-22",
+        "end_date": "2025-05-22",
+        "cabins": [
+          "Business"
+        ],
+        "companies": [
+          "IB"
+        ],
+        "hauls": [
+          "SH"
+        ]
+      },
+      "timestamp": "14:17:04",
+      "iteration": 3
+    },
+    {
+      "tool_name": "routes_tool",
+      "query": "DEFINE\n    VAR __DS0FilterTable9 =\n        FILTER(\n            KEEPFILTERS(VALUES('Route_Master'[route])),\n            NOT(ISBLANK('Route_Master'[route]))\n        )\n\n     VAR __DS0FilterTable =\n        TREATAS({\"Business\"}, 'Cabin_Master'[Cabin_Show])\n\n    VAR __DS0FilterTable2 =\n        TREATAS({\"IB\"}, 'Company_Master'[Company])\n\n    VAR __DS0FilterTable3 =\n        TREATAS({\"SH\"}, 'Haul_Master'[Haul_Aggr])\n\n    VAR __DS0FilterTable4 =\n        FILTER(\n            KEEPFILTERS(VALUES('Date_Master'[Date])),   \n            AND(\n                'Date_Master'[Date] >= DATE(2025, 5, 22),\n                'Date_Master'[Date] <= DATE(2025, 5, 22)\n            )\n        )\n\n    VAR __DS0FilterTable8 =\n        TREATAS({\"'surveys_maritz'[issue_category]\"}, 'Categories'[Categories Campos])\n\n    VAR __DS0FilterTable7 =\n        TREATAS({\"\"}, 'Filtro_Comparativa'[Filtro_Comparativa])\n\n\n\n    VAR __ValueFilterDM2 =\n        FILTER(\n            KEEPFILTERS(\n                SUMMARIZECOLUMNS(\n                    'Route_Master'[route],\n                    'Company_Master'[Company],\n                    __DS0FilterTable,\n                    __DS0FilterTable2,\n                    __DS0FilterTable3,\n                    __DS0FilterTable4,\n                    __DS0FilterTable8,\n                    __DS0FilterTable9,\n                    __DS0FilterTable7,\n                    \"Count_total\", IGNORE('Measure'[Count_total])\n                )\n            ),\n            [Count_total] >= 1\n        )\n\n    VAR __DS0Core =\n        CALCULATETABLE(\n            SUMMARIZECOLUMNS(\n                'Route_Master'[route],\n                'Company_Master'[Company],\n                __DS0FilterTable,\n                __DS0FilterTable2,\n                __DS0FilterTable3,\n                __DS0FilterTable4,\n                __DS0FilterTable8,\n                __DS0FilterTable9,\n                __DS0FilterTable7,\n                    \"NPS\", 'Measure'[NPS (Route)],\n                \"NPS_diff\", [Switch_NPS_Raw_diff],\n                \"Pax\", 'Measure'[n (Route)],\n                \"CodeShare\", 'Measure'[CodeShare (Route)]*100,\n                \"Check_in\", 'Measure'[Check-in (Route)],\n                \"Lounge\", 'Measure'[Lounge (Route)],\n                \"Boarding\", 'Measure'[Boarding (Route)],\n                \"Aircraft_interior\", 'Measure'[Aircraft interior (Route)],\n                \"Wi-Fi\", 'Measure'[Wi-Fi (Route)],\n                \"IFE\", 'Measure'[IFE (Route)],\n                \"F&B\", 'Measure'[F&B (Route)],\n                \"Crew\", 'Measure'[Crew (Route)],\n                \"Arrivals\", 'Measure'[Arrivals (Route)],\n                \"Connections\", 'Measure'[Connections (Route)],\n                \"Operative\", 'Measure'[Operative (Route)],\n                \"NonOperative\", 'Measure'[NonOperative (Route)],\n                \"Check_in_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Check-in\"),\n                \"Lounge_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Lounge\"),\n                \"Boarding_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Boarding\"),\n                \"Aircraft_interior_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Aircraft interior\"),\n                \"Wi-Fi_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Wi-Fi\"),\n                \"IFE_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"IFE\"),\n                \"F&B_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"In flight food and beverage\"),\n                \"Crew_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Cabin Crew\"),\n                \"Arrivals_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Arrivals experience\"),\n                \"Connections_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Connections experience\"),\n                \"Operative_diff\", CALCULATE([S_client_satisfaction_diff], TouchPoint_Master[filtered_name]=\"Punctuality\")\n            ),\n            __ValueFilterDM2\n        )\n       \n\nEVALUATE\n    __DS0Core ",
+      "parameters": {
+        "node_path": "Global/SH/Business/IB",
+        "start_date": "2025-05-22",
+        "end_date": "2025-05-22",
+        "comparison_filter": null,
+        "comparison_start_date": null,
+        "comparison_end_date": null,
+        "cabins": [
+          "Business"
+        ],
+        "companies": [
+          "IB"
+        ],
+        "hauls": [
+          "SH"
+        ]
+      },
+      "timestamp": "14:19:14",
+      "iteration": 4
+    }
+  ]
+}

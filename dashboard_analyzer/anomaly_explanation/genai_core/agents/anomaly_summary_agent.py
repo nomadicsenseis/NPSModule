@@ -561,10 +561,33 @@ class AnomalySummaryAgent:
             except Exception as e:
                 self.logger.warning(f"Could not write debug file: {e}")
             
-            # Export final conversation (step 3)
-            conversation_file = await self.export_conversation(message_history_step3, date_flight_local)
+            # Export ALL conversations (all 3 steps) for complete audit trail
+            all_conversations = {
+                'step1_section_connections': daily_context_paragraphs,  # Step 1 results by section
+                'step2_full_report': {
+                    'messages': [
+                        {
+                            'role': self._get_message_role(msg),
+                            'content': msg.content
+                        } for msg in message_history_final.get_messages()
+                    ],
+                    'result': polished_report
+                },
+                'step3_executive_synthesis': {
+                    'messages': [
+                        {
+                            'role': self._get_message_role(msg),
+                            'content': msg.content
+                        } for msg in message_history_step3.get_messages()
+                    ],
+                    'result': executive_synthesis
+                }
+            }
+            conversation_file = await self.export_full_stratified_conversation(
+                all_conversations, date_flight_local
+            )
             if conversation_file:
-                self.logger.info(f"🗂️ Summary conversation saved: {conversation_file}")
+                self.logger.info(f"🗂️ Full stratified conversation saved: {conversation_file}")
             
             # Upload to S3 if metadata is provided (use executive_synthesis, not full report)
             if executive_synthesis and execution_metadata and weekly_analysis_params and daily_analysis_params and date_ranges:
@@ -835,8 +858,58 @@ PERÍODO {period} ({date_range}):
         else:
             return 'unknown'
 
+    async def export_full_stratified_conversation(self, all_conversations: dict, dateflight_local: Optional[str] = None) -> str:
+        """Export the FULL stratified conversation (all 3 steps) to JSON file and upload to S3"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            period_identifier = dateflight_local if dateflight_local else timestamp[:8]
+            filename = f"summary_{period_identifier}_{timestamp}.json"
+            
+            # Create agent_conversations directory structure in current working directory
+            base_dir = Path.cwd() / 'agent_conversations' / 'anomaly_summary'
+            base_dir.mkdir(parents=True, exist_ok=True)
+            
+            full_path = base_dir / filename
+            
+            conversation_data = {
+                "metadata": {
+                    "agent_type": "anomaly_summary",
+                    "analysis_type": "stratified_comprehensive",
+                    "export_timestamp": datetime.now().isoformat(),
+                    "dateflight_local": dateflight_local,
+                    "llm_type": self.llm_type.value,
+                    "num_steps": 3,
+                    "summary_success": True
+                },
+                "step1_section_connections": all_conversations.get('step1_section_connections', {}),
+                "step2_full_report": all_conversations.get('step2_full_report', {}),
+                "step3_executive_synthesis": all_conversations.get('step3_executive_synthesis', {})
+            }
+            
+            # Save locally
+            with open(full_path, 'w', encoding='utf-8') as f:
+                json.dump(conversation_data, f, indent=2, ensure_ascii=False)
+            
+            self.logger.info(f"📝 Full stratified conversation exported to: {full_path}")
+            
+            # Upload to S3 in production
+            try:
+                s3_key = await self.s3_uploader.upload_summary_conversation(conversation_data, filename)
+                if s3_key:
+                    self.logger.info(f"📤 Full stratified conversation uploaded to S3: {s3_key}")
+                else:
+                    self.logger.info("🔧 S3 upload skipped (local environment or failed)")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
+            
+            return str(full_path)
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to export stratified conversation: {e}")
+            return ""
+
     async def export_conversation(self, message_history: 'MessageHistory', dateflight_local: Optional[str] = None) -> str:
-        """Export the conversation log to JSON file and upload to S3"""
+        """Export the conversation log to JSON file and upload to S3 (legacy single-step)"""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
