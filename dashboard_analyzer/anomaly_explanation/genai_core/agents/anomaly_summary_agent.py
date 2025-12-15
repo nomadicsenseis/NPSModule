@@ -304,9 +304,10 @@ class AnomalySummaryAgent:
             
             # DEBUG: persist exactly what the model will receive
             try:
-                os.makedirs("dashboard_analyzer/summary_reports", exist_ok=True)
+                summary_reports_dir = Path.cwd() / "summary_reports"
+                summary_reports_dir.mkdir(parents=True, exist_ok=True)
                 dbg_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-                debug_path = f"dashboard_analyzer/summary_reports/summary_agent_input_{dbg_ts}.md"
+                debug_path = summary_reports_dir / f"summary_agent_input_{dbg_ts}.md"
                 with open(debug_path, 'w', encoding='utf-8') as dbg:
                     dbg.write("===== SYSTEM =====\n\n")
                     dbg.write(system_prompt)
@@ -544,9 +545,10 @@ class AnomalySummaryAgent:
             # Save debug files and export conversation
             # =========================================================
             try:
-                os.makedirs("dashboard_analyzer/summary_reports", exist_ok=True)
+                summary_reports_dir = Path.cwd() / "summary_reports"
+                summary_reports_dir.mkdir(parents=True, exist_ok=True)
                 dbg_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-                debug_path = f"dashboard_analyzer/summary_reports/summary_stratified_{dbg_ts}.md"
+                debug_path = summary_reports_dir / f"summary_stratified_{dbg_ts}.md"
                 with open(debug_path, 'w', encoding='utf-8') as dbg:
                     dbg.write("===== STEP 1: SECTION CONNECTIONS =====\n\n")
                     for section_name, paragraph in daily_context_paragraphs.items():
@@ -842,8 +844,8 @@ PERÍODO {period} ({date_range}):
             period_identifier = dateflight_local if dateflight_local else timestamp[:8]  # Extract YYYYMMDD from timestamp
             filename = f"summary_{period_identifier}_{timestamp}.json"
             
-            # Create agent_conversations directory structure
-            base_dir = Path(__file__).parent.parent.parent.parent.parent / 'dashboard_analyzer' / 'agent_conversations' / 'anomaly_summary'
+            # Create agent_conversations directory structure in current working directory
+            base_dir = Path.cwd() / 'agent_conversations' / 'anomaly_summary'
             base_dir.mkdir(parents=True, exist_ok=True)
             
             full_path = base_dir / filename

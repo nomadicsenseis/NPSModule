@@ -5424,8 +5424,8 @@ class CausalExplanationAgent:
                 filename = f"causal_{period_info}_{safe_node_path}_{timestamp}.json"
                 print(f"🔍 DEBUG EXPORT: Final filename: '{filename}'")
             
-            # Create agent_conversations directory structure
-            base_dir = Path(__file__).parent.parent.parent.parent.parent / 'dashboard_analyzer' / 'agent_conversations' / 'causal_explanation'
+            # Create agent_conversations directory structure in current working directory
+            base_dir = Path.cwd() / 'agent_conversations' / 'causal_explanation'
             base_dir.mkdir(parents=True, exist_ok=True)
             
             full_path = base_dir / filename

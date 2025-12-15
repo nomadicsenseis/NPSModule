@@ -881,8 +881,8 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             period_identifier = date if date else timestamp[:8]  # Extract YYYYMMDD from timestamp
             filename = f"interpreter_{period_identifier}_{timestamp}.json"
             
-            # Create agent_conversations directory structure
-            base_dir = Path(__file__).parent.parent.parent.parent.parent / 'dashboard_analyzer' / 'agent_conversations' / 'anomaly_interpreter'
+            # Create agent_conversations directory structure in current working directory
+            base_dir = Path.cwd() / 'agent_conversations' / 'anomaly_interpreter'
             base_dir.mkdir(parents=True, exist_ok=True)
             
             full_path = base_dir / filename

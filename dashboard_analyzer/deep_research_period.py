@@ -85,8 +85,8 @@ def debug_save_hierarchical_data(hierarchical_explanation: str, period: int, dat
                                 causal_explanations: Optional[dict] = None, relationships: Optional[dict] = None):
     """Save hierarchical explanation data for interpreter debugging"""
     try:
-        # Create debug folder
-        debug_folder = Path("dashboard_analyzer/agent_conversations/interpreter_debug")
+        # Create debug folder in current working directory
+        debug_folder = Path.cwd() / "agent_conversations" / "interpreter_debug"
         debug_folder.mkdir(parents=True, exist_ok=True)
         
         # Create filename with timestamp
