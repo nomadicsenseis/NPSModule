@@ -163,9 +163,9 @@ class AnomalyInterpreterAgent:
         self.study_mode = study_mode
         self.environment = environment
         
-        # Load environment variables from .devcontainer/.env only if not in prod
+        # Load environment variables from .env in current working directory only if not in prod
         if self.environment != "prod":
-            dotenv_path = _PROJECT_ROOT / '.devcontainer' / '.env'
+            dotenv_path = Path.cwd() / '.env'
             if dotenv_path.exists():
                 load_dotenv(dotenv_path)
         

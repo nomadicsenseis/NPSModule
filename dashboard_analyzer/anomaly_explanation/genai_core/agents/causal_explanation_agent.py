@@ -492,10 +492,10 @@ class CausalExplanationAgent:
         if token:
             return token
         
-        # Try loading from temp_aws_credentials.env file (primary location)
+        # Try loading from temp_aws_credentials.env file in current working directory
         try:
-            temp_creds_file = "dashboard_analyzer/temp_aws_credentials.env"
-            if os.path.exists(temp_creds_file):
+            temp_creds_file = Path.cwd() / "temp_aws_credentials.env"
+            if temp_creds_file.exists():
                 with open(temp_creds_file, 'r') as f:
                     for line in f:
                         if line.startswith('chatbot_jwt_token ='):
@@ -505,10 +505,10 @@ class CausalExplanationAgent:
         except Exception as e:
             self.logger.debug(f"Could not load token from temp_aws_credentials.env: {e}")
         
-        # Try loading from token file (fallback)
+        # Try loading from .env file in current working directory (fallback)
         try:
-            token_file_path = os.getenv("CHATBOT_TOKEN_FILE", ".devcontainer/.env")
-            if os.path.exists(token_file_path):
+            token_file_path = Path.cwd() / ".env"
+            if token_file_path.exists():
                 with open(token_file_path, 'r') as f:
                     for line in f:
                         if line.startswith('CHATBOT_API_TOKEN='):
@@ -524,7 +524,7 @@ class CausalExplanationAgent:
     def _init_ncs_collector(self):
         """Initialize NCS collector with local environment"""
         try:
-            temp_creds_file = "dashboard_analyzer/temp_aws_credentials.env"
+            temp_creds_file = str(Path.cwd() / "temp_aws_credentials.env")
             collector = NCSDataCollector(temp_env_file=temp_creds_file, environment="prod")
             self.logger.info("✅ NCS collector initialized with production environment")
             return collector
@@ -562,9 +562,9 @@ class CausalExplanationAgent:
     
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
         """Create AWS Bedrock LLM instance."""
-        # Load environment variables from .devcontainer/.env only if not in prod
+        # Load environment variables from .env in current working directory only if not in prod
         if self.environment != "prod":
-            dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
+            dotenv_path = Path.cwd() / '.env'
             if dotenv_path.exists():
                 load_dotenv(dotenv_path)
         
@@ -1166,7 +1166,7 @@ class CausalExplanationAgent:
             
             # Import and create fresh NCS collector (same as comparative mode)
             from ....data_collection.ncs_collector import NCSDataCollector
-            temp_creds_file = "dashboard_analyzer/temp_aws_credentials.env"
+            temp_creds_file = str(Path.cwd() / "temp_aws_credentials.env")
             ncs_collector = NCSDataCollector(temp_env_file=temp_creds_file)
             
             # Get NCS data for the specific period only
@@ -3273,7 +3273,7 @@ class CausalExplanationAgent:
             from ....data_collection.ncs_collector import NCSDataCollector
             
             # Initialize NCS collector with temp credentials
-            temp_creds_file = "dashboard_analyzer/temp_aws_credentials.env"
+            temp_creds_file = str(Path.cwd() / "temp_aws_credentials.env")
             ncs_collector = NCSDataCollector(temp_env_file=temp_creds_file)
             
             # Calculate comparison period dates if temporal comparison is enabled

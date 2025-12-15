@@ -69,9 +69,9 @@ class AnomalySummaryAgent:
         # Initialize S3 uploader with environment
         self.s3_uploader = S3ReportUploader(environment=environment)
         
-        # Load environment variables from .devcontainer/.env only if not in prod
+        # Load environment variables from .env in current working directory only if not in prod
         if self.environment != "prod":
-            dotenv_path = Path(__file__).parent.parent.parent.parent.parent / '.devcontainer' / '.env'
+            dotenv_path = Path.cwd() / '.env'
             if dotenv_path.exists():
                 load_dotenv(dotenv_path)
         

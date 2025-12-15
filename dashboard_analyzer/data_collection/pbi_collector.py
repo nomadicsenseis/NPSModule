@@ -20,9 +20,9 @@ class PBIDataCollector:
         
         self.environment = environment
         
-        # Load environment variables from .devcontainer/.env ONLY if not in prod
+        # Load environment variables from .env in current working directory ONLY if not in prod
         if self.environment != "prod":
-            dotenv_path = Path(__file__).parent.parent.parent / '.devcontainer' / '.env'
+            dotenv_path = Path.cwd() / '.env'
             if dotenv_path.exists():
                 print(f"🔍 DEBUG: Loading .env from {dotenv_path}")
                 load_dotenv(dotenv_path, override=True)
@@ -66,7 +66,7 @@ class PBIDataCollector:
             if self.environment == "prod":
                 error_msg += "\n   Running in 'prod' mode: System environment variables are expected but not found."
             else:
-                error_msg += "\n   Running in 'local' mode: Checked .devcontainer/.env but variables are missing."
+                error_msg += "\n   Running in 'local' mode: Checked .env in current directory but variables are missing."
             print(error_msg)
             raise ValueError(error_msg)
         
