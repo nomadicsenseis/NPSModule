@@ -303,9 +303,14 @@ hierarchical_diagnostic_helpers:
        - Busca: "OTP", "OTP15", "Mishandling", "Misconex", "Load Factor", "operative_data"
        - Formato: "OTP15 +0.6 pts" → Copia exactamente
 
-    3. **INCIDENTES NCS:**
-       - Busca: "cancelaciones", "retrasos", "cancellations", "delays", "aircraft limitations", "ncs_tool"
-       - Formato: "cancelaciones +17, retrasos -126" → Copia exactamente
+    3. **INCIDENTES NCS (OBLIGATORIO: cuantitativo + cualitativo):**
+       - **Parte cuantitativa (deltas / conteos):**
+         - Busca: "cancelaciones", "retrasos", "cancellations", "delays", "desvíos", "diversions", "aircraft limitations", "ncs_tool"
+         - Formato: "cancelaciones +17, retrasos -126" → Copia exactamente
+       - **Parte cualitativa (reflexión / eventos especiales):**
+         - Busca: "NCS_REFLEXION:" o la sección "🐴" / "Dark horses" dentro del bloque causal
+         - Copia textualmente el resumen de eventos (con fechas) y la relación sugerida con el cambio de incidentes y el NPS (si aparece)
+         - Si NO hay parte cualitativa para ese NMA, escribe "No disponible"
 
     4. **VERBATIMS/FEEDBACK:**
        - Busca: "verbatims", "comentarios", "menciones positivas/negativas"
@@ -331,8 +336,11 @@ hierarchical_diagnostic_helpers:
     📊 DATOS OPERATIVOS:
     [Copia textual de OTP, mishandling, load factor, etc., o "No disponible"]
     
-    🚨 INCIDENTES NCS:
-    [Copia textual de cancelaciones, retrasos, limitaciones, etc., o "No disponible"]
+    🚨 INCIDENTES NCS (CUANTITATIVO):
+    [Copia textual de cancelaciones, retrasos, desvíos, limitaciones, etc., o "No disponible"]
+
+    🧠 NCS (CUALITATIVO / REFLEXIÓN):
+    [Copia textual de "NCS_REFLEXION:" o de la sección de eventos especiales (🐴) si existe; o "No disponible"]
     
     💬 FEEDBACK DE CLIENTES:
     [Resumen de verbatims, o "No disponible"]
