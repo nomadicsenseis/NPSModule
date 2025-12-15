@@ -861,9 +861,11 @@ class PBIDataCollector:
             with open(template_path, 'r', encoding='utf-8') as f:
                 template = f.read()
             
-            # Replace analysis period placeholders
-            query = template.replace('__START_DATE__', start_date.strftime('%Y, %-m, %-d'))
-            query = query.replace('__END_DATE__', end_date.strftime('%Y, %-m, %-d'))
+            # Replace analysis period placeholders (cross-platform date format without leading zeros)
+            start_date_str = f"{start_date.year}, {start_date.month}, {start_date.day}"
+            end_date_str = f"{end_date.year}, {end_date.month}, {end_date.day}"
+            query = template.replace('__START_DATE__', start_date_str)
+            query = query.replace('__END_DATE__', end_date_str)
             
             # Replace segment filters
             cabin_filter = "{" + ", ".join([f'"{c}"' for c in cabins]) + "}" if cabins else ""
@@ -1085,9 +1087,11 @@ class PBIDataCollector:
             '__COMPARISON_FILTER__', comparison_filter or ""
         )
         
-        # Replace analysis period placeholders (same as exp_drivers_tool)
-        query = query.replace('__START_DATE__', start_date.strftime('%Y, %-m, %-d'))
-        query = query.replace('__END_DATE__', end_date.strftime('%Y, %-m, %-d'))
+        # Replace analysis period placeholders (cross-platform date format without leading zeros)
+        start_date_str = f"{start_date.year}, {start_date.month}, {start_date.day}"
+        end_date_str = f"{end_date.year}, {end_date.month}, {end_date.day}"
+        query = query.replace('__START_DATE__', start_date_str)
+        query = query.replace('__END_DATE__', end_date_str)
         
         # Replace comparison date placeholders for the selected period filter
         if comparison_filter == "vs Sel. Period" and comparison_start_date and comparison_end_date:
