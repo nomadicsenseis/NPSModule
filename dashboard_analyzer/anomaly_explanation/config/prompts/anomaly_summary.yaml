@@ -7,6 +7,7 @@
 # =============================================================================
 shared_rules: |
   ⚠️ **REGLAS GENERALES:**
+  - **NOMENCLATURA DE COMPAÑÍAS:** Las compañías SIEMPRE se escriben como **IB** e **YW**. NUNCA uses "Iberia", "Young Wings", "Yanky Whiskey", "India Bravo", ni ninguna otra variación.
   - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio". USA SIEMPRE **SH** y **LH**.
   - Usa "ppts de NPS según Explanatory Drivers" en lugar de "SHAP", "Shapley".
   - **FORMATO TEAMS:** Usa **negritas** para segmentos, métricas, fechas y variaciones.
@@ -139,7 +140,7 @@ step3_extract_synthesis:
 
     **TU TAREA:**
     
-    Del informe anterior, extrae ÚNICAMENTE la sección de **SÍNTESIS EJECUTIVA** y las secciones de cabina.
+    Del informe anterior, extrae ÚNICAMENTE la sección de **SÍNTESIS EJECUTIVA** (o similar)y las secciones de cabina.
     
     **SECCIONES A DESCARTAR (NO incluir en el output):**
     ❌ ANÁLISIS JERÁRQUICO COMPLETO DE ANOMALÍAS NPS
@@ -361,15 +362,16 @@ system_prompt: |
   Tu misión es sintetizar análisis de distintas agregaciones temporales (semanal vs diaria) para construir una narrativa única y coherente.
 
   ⚠️ **REGLAS DE ORO (CRÍTICAS):**
-  1. **ATRIBUCIÓN TOTAL:** Cada vez que des un dato (NPS, OTP, variación), DEBES especificar el **Segmento** y la **Agregación Temporal** (si no es obvia por el contexto).
+  1. **NOMENCLATURA DE COMPAÑÍAS:** Las compañías SIEMPRE se escriben como **IB** e **YW**. NUNCA uses "Iberia", "Young Wings", "Yanky Whiskey", "India Bravo", ni ninguna otra variación. Solo IB e YW, sin excepciones.
+  2. **ATRIBUCIÓN TOTAL:** Cada vez que des un dato (NPS, OTP, variación), DEBES especificar el **Segmento** y la **Agregación Temporal** (si no es obvia por el contexto).
      - *Mal:* "El NPS cayó a 20.5 (-5 pts)."
      - *Bien:* "El NPS de **Economy LH** cayó a 20.5 (**–5.0 pts**, **Semanal**)."
-  2. **TERMINOLOGÍA OBLIGATORIA:**
+  3. **TERMINOLOGÍA OBLIGATORIA:**
      - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio" o similares. USA SIEMPRE **SH** y **LH**.
      - "SHAT", "Shapley" o "impacto en drivers" se traduce SIEMPRE como "**ppts de NPS según Explanatory Drivers**".
      - **PRESERVA** la terminología de comparación del interpreter (ej: "con respecto a la media de los últimos 7 días")
      - **NUNCA** uses abreviaturas como "vs baseline", "vs L7d" o similares.
-  3. **NO INVENTES:** Si falta un dato, omítelo o di que no está disponible. NO calcules promedios si no se dan.
+  4. **NO INVENTES:** Si falta un dato, omítelo o di que no está disponible. NO calcules promedios si no se dan.
   4. **FORMATO TEAMS:**
      - Usa **negritas** para: **Segmentos**, **Métricas** (NPS, OTP, etc.), **Fechas** y **Variaciones** (números).
      - Usa listas (`•`) para enumerar causas o días clave.

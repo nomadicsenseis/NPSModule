@@ -101,9 +101,9 @@ async def run_weekly_comprehensive_analysis(
 
     generated_reports = []
 
-    # --- PARALLEL EXECUTION: Weekly + Daily Analysis ---
+    # --- SEQUENTIAL EXECUTION: Weekly first, then Daily Analysis ---
     print("\n" + "=" * 40)
-    print("🚀 PARALLEL EXECUTION: Weekly Comparative + Daily Single Analyses")
+    print("🚀 SEQUENTIAL EXECUTION: Weekly Comparative first, then Daily Single Analyses")
     print("=" * 40)
     
     # Determine anomaly detection mode based on causal filter
@@ -115,7 +115,7 @@ async def run_weekly_comprehensive_analysis(
     
     async def run_weekly_analysis():
         """Execute weekly comparative analysis"""
-        print("\n📊 [PARALLEL] Starting Weekly Comparative Analysis...")
+        print("\n📊 [STEP 1] Starting Weekly Comparative Analysis...")
         try:
             result = await execute_analysis_flow(
                 analysis_date=analysis_date,
@@ -133,20 +133,20 @@ async def run_weekly_comprehensive_analysis(
                 environment=environment
             )
             if result and "Error" not in str(result):
-                print(f"✅ [PARALLEL] Weekly analysis completed. Data length: {len(str(result))} chars")
+                print(f"✅ [STEP 1] Weekly analysis completed. Data length: {len(str(result))} chars")
                 return {'type': 'weekly', 'data': result, 'success': True}
             else:
-                print(f"⚠️ [PARALLEL] Weekly analysis did not generate a report.")
+                print(f"⚠️ [STEP 1] Weekly analysis did not generate a report.")
                 return {'type': 'weekly', 'data': None, 'success': False}
         except Exception as e:
-            print(f"❌ [PARALLEL] Weekly analysis error: {e}")
+            print(f"❌ [STEP 1] Weekly analysis error: {e}")
             import traceback
             traceback.print_exc()
             return {'type': 'weekly', 'data': None, 'success': False, 'error': str(e)}
     
     async def run_daily_analysis():
         """Execute daily single analysis for each of the last N days"""
-        print(f"\n📊 [PARALLEL] Starting Daily Analysis ({daily_periods} days)...")
+        print(f"\n📊 [STEP 2] Starting Daily Analysis ({daily_periods} days)...")
         try:
             result = await execute_analysis_flow(
                 analysis_date=analysis_date,
@@ -164,39 +164,55 @@ async def run_weekly_comprehensive_analysis(
                 environment=environment
             )
             if result and "Error" not in str(result):
-                print(f"✅ [PARALLEL] Daily analysis completed. Data length: {len(str(result))} chars")
+                print(f"✅ [STEP 2] Daily analysis completed. Data length: {len(str(result))} chars")
                 return {'type': 'daily', 'data': result, 'success': True}
             else:
-                print(f"❌ [PARALLEL] Daily analysis failed. Reason: {result}")
+                print(f"❌ [STEP 2] Daily analysis failed. Reason: {result}")
                 return {'type': 'daily', 'data': None, 'success': False}
         except Exception as e:
-            print(f"❌ [PARALLEL] Daily analysis error: {e}")
+            print(f"❌ [STEP 2] Daily analysis error: {e}")
             import traceback
             traceback.print_exc()
             return {'type': 'daily', 'data': None, 'success': False, 'error': str(e)}
     
-    # Execute both analyses in parallel
-    print("\n⚡ Launching parallel analysis tasks...")
-    parallel_results = await asyncio.gather(
-        run_weekly_analysis(),
-        run_daily_analysis(),
-        return_exceptions=True
-    )
+    # Execute analyses SEQUENTIALLY: Weekly first, then Daily
+    # This prevents resource contention and API throttling issues
+    print("\n⚡ Executing WEEKLY analysis first (sequential mode)...")
     
-    # Process parallel results
+    # STEP 1: Run weekly analysis and wait for completion
+    weekly_result = await run_weekly_analysis()
+    
+    if isinstance(weekly_result, Exception):
+        print(f"❌ Weekly analysis failed with exception: {weekly_result}")
+    elif isinstance(weekly_result, dict) and weekly_result.get('success') and weekly_result.get('data'):
+        generated_reports.append({
+            'type': weekly_result['type'],
+            'data': weekly_result['data']
+        })
+        print(f"✅ Weekly analysis: SUCCESS")
+    else:
+        print(f"⚠️ Weekly analysis: No data generated")
+    
+    # STEP 2: Only after weekly is complete, run daily analysis
+    print("\n⚡ Weekly complete. Now executing DAILY analyses...")
+    daily_result = await run_daily_analysis()
+    
+    if isinstance(daily_result, Exception):
+        print(f"❌ Daily analysis failed with exception: {daily_result}")
+    elif isinstance(daily_result, dict) and daily_result.get('success') and daily_result.get('data'):
+        generated_reports.append({
+            'type': daily_result['type'],
+            'data': daily_result['data']
+        })
+        print(f"✅ Daily analysis: SUCCESS")
+    else:
+        print(f"⚠️ Daily analysis: No data generated")
+    
+    # Summary of sequential execution results
     print("\n" + "=" * 40)
-    print("📋 PARALLEL EXECUTION RESULTS")
+    print("📋 SEQUENTIAL EXECUTION RESULTS")
     print("=" * 40)
-    
-    for result in parallel_results:
-        if isinstance(result, Exception):
-            print(f"❌ Task failed with exception: {result}")
-        elif isinstance(result, dict) and result.get('success') and result.get('data'):
-            generated_reports.append({
-                'type': result['type'],
-                'data': result['data']
-            })
-            print(f"✅ {result['type'].capitalize()} analysis: SUCCESS")
+    print(f"✅ Total reports generated: {len(generated_reports)}")
 
     # --- 3. Final Summary ---
     print("\n" + "=" * 40)
