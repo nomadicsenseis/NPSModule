@@ -1578,6 +1578,10 @@ class CausalExplanationAgent:
             current_nps = "N/A"
             baseline_nps = "N/A" 
             nps_difference = "N/A"
+            # Persist NPS context on the agent so tools (e.g., ncs_tool) can relate incidents ↔ NPS
+            self.current_nps_value = None
+            self.baseline_nps_value = None
+            self.nps_difference_value = None
             
             if nps_context:
                 # Try to extract NPS values from the context
@@ -1596,6 +1600,9 @@ class CausalExplanationAgent:
                         current_val = float(current_nps)
                         baseline_val = float(baseline_nps)
                         nps_difference = f"{current_val - baseline_val:.1f}"
+                        self.current_nps_value = current_val
+                        self.baseline_nps_value = baseline_val
+                        self.nps_difference_value = current_val - baseline_val
                     except ValueError:
                         nps_difference = "N/A"
             
@@ -1860,6 +1867,10 @@ class CausalExplanationAgent:
             current_nps = "N/A"
             baseline_nps = "N/A" 
             nps_difference = "N/A"
+            # Persist NPS context on the agent so tools (e.g., ncs_tool) can relate incidents ↔ NPS
+            self.current_nps_value = None
+            self.baseline_nps_value = None
+            self.nps_difference_value = None
             
             self.logger.info(f"🔍 DEBUG COMPARATIVE: nps_context received (length={len(nps_context)}): '{nps_context}'")
             if nps_context:
@@ -1885,6 +1896,9 @@ class CausalExplanationAgent:
                         current_val = float(current_nps)
                         baseline_val = float(baseline_nps)
                         nps_difference = f"{current_val - baseline_val:.1f}"
+                        self.current_nps_value = current_val
+                        self.baseline_nps_value = baseline_val
+                        self.nps_difference_value = current_val - baseline_val
                     except ValueError:
                         nps_difference = "N/A"
                 else:
@@ -3464,11 +3478,49 @@ class CausalExplanationAgent:
             # Get anomaly type from stored attribute or default to unknown
             current_anomaly_type = getattr(self, 'current_anomaly_type', 'unknown')
             
+            # NPS variation for the node (comes from investigation context, not from NCS temporal_analysis)
+            nps_variation = getattr(self, 'nps_difference_value', None)
+            temporal_incident_changes = {}
+            if temporal_analysis:
+                # Extract incident type deltas from temporal comparison
+                incident_type_deltas = temporal_analysis.get('incident_type_deltas', {})
+                if incident_type_deltas:
+                    temporal_incident_changes = incident_type_deltas
+            
+            # Prepare comparison data for dark horses detection
+            comparison_data_for_reflection = None
+            comparison_start_str = None
+            comparison_end_str = None
+            if temporal_comparison and comparison_data is not None and not comparison_data.empty:
+                # Use the already filtered comparison data if it exists
+                if 'filtered_comparison_data_for_temporal' in locals():
+                    comparison_data_for_reflection = filtered_comparison_data_for_temporal
+                else:
+                    # Fall back to filtering again if needed
+                    comparison_data_for_reflection = await self._filter_ncs_by_segment(comparison_data, node_path)
+                if comparison_start_dt:
+                    comparison_start_str = comparison_start_dt.strftime('%Y-%m-%d')
+                if comparison_end_dt:
+                    comparison_end_str = comparison_end_dt.strftime('%Y-%m-%d')
+            
             try:
                 # First, try the new agent reflection approach
                 self.logger.info(f"🤖 Trying new NCS agent reflection approach...")
                 self.logger.info(f"📊 MAIN: About to send to agent reflection - data shape: {filtered_ncs_data.shape}")
-                causal_analysis = await self._ncs_reflection_with_agent(filtered_ncs_data, node_path, current_anomaly_type, total_days)
+                causal_analysis = await self._ncs_reflection_with_agent(
+                    filtered_ncs_data=filtered_ncs_data,
+                    node_path=node_path,
+                    anomaly_type=current_anomaly_type,
+                    total_days=total_days,
+                    # New dark horses parameters
+                    comparison_data=comparison_data_for_reflection,
+                    current_start_date=start_date,
+                    current_end_date=end_date,
+                    comparison_start_date=comparison_start_str,
+                    comparison_end_date=comparison_end_str,
+                    nps_variation=nps_variation,
+                    temporal_incident_changes=temporal_incident_changes
+                )
                 
                 # INTEGRATE STRUCTURED NCS DATA into causal analysis
                 causal_analysis['structured_ncs_data'] = structured_ncs_data
@@ -3484,7 +3536,7 @@ class CausalExplanationAgent:
                     
             except Exception as e:
                 self.logger.error(f"Error in NCS agent reflection, falling back to pattern matching: {str(e)}")
-            causal_analysis = await self._extract_ncs_causal_insights_workflow_aware(filtered_ncs_data, node_path, current_anomaly_type)
+                causal_analysis = await self._extract_ncs_causal_insights_workflow_aware(filtered_ncs_data, node_path, current_anomaly_type)
             
             # Format results for agent understanding with WORKFLOW-AWARE FOCUS
             analysis_result = []
@@ -5325,8 +5377,9 @@ class CausalExplanationAgent:
                 summary_parts.append(f"   📅 Días analizados: {ncs_data.get('days_analyzed', 'N/A')}")
                 summary_parts.append(f"   ⚙️ Estado fuente datos: {ncs_data.get('data_source_status', 'N/A')}")
                 analysis_summary = ncs_data.get('analysis_summary', 'No disponible')
-                if len(analysis_summary) > 300:
-                    analysis_summary = analysis_summary[:300] + '...'
+                # Keep a larger snippet so the persisted NCS reflection (incl. dark horses + NPS↔incidents) reaches final synthesis.
+                if len(analysis_summary) > 1200:
+                    analysis_summary = analysis_summary[:1200] + '...'
                 summary_parts.append(f"   📊 Análisis: {analysis_summary}")
             else:
                 summary_parts.append(f"   {ncs_data}")
@@ -5545,7 +5598,13 @@ class CausalExplanationAgent:
                 
                 # Use routes dictionary instead of hardcoded keywords
                 filtered_ncs = await self._filter_using_routes_dictionary(
-                    filtered_ncs, haul_type, incident_col
+                    filtered_ncs,
+                    haul_type,
+                    incident_col,
+                    # Key point: for non-Global nodes we must avoid cross-contamination.
+                    # Incidents without explicit routes (XXX-YYY) cannot be reliably assigned to LH/SH,
+                    # so we exclude them for haul-specific segments.
+                    allow_unknown_route_incidents=("Global" in node_path)
                 )
             
             # STEP 2: Apply cabin filtering ONLY when we're at cabin level AND need to exclude incidents that affect ONLY other cabins
@@ -6010,10 +6069,37 @@ ORDER BY 'Route_Master'[route]
         # Simple placeholder - return empty list for now
         return []
 
-    async def _ncs_reflection_with_agent(self, filtered_ncs_data: pd.DataFrame, node_path: str, anomaly_type: str, total_days: int) -> dict:
+    async def _ncs_reflection_with_agent(
+        self, 
+        filtered_ncs_data: pd.DataFrame, 
+        node_path: str, 
+        anomaly_type: str, 
+        total_days: int,
+        # New parameters for dark horses analysis
+        comparison_data: pd.DataFrame = None,
+        current_start_date: str = None,
+        current_end_date: str = None,
+        comparison_start_date: str = None,
+        comparison_end_date: str = None,
+        nps_variation: float = None,
+        temporal_incident_changes: dict = None
+    ) -> dict:
         """
         Send filtered NCS data to agent with helper prompt for reflection.
-        This bypasses the pattern-matching pipeline and lets the LLM analyze raw data directly.
+        Enhanced to include dark horses detection by comparing comments between periods.
+        
+        Args:
+            filtered_ncs_data: Current period NCS data filtered by segment
+            node_path: Segment path being analyzed
+            anomaly_type: Type of anomaly (positive/negative)
+            total_days: Number of days in period
+            comparison_data: Comparison period NCS data filtered by segment (optional)
+            current_start_date: Start date of current period
+            current_end_date: End date of current period
+            comparison_start_date: Start date of comparison period
+            comparison_end_date: End date of comparison period
+            nps_variation: NPS variation between periods (e.g., -10.0)
+            temporal_incident_changes: Dict with incident type changes (e.g., {'cancelaciones': +12})
         """
         try:
             # DEBUG: Log actual data structure
@@ -6051,75 +6137,126 @@ ORDER BY 'Route_Master'[route]
             
             # Prepare sample of incidents for agent analysis
             incident_count = len(filtered_ncs_data)
-            sample_size = min(20, incident_count)  # Show up to 20 incidents
+            sample_size = min(30, incident_count)  # Show up to 30 incidents for dark horse detection
             
-            # Extract incidents using iloc to handle empty column names
-            sample_incidents = filtered_ncs_data.iloc[:sample_size, 0].tolist()
+            # Extract incidents WITH DATES from current period
+            current_incidents_with_dates = self._extract_incidents_with_dates(filtered_ncs_data, sample_size)
             
-            # Filter out empty/null incidents
-            sample_incidents = [str(incident).strip() for incident in sample_incidents if pd.notna(incident) and str(incident).strip()]
+            # Extract incidents WITH DATES from comparison period (if available)
+            comparison_incidents_with_dates = []
+            if comparison_data is not None and not comparison_data.empty:
+                comparison_sample_size = min(30, len(comparison_data))
+                comparison_incidents_with_dates = self._extract_incidents_with_dates(comparison_data, comparison_sample_size)
             
-            self.logger.info(f"🔍 DEBUG: Extracted {len(sample_incidents)} valid incidents from {sample_size} samples")
+            self.logger.info(f"🔍 DEBUG: Extracted {len(current_incidents_with_dates)} current incidents, {len(comparison_incidents_with_dates)} comparison incidents")
             
             # ENHANCEMENT: Pre-analyze routes for disruption counting
+            sample_incidents = [inc['text'] for inc in current_incidents_with_dates]
             all_incidents_text = "\n".join(sample_incidents)
             route_disruption_summary = self._extract_route_disruption_counts(all_incidents_text)
             
-            # Create enhanced NCS helper prompt with route disruption data
+            # Build NPS variation context
+            nps_context = ""
+            nps_variation_str = "N/A"  # String version for prompt
+            if nps_variation is not None:
+                direction = "subió" if nps_variation > 0 else "bajó"
+                nps_variation_str = f"{nps_variation:+.1f}"
+                nps_context = f"📈 **VARIACIÓN DE NPS (del nodo analizado):** El NPS {direction} **{nps_variation_str} pts** respecto al baseline del análisis"
+            
+            # Build incident changes context
+            incident_changes_context = ""
+            if temporal_incident_changes:
+                incident_changes_context = "📊 **VARIACIÓN DE INCIDENTES:**\n"
+                for incident_type, change_data in temporal_incident_changes.items():
+                    # change_data is a dict with {current, previous, delta, pct_change}
+                    delta = change_data.get('delta', 0) if isinstance(change_data, dict) else change_data
+                    if delta != 0:
+                        direction = "+" if delta > 0 else ""
+                        incident_changes_context += f"   • {incident_type.capitalize()}: {direction}{delta}\n"
+            
+            # Create enhanced NCS helper prompt with DARK HORSES analysis
             ncs_helper_prompt = f"""
-🚨 **ANÁLISIS NCS - REFLEXIÓN REQUERIDA**
+🚨 **ANÁLISIS NCS - REFLEXIÓN CON DETECCIÓN DE DARK HORSES**
 
-📊 **DATOS DISPONIBLES:**
+📊 **CONTEXTO DEL ANÁLISIS:**
 - Segmento: {node_path}
-- Período: {total_days} días
-- Incidentes filtrados: {incident_count} incidentes operacionales
-- Tipo de anomalía: {anomaly_type}
+- Período actual: {current_start_date or 'N/A'} a {current_end_date or 'N/A'} ({total_days} días)
+- Período comparativo: {comparison_start_date or 'N/A'} a {comparison_end_date or 'N/A'}
+- Incidentes período actual: {incident_count}
+- Incidentes período comparativo: {len(comparison_data) if comparison_data is not None else 'N/A'}
+- Tipo de anomalía NPS: {anomaly_type}
 
-📈 **CONTEO DE DISRUPCIONES POR RUTA:**"""
+{nps_context}
+
+{incident_changes_context}
+
+📈 **CONTEO DE DISRUPCIONES POR RUTA (período actual):**"""
             
             if route_disruption_summary:
                 ncs_helper_prompt += "\n"
-                for route, count in list(route_disruption_summary.items())[:10]:  # Show top 10
+                for route, count in list(route_disruption_summary.items())[:10]:
                     ncs_helper_prompt += f"\n   • {route}: {count} disrupciones"
                 if len(route_disruption_summary) > 10:
                     ncs_helper_prompt += f"\n   ... y {len(route_disruption_summary) - 10} rutas adicionales"
             else:
-                ncs_helper_prompt += "\n   • No se encontraron patrones de ruta claros en los datos"
+                ncs_helper_prompt += "\n   • No se encontraron patrones de ruta claros"
 
+            # Add current period incidents WITH DATES
             ncs_helper_prompt += f"""
 
-📋 **MUESTRA DE INCIDENTES (primeros {sample_size}):**"""
+📋 **COMENTARIOS PERÍODO ACTUAL ({current_start_date or 'N/A'} a {current_end_date or 'N/A'}):**"""
             
-            for i, incident in enumerate(sample_incidents, 1):
-                # Truncate very long incidents
-                incident_text = str(incident)[:200] + "..." if len(str(incident)) > 200 else str(incident)
-                ncs_helper_prompt += f"\n{i}. {incident_text}"
+            for inc in current_incidents_with_dates:
+                incident_text = inc['text'][:250] + "..." if len(inc['text']) > 250 else inc['text']
+                ncs_helper_prompt += f"\n• [{inc['date']}] {incident_text}"
             
             if incident_count > sample_size:
                 ncs_helper_prompt += f"\n... y {incident_count - sample_size} incidentes adicionales"
             
+            # Add comparison period incidents WITH DATES (if available)
+            if comparison_incidents_with_dates:
+                ncs_helper_prompt += f"""
+
+📋 **COMENTARIOS PERÍODO COMPARATIVO ({comparison_start_date or 'N/A'} a {comparison_end_date or 'N/A'}):**"""
+                
+                for inc in comparison_incidents_with_dates:
+                    incident_text = inc['text'][:250] + "..." if len(inc['text']) > 250 else inc['text']
+                    ncs_helper_prompt += f"\n• [{inc['date']}] {incident_text}"
+                
+                if comparison_data is not None and len(comparison_data) > len(comparison_incidents_with_dates):
+                    ncs_helper_prompt += f"\n... y {len(comparison_data) - len(comparison_incidents_with_dates)} incidentes adicionales"
+            
             ncs_helper_prompt += f"""
 
-🎯 **SOLICITUD DE ANÁLISIS:**
+🎯 **SOLICITUD DE ANÁLISIS (sin asumir correlaciones):**
 
-Por favor analiza estos incidentes operacionales y proporciona:
+Genera una **REFLEXIÓN NCS** que pueda persistirse y reutilizarse en la síntesis final. Debe integrar SIEMPRE:
 
-1. **CAUSAS PRINCIPALES**: ¿Qué tipos de problemas operacionales identificas? (retrasos, cancelaciones, problemas técnicos, equipaje, tripulación, etc.)
+1) **CUANTITATIVO (incidentes):**
+   - Variación por tipo (cancelaciones, desvíos, retrasos, etc.) y lectura de rutas más afectadas.
 
-2. **RUTAS AFECTADAS**: ¿Qué rutas específicas (formato XXX-YYY) menciona en los incidentes? 
-   - Usa el conteo de disrupciones arriba para priorizar las rutas más impactadas
-   - Explica qué tipo de problemas afectó a cada ruta
+2) **DARK HORSES (texto libre, ambos períodos):**
+   - Identifica eventos excepcionales mencionados y cita **fechas** y, si están, **rutas/vuelos**.
+   - Si no hay eventos, dilo explícitamente.
 
-3. **CORRELACIÓN CON ANOMALÍA {anomaly_type.upper()}**: 
-   - Si anomalía POSITIVA: ¿Los incidentes son aislados/no relevantes, o indican mejoras operacionales?
-   - Si anomalía NEGATIVA: ¿Los incidentes explican la caída del NPS? ¿Qué rutas con más disrupciones correlacionan con peor NPS?
+3) **RELACIÓN NPS ↔ INCIDENTES ↔ DARK HORSES (con incertidumbre):**
+   - Explica **cómo podría** conectarse la variación de NPS ({nps_variation_str} pts) con:
+     (a) la variación cuantitativa de incidentes,
+     (b) la presencia/ausencia de dark horses.
+   - Si un dark horse podría explicar parte del cambio cuantitativo (p.ej. más desvíos/retrasos), dilo.
+   - Si el cuantitativo parece NO alinearse con el NPS, dilo y sugiere hipótesis alternativas.
+   - **No asumas causalidad**: etiqueta como “posible”, “consistente con”, “no concluyente”.
 
-4. **TOUCHPOINTS AFECTADOS**: ¿Qué aspectos del viaje impactaron? (puntualidad, equipaje, embarque, tripulación, etc.)
+🧩 **FORMATO DE SALIDA (OBLIGATORIO, para persistencia):**
+Empieza EXACTAMENTE con:
+NCS_REFLEXION:
 
-5. **ANÁLISIS CUANTITATIVO**: Conecta los números de disrupciones por ruta con el impacto esperado en NPS
-
-📝 **FORMATO DE RESPUESTA:**
-Proporciona un análisis estructurado que pueda usarse para explicar la anomalía NPS, incluyendo datos específicos de disrupciones por ruta.
+Luego incluye estas secciones (en este orden):
+- NPS_DELTA: {nps_variation_str} pts
+- INCIDENTES_DELTA: [resumen breve por tipo]
+- DARK_HORSES: [lista con fechas; o “No detectados”]
+- HIPOTESIS_DE_RELACION: [2-5 líneas]
+- NIVEL_DE_CONFIANZA: [bajo/medio/alto] + por qué
 """
             
             self.logger.info(f"🤖 Enviando {incident_count} incidentes NCS al agente para reflexión con datos de disrupciones por ruta")
@@ -6142,18 +6279,29 @@ Proporciona un análisis estructurado que pueda usarse para explicar la anomalí
             
             message_history = MessageHistory(logger=self.logger)
             
-            # System prompt for NCS analysis
+            # System prompt for NCS analysis with dark horses detection
             system_prompt = """Eres un experto analista de incidentes operacionales de aerolíneas. 
-Tu tarea es analizar incidentes NCS (Network Control Center) y extraer insights causales relevantes para anomalías de NPS.
+Tu tarea es analizar incidentes NCS (Network Control Center) y extraer insights causales para explicar variaciones de NPS.
 
-Enfócate en:
-- Identificar causas operacionales concretas con datos cuantitativos
-- Extraer rutas específicas afectadas con conteos de disrupciones
-- Correlacionar incidentes con impacto en satisfacción del cliente
-- Distinguir entre incidentes relevantes vs aislados
-- Usar los datos de conteo de disrupciones para priorizar análisis
+**CAPACIDADES DE ANÁLISIS:**
+1. Identificar causas operacionales cuantificables (cancelaciones, retrasos, desvíos)
+2. Detectar "DARK HORSES" - eventos excepcionales en comentarios:
+   - Huelgas (ATC, handling, pilotos)
+   - Condiciones meteorológicas extremas
+   - Fallos de sistemas IT
+   - Problemas de tripulación
+   - Cierres de aeropuertos
+   - Overbooking masivo
+   - Cualquier evento inusual mencionado en texto libre
 
-Proporciona análisis estructurado, específico y respaldado por números."""
+**ENFOQUE CRÍTICO:**
+- NO asumas correlaciones automáticas entre incidentes y NPS
+- REFLEXIONA sobre la posible influencia de cada factor
+- DISTINGUE entre causas recurrentes (métricas) vs excepcionales (dark horses)
+- MENCIONA fechas específicas cuando los comentarios las indiquen
+- CONECTA los dark horses con las variaciones de incidentes cuantificados
+
+Proporciona análisis estructurado, específico y basado en evidencia de los datos proporcionados."""
             
             message_history.create_and_add_message(
                 content=system_prompt,
@@ -6167,7 +6315,7 @@ Proporciona análisis estructurado, específico y respaldado por números."""
             self.tracker.log_message("USER", ncs_helper_prompt)
             
             # Get LLM analysis
-            self.logger.info(f"🔄 DEBUG: About to call LLM with {len(sample_incidents)} incidents and route disruption data...")
+            self.logger.info(f"🔄 DEBUG: About to call LLM with {len(current_incidents_with_dates)} current + {len(comparison_incidents_with_dates)} comparison incidents...")
             
             response, _, _ = await self.agent.invoke(
                 messages=message_history.get_messages(),
@@ -6196,7 +6344,9 @@ Proporciona análisis estructurado, específico y respaldado por números."""
                 'incident_count': incident_count,
                 'sample_size': sample_size,
                 'route_disruption_counts': route_disruption_summary,
-                'method': 'agent_reflection'
+                'method': 'agent_reflection_ncs',
+                'dark_horses_analysis_included': comparison_data is not None and not comparison_data.empty,
+                'comparison_incidents_analyzed': len(comparison_incidents_with_dates)
             }
             
         except Exception as e:
@@ -6210,6 +6360,81 @@ Proporciona análisis estructurado, específico y respaldado por números."""
                 'analysis_summary': f'Error en reflexión NCS: {str(e)}',
                 'method': 'agent_reflection_failed'
             }
+
+    def _extract_incidents_with_dates(self, ncs_data: pd.DataFrame, max_incidents: int = 30) -> List[Dict[str, str]]:
+        """
+        Extract incidents from NCS data with their associated dates.
+        
+        Args:
+            ncs_data: DataFrame with NCS incident data
+            max_incidents: Maximum number of incidents to extract
+            
+        Returns:
+            List of dicts with 'date' and 'text' keys
+        """
+        incidents_with_dates = []
+        
+        if ncs_data.empty:
+            return incidents_with_dates
+        
+        try:
+            # Get incident text column (first column)
+            incident_col = ncs_data.columns[0] if len(ncs_data.columns) > 0 else None
+            if incident_col is None:
+                return incidents_with_dates
+            
+            # Try to find date column
+            date_col = None
+            date_column_candidates = ['collection_date', 'email_date', 'date', 'fecha', 'Date', 'Fecha']
+            for col in date_column_candidates:
+                if col in ncs_data.columns:
+                    date_col = col
+                    break
+            
+            # If no date column found, try to extract date from source_file
+            if date_col is None and 'source_file' in ncs_data.columns:
+                date_col = 'source_file'  # Will extract date from filename
+            
+            # Extract incidents with dates
+            for idx, row in ncs_data.head(max_incidents).iterrows():
+                incident_text = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
+                
+                if not incident_text or incident_text == 'nan':
+                    continue
+                
+                # Extract date
+                date_str = "N/A"
+                if date_col:
+                    date_value = row.get(date_col, None)
+                    if date_value is not None and pd.notna(date_value):
+                        if date_col == 'source_file':
+                            # Extract date from filename (format: ndc-YYYY-MM-DD...)
+                            import re
+                            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', str(date_value))
+                            if date_match:
+                                date_str = date_match.group(1)
+                        elif hasattr(date_value, 'strftime'):
+                            date_str = date_value.strftime('%Y-%m-%d')
+                        else:
+                            # Try to parse string date
+                            try:
+                                from datetime import datetime
+                                parsed_date = datetime.strptime(str(date_value)[:10], '%Y-%m-%d')
+                                date_str = parsed_date.strftime('%d-%b')  # Format: 06-dic
+                            except:
+                                date_str = str(date_value)[:10]
+                
+                incidents_with_dates.append({
+                    'date': date_str,
+                    'text': incident_text
+                })
+            
+            self.logger.info(f"🔍 Extracted {len(incidents_with_dates)} incidents with dates")
+            return incidents_with_dates
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting incidents with dates: {str(e)}")
+            return incidents_with_dates
 
     def _extract_structured_ncs_data(self, incidents_text: str) -> dict:
         """Extract structured NCS data with categories, motives, routes, and aggregated counts"""
@@ -6442,7 +6667,7 @@ Proporciona análisis estructurado, específico y respaldado por números."""
                     break  # One example per pattern
         
         return causes[:5]  # Return top 5
-    
+
     def _extract_routes_from_llm_response(self, llm_response: str) -> list:
         """Extract affected routes from LLM analysis response"""
         import re
@@ -6479,7 +6704,13 @@ Proporciona análisis estructurado, específico y respaldado por números."""
         
         return touchpoints
 
-    async def _filter_using_routes_dictionary(self, ncs_data: pd.DataFrame, target_haul: str, incident_col: str) -> pd.DataFrame:
+    async def _filter_using_routes_dictionary(
+        self,
+        ncs_data: pd.DataFrame,
+        target_haul: str,
+        incident_col: str,
+        allow_unknown_route_incidents: bool = True
+    ) -> pd.DataFrame:
         """
         Filtra NCS usando el diccionario de rutas de PBI.
         
@@ -6540,10 +6771,12 @@ Proporciona análisis estructurado, específico y respaldado por números."""
                 2. Buscar cada ruta en el diccionario de PBI
                 3. Si ALGUNA ruta es del haul OPUESTO → EXCLUIR (return False)
                 4. Si ALGUNA ruta es del haul TARGET → INCLUIR (return True)
-                5. Si no se encuentra ninguna ruta en el diccionario → INCLUIR por defecto
+                5. Si no se encuentra ninguna ruta en el diccionario:
+                   - Si allow_unknown_route_incidents=True → INCLUIR por defecto
+                   - Si allow_unknown_route_incidents=False → EXCLUIR (no atribuible al haul)
                 """
                 if pd.isna(text):
-                    return True  # Incluir por defecto si no hay texto
+                    return True if allow_unknown_route_incidents else False
                 
                 text_upper = str(text).upper()
                 
@@ -6551,8 +6784,8 @@ Proporciona análisis estructurado, específico y respaldado por números."""
                 matches = route_pattern.findall(text_upper)
             
                 if not matches:
-                    # No se encontraron rutas en el texto, incluir por defecto
-                    return True
+                    # No se encontraron rutas en el texto
+                    return True if allow_unknown_route_incidents else False
                 
                 found_target_route = False
                 found_opposite_route = False
@@ -6576,8 +6809,8 @@ Proporciona análisis estructurado, específico y respaldado por números."""
                 if found_target_route:
                     return True
                 
-                # Si no encontramos rutas conocidas → INCLUIR por defecto
-                return True
+                # Si no encontramos rutas conocidas → según configuración
+                return True if allow_unknown_route_incidents else False
             
             # 5. Aplicar filtro a cada incidente
             mask = ncs_data[incident_col].apply(incident_belongs_to_target_haul)
