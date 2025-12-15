@@ -460,6 +460,11 @@ async def main():
         print(f"Debug info: {traceback.format_exc()}")
 
 
-if __name__ == "__main__":
+def cli_main():
+    """Synchronous entry point for CLI (used by pyproject.toml scripts)."""
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    cli_main()
 

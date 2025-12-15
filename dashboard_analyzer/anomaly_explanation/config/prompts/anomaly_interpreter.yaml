@@ -110,6 +110,14 @@ hierarchical_diagnostic_helpers:
     
     **Objetivo:** Determinar cómo interactúan los subgrupos (IB y YW) para formar el resultado del nodo padre (Economy SH o Business SH).
 
+    **⚠️ REGLA CRÍTICA DE MAPEO DE ESTADOS:**
+    Para determinar si un nodo es `+`, `-` o `N`, usa ÚNICAMENTE la etiqueta del tree_data, NO el signo de la variación:
+    - **"POSITIVE ANOMALY"** → Estado `+`
+    - **"NEGATIVE ANOMALY"** → Estado `-`
+    - **"Normal"** → Estado `N` (incluso si tiene variación positiva o negativa pequeña)
+    
+    Ejemplo: Si ves "IB: Normal (+2.2 pts)", el estado es `N` (no `+`), porque está etiquetado como "Normal".
+
     **PARTE A: ANÁLISIS DE DINÁMICA DE AGREGACIÓN**
     Observa la tríada de estados en formato `(IB, YW | PADRE)`:
 
@@ -145,6 +153,12 @@ hierarchical_diagnostic_helpers:
     ✈️ **PASO 2: DIAGNÓSTICO DE AGREGACIÓN Y CAUSALIDAD (NIVEL CABINA)**
     
     **Objetivo:** Determinar cómo interactúan las cabinas para formar el resultado del radio (SH o LH).
+
+    **⚠️ REGLA CRÍTICA DE MAPEO DE ESTADOS:**
+    Para determinar si un nodo es `+`, `-` o `N`, usa ÚNICAMENTE la etiqueta del tree_data:
+    - **"POSITIVE ANOMALY"** → Estado `+`
+    - **"NEGATIVE ANOMALY"** → Estado `-`
+    - **"Normal"** → Estado `N` (incluso si tiene variación positiva o negativa)
 
     **PARTE A: ANÁLISIS DE DINÁMICA DE AGREGACIÓN**
     Observa los estados en formato `(Hijos... | PADRE)`:
@@ -185,6 +199,12 @@ hierarchical_diagnostic_helpers:
     🌍 **PASO 3: DIAGNÓSTICO DE AGREGACIÓN Y CAUSALIDAD (NIVEL GLOBAL)**
     
     **Objetivo:** Determinar cómo interactúan los radios para formar el NPS Global.
+
+    **⚠️ REGLA CRÍTICA DE MAPEO DE ESTADOS:**
+    Para determinar si un nodo es `+`, `-` o `N`, usa ÚNICAMENTE la etiqueta del tree_data:
+    - **"POSITIVE ANOMALY"** → Estado `+`
+    - **"NEGATIVE ANOMALY"** → Estado `-`
+    - **"Normal"** → Estado `N` (incluso si tiene variación positiva o negativa)
 
     **PARTE A: ANÁLISIS DE DINÁMICA DE AGREGACIÓN**
     Observa la tríada `(LH, SH | GLOBAL)`:

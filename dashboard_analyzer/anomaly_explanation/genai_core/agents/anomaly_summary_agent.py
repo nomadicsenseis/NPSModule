@@ -507,7 +507,38 @@ class AnomalySummaryAgent:
                 agent=AgentName.CONVERSATIONAL
             )
             
-            self.logger.info(f"✅ Step 2 complete: Final report generated ({len(polished_report)} chars)")
+            self.logger.info(f"✅ Step 2 complete: Full report generated ({len(polished_report)} chars)")
+            
+            # =========================================================
+            # STEP 3: Extract only executive synthesis
+            # =========================================================
+            self.logger.info("📋 STEP 3: Extracting executive synthesis...")
+            
+            step3_config = self.config.get('step3_extract_synthesis', {})
+            step3_system = step3_config.get('system_prompt', '')
+            step3_input = step3_config.get('input_template', '').format(
+                full_report=polished_report
+            )
+            
+            message_history_step3 = MessageHistory()
+            message_history_step3.create_and_add_message(content=step3_system, message_type=MessageType.SYSTEM)
+            message_history_step3.create_and_add_message(content=step3_input, message_type=MessageType.USER)
+            
+            response_step3, _, _ = await self.agent.invoke(messages=message_history_step3.get_messages())
+            executive_synthesis = response_step3.content if hasattr(response_step3, 'content') else str(response_step3)
+            
+            if not executive_synthesis or len(executive_synthesis.strip()) == 0:
+                self.logger.warning(f"⚠️ Step 3 returned empty response! Using full report as fallback.")
+                executive_synthesis = polished_report
+            
+            # Add assistant response to message history for export
+            message_history_step3.create_and_add_message(
+                content=executive_synthesis, 
+                message_type=MessageType.AI,
+                agent=AgentName.CONVERSATIONAL
+            )
+            
+            self.logger.info(f"✅ Step 3 complete: Executive synthesis extracted ({len(executive_synthesis)} chars)")
             
             # =========================================================
             # Save debug files and export conversation
@@ -520,21 +551,23 @@ class AnomalySummaryAgent:
                     dbg.write("===== STEP 1: SECTION CONNECTIONS =====\n\n")
                     for section_name, paragraph in daily_context_paragraphs.items():
                         dbg.write(f"--- {section_name} ---\n{paragraph}\n\n")
-                    dbg.write("===== STEP 2: FINAL REPORT =====\n\n")
+                    dbg.write("===== STEP 2: FULL REPORT =====\n\n")
                     dbg.write(polished_report)
+                    dbg.write("\n\n===== STEP 3: EXECUTIVE SYNTHESIS =====\n\n")
+                    dbg.write(executive_synthesis)
                 self.logger.info(f"📝 Saved stratified debug to: {debug_path}")
             except Exception as e:
                 self.logger.warning(f"Could not write debug file: {e}")
             
-            # Export final conversation
-            conversation_file = await self.export_conversation(message_history_final, date_flight_local)
+            # Export final conversation (step 3)
+            conversation_file = await self.export_conversation(message_history_step3, date_flight_local)
             if conversation_file:
                 self.logger.info(f"🗂️ Summary conversation saved: {conversation_file}")
             
-            # Upload to S3 if metadata is provided
-            if polished_report and execution_metadata and weekly_analysis_params and daily_analysis_params and date_ranges:
+            # Upload to S3 if metadata is provided (use executive_synthesis, not full report)
+            if executive_synthesis and execution_metadata and weekly_analysis_params and daily_analysis_params and date_ranges:
                 try:
-                    self.logger.info("📤 Uploading comprehensive report to S3...")
+                    self.logger.info("📤 Uploading executive synthesis to S3...")
                     s3_key = await self.s3_uploader.upload_comprehensive_report(
                         execution_date=datetime.now(),
                         analysis_date=execution_metadata.get('analysis_date', ''),
@@ -544,7 +577,7 @@ class AnomalySummaryAgent:
                         weekly_analysis_params=weekly_analysis_params,
                         daily_analysis_params=daily_analysis_params,
                         date_ranges=date_ranges,
-                        final_synthesis=polished_report,
+                        final_synthesis=executive_synthesis,
                         comparison_start_date=date_ranges.get('comparison_start_date'),
                         comparison_end_date=date_ranges.get('comparison_end_date')
                     )
@@ -553,7 +586,7 @@ class AnomalySummaryAgent:
                 except Exception as e:
                     self.logger.error(f"❌ Error uploading to S3: {str(e)}")
             
-            return polished_report
+            return executive_synthesis
             
         except Exception as e:
             self.logger.error(f"❌ Error in stratified summary: {str(e)}")

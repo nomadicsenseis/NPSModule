@@ -122,9 +122,78 @@ step2_integrate_final:
     **GENERA EL INFORME FINAL:**
 
 # =============================================================================
-# STEP 3: INTEGRATE INTO WEEKLY REPORT
+# STEP 3: EXTRACT EXECUTIVE SYNTHESIS ONLY
 # =============================================================================
-step3_integrate_report:
+step3_extract_synthesis:
+  system_prompt: |
+    Eres un editor ejecutivo que extrae la síntesis ejecutiva de informes de NPS.
+    
+    Tu ÚNICA tarea es extraer la sección de SÍNTESIS EJECUTIVA del informe completo,
+    DESCARTANDO todas las secciones técnicas previas.
+
+  input_template: |
+    **INFORME COMPLETO:**
+    {full_report}
+
+    ---
+
+    **TU TAREA:**
+    
+    Del informe anterior, extrae ÚNICAMENTE la sección de **SÍNTESIS EJECUTIVA** y las secciones de cabina.
+    
+    **SECCIONES A DESCARTAR (NO incluir en el output):**
+    ❌ ANÁLISIS JERÁRQUICO COMPLETO DE ANOMALÍAS NPS
+    ❌ DIAGNÓSTICO A NIVEL DE EMPRESA
+    ❌ DIAGNÓSTICO A NIVEL DE CABINA
+    ❌ DIAGNÓSTICO GLOBAL POR RADIO
+    ❌ IDENTIFICACIÓN DE NODOS MÁXIMO AFECTADOS
+    ❌ EXTRACCIÓN DE EVIDENCIAS
+    ❌ Nodos analizados, pasos de análisis, metodología
+    ❌ ✅ ANÁLISIS COMPLETADO (footer)
+    
+    **SECCIONES A INCLUIR (copiar PALABRA POR PALABRA):**
+    ✅ 📈 **SÍNTESIS EJECUTIVA:** (párrafo introductorio)
+    ✅ **ECONOMY SH:** con su párrafo semanal + contexto diario
+    ✅ **BUSINESS SH:** con su párrafo semanal + contexto diario
+    ✅ **ECONOMY LH:** con su párrafo semanal + contexto diario
+    ✅ **BUSINESS LH:** con su párrafo semanal + contexto diario
+    ✅ **PREMIUM LH:** con su párrafo semanal + contexto diario
+    
+    **FORMATO DE SALIDA ESPERADO:**
+    ```
+    📈 **SÍNTESIS EJECUTIVA:**
+    Durante la semana del X al Y de [mes], hemos identificado [N] factores clave...
+    [Párrafo de contexto diario global si existe]
+
+    **ECONOMY SH: [Título]**
+    [Párrafo semanal completo]
+    [Párrafo de contexto diario]
+
+    **BUSINESS SH: [Título]**
+    [Párrafo semanal completo]
+    [Párrafo de contexto diario]
+
+    ... (resto de cabinas)
+    ```
+
+    **REGLAS ESTRICTAS:**
+    ❌ NO modifiques el texto de las secciones incluidas
+    ❌ NO añadas información nueva
+    ❌ NO incluyas las secciones técnicas (diagnósticos, NMAs, evidencias)
+    ❌ NO incluyas el footer de "ANÁLISIS COMPLETADO"
+    
+    ✅ Copia el contenido de la síntesis PALABRA POR PALABRA
+    ✅ Mantén el formato Teams (negritas, emojis)
+    ✅ Incluye TODAS las cabinas que aparezcan en la síntesis
+
+    ---
+
+    **GENERA LA SÍNTESIS EJECUTIVA:**
+
+# =============================================================================
+# STEP 4: INTEGRATE INTO WEEKLY REPORT (legacy, kept for reference)
+# =============================================================================
+step4_legacy_integrate_report:
   system_prompt: |
     Eres un experto analista ejecutivo y redactor de informes de NPS.
     Tu tarea es integrar el detalle diario en la estructura del informe semanal,
@@ -189,9 +258,9 @@ step3_integrate_report:
     14. **ATRIBUCIÓN DE SEGMENTO**: Siempre que menciones un dato, indica a qué segmento pertenece (ej: "NPS 19.8 (Economy LH)", "OTP –4.0 pts (Business SH)")
 
 # =============================================================================
-# STEP 4: POLISH AND NARRATIVE COHERENCE
+# STEP 5: POLISH AND NARRATIVE COHERENCE (legacy, kept for reference)
 # =============================================================================
-step4_polish_narrative:
+step5_legacy_polish_narrative:
   system_prompt: |
     Eres un editor ejecutivo especializado en informes de NPS.
     

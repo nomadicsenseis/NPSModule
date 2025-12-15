@@ -98,4 +98,9 @@ config.json
 .pytest_cache/
 .coverage
 htmlcov/
-.tox/ 
+.tox/
+
+# Agent conversation logs and temporary reports (runtime artifacts)
+dashboard_analyzer/agent_conversations/
+dashboard_analyzer/summary_reports/
+dashboard_analyzer/tables/ 

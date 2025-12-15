@@ -3181,7 +3181,10 @@ async def execute_analysis_flow(
     
     return summary_data
 
-if __name__ == "__main__":
-    # To run this from the command line:
-    # python -m dashboard_analyzer.main --mode both --segment "Global" --date-flight-local "2025-01-15"
+def cli_main():
+    """Synchronous entry point for CLI (used by pyproject.toml scripts)."""
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    cli_main()
