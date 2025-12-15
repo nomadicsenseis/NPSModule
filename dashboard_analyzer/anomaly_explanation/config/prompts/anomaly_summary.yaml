@@ -10,7 +10,7 @@ shared_rules: |
   - **NOMENCLATURA DE COMPAÑÍAS:** Las compañías SIEMPRE se escriben como **IB** e **YW**. NUNCA uses "Iberia", "Young Wings", "Yanky Whiskey", "India Bravo", ni ninguna otra variación.
   - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio". USA SIEMPRE **SH** y **LH**.
   - Usa "ppts de NPS según Explanatory Drivers" en lugar de "SHAP", "Shapley".
-  - **FORMATO TEAMS:** Usa **negritas** para segmentos, métricas, fechas y variaciones.
+  - **FORMATO FINAL:** El output final va a Microsoft Teams, que usa HTML (no markdown).
   - **NO INVENTES:** Si falta un dato, omítelo o di que no está disponible.
 
 # =============================================================================
@@ -123,7 +123,7 @@ step2_integrate_final:
     **GENERA EL INFORME FINAL:**
 
 # =============================================================================
-# STEP 3: EXTRACT EXECUTIVE SYNTHESIS ONLY
+# STEP 3: EXTRACT EXECUTIVE SYNTHESIS ONLY (HTML FORMAT FOR TEAMS)
 # =============================================================================
 step3_extract_synthesis:
   system_prompt: |
@@ -131,6 +131,8 @@ step3_extract_synthesis:
     
     Tu ÚNICA tarea es extraer la sección de SÍNTESIS EJECUTIVA del informe completo,
     DESCARTANDO todas las secciones técnicas previas.
+    
+    ⚠️ **IMPORTANTE: El output debe estar en formato HTML para Microsoft Teams.**
 
   input_template: |
     **INFORME COMPLETO:**
@@ -140,7 +142,7 @@ step3_extract_synthesis:
 
     **TU TAREA:**
     
-    Del informe anterior, extrae ÚNICAMENTE la sección de **SÍNTESIS EJECUTIVA** (o similar)y las secciones de cabina.
+    Del informe anterior, extrae ÚNICAMENTE la sección de **SÍNTESIS EJECUTIVA** (o similar) y las secciones de cabina.
     
     **SECCIONES A DESCARTAR (NO incluir en el output):**
     ❌ ANÁLISIS JERÁRQUICO COMPLETO DE ANOMALÍAS NPS
@@ -152,44 +154,59 @@ step3_extract_synthesis:
     ❌ Nodos analizados, pasos de análisis, metodología
     ❌ ✅ ANÁLISIS COMPLETADO (footer)
     
-    **SECCIONES A INCLUIR (copiar PALABRA POR PALABRA):**
-    ✅ 📈 **SÍNTESIS EJECUTIVA:** (párrafo introductorio)
-    ✅ **ECONOMY SH:** con su párrafo semanal + contexto diario
-    ✅ **BUSINESS SH:** con su párrafo semanal + contexto diario
-    ✅ **ECONOMY LH:** con su párrafo semanal + contexto diario
-    ✅ **BUSINESS LH:** con su párrafo semanal + contexto diario
-    ✅ **PREMIUM LH:** con su párrafo semanal + contexto diario
+    **SECCIONES A INCLUIR (copiar contenido, convertir a HTML):**
+    ✅ 📈 SÍNTESIS EJECUTIVA (párrafo introductorio)
+    ✅ ECONOMY SH con su párrafo semanal + contexto diario
+    ✅ BUSINESS SH con su párrafo semanal + contexto diario
+    ✅ ECONOMY LH con su párrafo semanal + contexto diario
+    ✅ BUSINESS LH con su párrafo semanal + contexto diario
+    ✅ PREMIUM LH con su párrafo semanal + contexto diario
     
-    **FORMATO DE SALIDA ESPERADO:**
-    ```
-    📈 **SÍNTESIS EJECUTIVA:**
-    Durante la semana del X al Y de [mes], hemos identificado [N] factores clave...
-    [Párrafo de contexto diario global si existe]
-
-    **ECONOMY SH: [Título]**
-    [Párrafo semanal completo]
-    [Párrafo de contexto diario]
-
-    **BUSINESS SH: [Título]**
-    [Párrafo semanal completo]
-    [Párrafo de contexto diario]
-
-    ... (resto de cabinas)
+    ---
+    
+    ⚠️ **FORMATO HTML PARA TEAMS (OBLIGATORIO):**
+    
+    El output DEBE estar en HTML. Usa estas conversiones:
+    
+    | Markdown | HTML para Teams |
+    |----------|-----------------|
+    | **texto** | <b>texto</b> |
+    | Salto de línea | <br> |
+    | Párrafo nuevo | <br><br> |
+    | • bullet | • (el emoji funciona directamente) |
+    
+    **EJEMPLO DE OUTPUT HTML CORRECTO:**
+    ```html
+    📈 <b>SÍNTESIS EJECUTIVA:</b><br>
+    Durante la semana del <b>5 al 11 de diciembre</b>, hemos identificado 3 factores clave que explican las variaciones de NPS. El NPS global subió <b>+3.2 pts</b> con respecto a la semana anterior.<br><br>
+    
+    A nivel diario, el fuerte repunte del <b>06-dic</b> (+6.1 pts) explica gran parte de la mejora semanal.<br><br>
+    
+    <b>ECONOMY SH: Desempeño estable</b><br>
+    La cabina Economy de SH registró un NPS de <b>36.6</b> con <b>+3.4 pts</b> con respecto a la semana anterior. Desglose por compañía: <b>IB</b> obtuvo 35.4 con +3.5 pts, y <b>YW</b> 39.0 con +2.9 pts.<br><br>
+    
+    A nivel diario, la cabina Economy SH evidenció una trayectoria uniforme sin picos ni caídas relevantes.<br><br>
+    
+    <b>BUSINESS SH: Impacto conjunto de puntualidad y producto</b><br>
+    En Business de SH, el NPS fue <b>29.3</b> con <b>–10.0 pts</b> con respecto a la semana anterior...<br><br>
     ```
 
     **REGLAS ESTRICTAS:**
+    ❌ NO uses markdown (**texto**), usa HTML (<b>texto</b>)
     ❌ NO modifiques el texto de las secciones incluidas
     ❌ NO añadas información nueva
     ❌ NO incluyas las secciones técnicas (diagnósticos, NMAs, evidencias)
     ❌ NO incluyas el footer de "ANÁLISIS COMPLETADO"
+    ❌ NO uses ```html ni bloques de código, el output debe ser HTML puro
     
-    ✅ Copia el contenido de la síntesis PALABRA POR PALABRA
-    ✅ Mantén el formato Teams (negritas, emojis)
+    ✅ Convierte TODAS las negritas de **texto** a <b>texto</b>
+    ✅ Usa <br> para saltos de línea y <br><br> entre secciones
+    ✅ Los emojis (📈, •) funcionan directamente, no los cambies
     ✅ Incluye TODAS las cabinas que aparezcan en la síntesis
 
     ---
 
-    **GENERA LA SÍNTESIS EJECUTIVA:**
+    **GENERA LA SÍNTESIS EJECUTIVA EN HTML:**
 
 # =============================================================================
 # STEP 4: INTEGRATE INTO WEEKLY REPORT (legacy, kept for reference)

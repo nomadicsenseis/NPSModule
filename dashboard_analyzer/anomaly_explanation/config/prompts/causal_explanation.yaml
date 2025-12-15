@@ -549,5 +549,9 @@ final_synthesis_prompt: |
   📋 **ESTRUCTURA DEL INFORME:**
   1. **Resumen de la anomalía** - Incluye NPS actual, baseline y variación
   2. **Causa/s encontradas y herramientas que la validan** - Explicacion de las causas encontradas y las herramientas que la validan
-  3. **Rutas afectadas** - Rutas con mayor impacto
-  4. **Reactividad de cliente** - Perfiles más afectados
+  3. **🐴 Dark horses detectados** - Eventos excepcionales identificados en NCS (huelgas, meteorología, fallos sistemas, etc.)
+     - Si se detectaron en el período ACTUAL: explica cómo afectaron al NPS actual
+     - Si se detectaron en el período COMPARATIVO: indica que el baseline estaba afectado por estos eventos
+     - Si no hubo dark horses: indicar "No se detectaron eventos excepcionales"
+  4. **Rutas afectadas** - Rutas con mayor impacto
+  5. **Reactividad de cliente** - Perfiles más afectados

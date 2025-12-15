@@ -319,6 +319,7 @@ hierarchical_diagnostic_helpers:
        - Busca: "CodeShare", "Fleet", "Residence Region", "Business/Leisure", "spread"
        - Formato: "CodeShare: spread 250.0 pts" → Copia exactamente
 
+
     **Salida Requerida:**
     Para cada NMA del paso anterior, genera:
     ```
@@ -341,6 +342,7 @@ hierarchical_diagnostic_helpers:
     
     👥 PERFILES REACTIVOS:
     [Perfiles con spread, o "No disponible"]
+
     ```
 
     **⚠️ REGLAS ESTRICTAS:**
