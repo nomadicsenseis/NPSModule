@@ -6183,10 +6183,13 @@ ORDER BY 'Route_Master'[route]
             """
             
             try:
-                response = await self.llm.ainvoke([
-                    SystemMessage(content="You are an expert Airline Operations Analyst. You filter noise to find critical disruptions."),
-                    HumanMessage(content=prompt_content)
-                ])
+                # Use wrapper __call__ method instead of ainvoke directly on wrapper
+                response = await self.llm(
+                    prompt=[
+                        SystemMessage(content="You are an expert Airline Operations Analyst. You filter noise to find critical disruptions."),
+                        HumanMessage(content=prompt_content)
+                    ]
+                )
                 
                 selection = response.content.strip().split('\n')
                 # Clean up selection
