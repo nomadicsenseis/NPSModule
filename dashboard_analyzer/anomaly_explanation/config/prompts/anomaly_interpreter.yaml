@@ -400,7 +400,10 @@ hierarchical_diagnostic_helpers:
     En contraste, SH mostró una dinámica opuesta..."
     
     **DETALLE POR CABINA (HTML):**
-    Después del texto narrativo, añade `<br><br><b>DETALLE POR CABINA</b><br>` y luego pega `{CABIN_SECTIONS}` (también en HTML).
+    Añade `<br><br><b>DETALLE POR CABINA</b><br>` y luego pega `{CABIN_SECTIONS}` (también en HTML) **SOLAMENTE SI** hay más de una cabina analizada.
+    
+    **⚠️ REGLA DE REDUNDANCIA:** 
+    Si el análisis se centra en una única cabina (es decir, el nodo raíz del análisis YA es una cabina específica como Economy o Business, o un nivel inferior), **OMITE la sección 'DETALLE POR CABINA'**, ya que su contenido sería idéntico a la Síntesis Ejecutiva. En este caso, integra todos los detalles necesarios en la sección de Síntesis Ejecutiva.
 
     {CABIN_SECTIONS}
 
