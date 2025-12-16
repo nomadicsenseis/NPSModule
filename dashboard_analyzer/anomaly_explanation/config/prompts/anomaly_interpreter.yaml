@@ -11,6 +11,7 @@ comparative_prompts:
 
     **NOMENCLATURA DE COMPAÑÍAS (OBLIGATORIO):**
     Las compañías SIEMPRE se escriben como **IB** e **YW**. NUNCA uses "Iberia", "Young Wings", "Yanky Whiskey", "India Bravo", ni ninguna otra variación. Solo IB e YW, sin excepciones.
+    🚫 **PROHIBICIÓN ESTRICTA:** NUNCA escribas "Young Wings". Si detectas esa entidad en los datos de entrada, DEBES sustituirla automáticamente por **YW**. Esta regla aplica a títulos, cuerpo del texto y listas. Ejemplo: Mal: "Caída en Young Wings" -> Bien: "Caída en YW".
 
     **Principios de análisis:**
     1.  **Ausencia de datos**: Si faltan datos operativos (OTP, Load Factor, etc.), esto es una limitación del análisis, no la causa de la anomalía de NPS. Utiliza la información disponible (como los incidentes de NCS o verbatims) para inferir la causa operacional real.
@@ -366,74 +367,55 @@ hierarchical_diagnostic_helpers:
 
     **⚠️ FORMATO TEAMS (CRÍTICO):**
     - El output FINAL debe ser **HTML** (NO Markdown).
-    - Usa solo: `<b>...</b>`, `<br>`, `<ul>`, `<li>`.
-    - No uses `**negrita**`, `#`, `-` ni backticks.
-    - No uses emojis. (Los encabezados del input pueden traerlos; tú no los repitas.)
-    
+    - Usa solo: `<b>...</b>`, `<u>...</u>`, `<br>`, `<ul>`, `<li>`.
+    - No uses `**negrita**` (usa `<b>`), `#`, `-` ni backticks.
+    - No uses emojis.
+
     **⚠️ REGLAS DE LENGUAJE EJECUTIVO:**
-    - NUNCA uses términos técnicos internos: "nodo", "árbol", "NMA", "burbujeo", "jerarquía", "agregación"
-    - USA "LH" y "SH" (NO "Largo Radio" ni "Corto Radio")
-    - USA lenguaje de negocio: "segmento", "cabina", "compañía"
-    - Escribe como si fuera un informe para dirección ejecutiva
-    - **NO ENUMERES las causas** (nada de "CAUSA 1:", "CAUSA 2:"). Nárralas de forma fluida.
+    - 🚫 **PROHIBICIÓN ESTRICTA:** NUNCA escribas "Young Wings". Usa SIEMPRE **YW**.
+    - NUNCA uses términos técnicos internos: "nodo", "árbol", "NMA", "burbujeo".
+    - USA "LH" y "SH" (NO "Largo Radio" ni "Corto Radio").
+    - **NO ENUMERES las causas**. Nárralas de forma fluida.
     
+    **🔢 FORMATO NUMÉRICO (CRÍTICO):**
+    - Redondea TODOS los valores numéricos (NPS, SHAP, OTP, porcentajes) a **1 decimal** máximo.
+      *   Ejemplos: `15.0` → `15.0`; `+1.79` → `+1.8`; `3.23` → `3.2`.
+    - Para números enteros (conteos de incidentes, pasajeros), NO uses decimales.
+      *   Ejemplo: `27` incidentes (NO `27.0`).
+
     **Formato esperado (HTML):**
     
     Empieza SIEMPRE con:
     `<b>SÍNTESIS EJECUTIVA</b><br>`
     
-    **PÁRRAFO INTRODUCTORIO (2-3 líneas) en HTML:**
-    Usa texto normal + `<br>` al final del párrafo.
+    **PÁRRAFO INTRODUCTORIO (2-3 líneas):**
+    Texto normal + `<br>` al final.
     
-    **DESARROLLO NARRATIVO DE LAS CAUSAS (2-4 párrafos) en HTML:**
-    Texto corrido (no enumerado). Separa párrafos con `<br><br>`.
+    **DESARROLLO NARRATIVO DE LAS CAUSAS (2-4 párrafos):**
+    Texto corrido. Separa párrafos con `<br><br>`.
     
-    Cada causa debe incluir (integrado naturalmente en la narrativa):
-    - Qué segmento afecta y cuánto impacta el NPS
-    - Las evidencias que la sustentan (drivers, operativa, incidentes, feedback)
-    - Las rutas más afectadas
-    - Los perfiles de cliente más reactivos
-    
-    **Ejemplo de narrativa fluida (análisis SEMANAL):**
-    "La principal causa del deterioro fue el aumento de cancelaciones en LH, donde el NPS cayó de 17.9 a 12.1 (–5.7 pts con respecto a la semana anterior). Este impacto se evidenció en un empeoramiento de la puntualidad (–1.1 ppts según Explanatory Drivers), un incremento de +17 cancelaciones y +4 limitaciones de aeronave, afectando especialmente las rutas MAD–MCO (NPS –32.0, 17 pax) y JFK–MAD (NPS –14.5, 78 pax), aunque rutas como LIM-MAD (+10.4, 104 pax) mantuvieron buen rendimiento. Los pasajeros más sensibles fueron aquellos agrupados por región de residencia (spread 142.4 pts) y en vuelos code-share (spread 72.2 pts).
-    
-    En contraste, SH mostró una dinámica opuesta..."
-    
+    **✍️ NARRATIVA DE INCIDENTES (NCS):** 
+    No uses listas densas entre paréntesis. Integra los datos en la frase de forma fluida y natural.
+    *   **Mal:** "Los incidentes aumentaron (cancelaciones +15.0, retrasos +9.0) debido a meteorología..."
+    *   **Bien:** "La operatividad se vio lastrada por un aumento de **15 cancelaciones** y **9 retrasos**, provocados principalmente por la meteorología adversa en..."
+    *   Agrupa las causas (meteorología, huelgas, técnico) y lístalas de forma clara.
+
     **DETALLE POR CABINA (HTML):**
-    Añade `<br><br><b>DETALLE POR CABINA</b><br>` y luego pega `{CABIN_SECTIONS}` (también en HTML) **SOLAMENTE SI** hay más de una cabina analizada.
+    Añade `<br><br><b><u>DETALLE POR CABINA</u></b><br>` y luego pega `{CABIN_SECTIONS}` (también en HTML) **SOLAMENTE SI** hay más de una cabina analizada.
+    *   Usa este formato para los títulos de cabina dentro de `{CABIN_SECTIONS}`: `<b><u>ECONOMY SH: [Titular]</u></b><br>`
     
     **⚠️ REGLA DE REDUNDANCIA:** 
-    Si el análisis se centra en una única cabina (es decir, el nodo raíz del análisis YA es una cabina específica como Economy o Business, o un nivel inferior), **OMITE la sección 'DETALLE POR CABINA'**, ya que su contenido sería idéntico a la Síntesis Ejecutiva. En este caso, integra todos los detalles necesarios en la sección de Síntesis Ejecutiva.
+    Si el análisis se centra en una única cabina (nodo raíz = Economy/Business), **OMITE la sección 'DETALLE POR CABINA'**.
 
     {CABIN_SECTIONS}
 
-    **⚠️ IMPORTANTE:**
-    - EMPIEZA DIRECTAMENTE con `<b>SÍNTESIS EJECUTIVA</b><br>`
-    - El párrafo introductorio debe ser MUY BREVE (2-3 líneas)
-    - El desarrollo de causas debe ser NARRATIVO, no enumerado
-    - **INCLUYE TODOS LOS DATOS DEL PASO 4B** - no omitas ninguna evidencia:
-      • TODOS los SHAP de cada segmento (incluidos los de YW si existen)
-      • TODAS las rutas (tanto negativas como positivas, para dar contraste)
-      • TODOS los verbatims/feedback (incluso si contradicen la tendencia)
-      • TODOS los perfiles reactivos
-    - **ATRIBUCIÓN OBLIGATORIA:** Cada métrica debe indicar a qué segmento pertenece
-    - **TERMINOLOGÍA DE COMPARACIÓN (CRÍTICO):** 
-      • Lee el "BASELINE REFERENCE" del contexto inicial (<tree_data>)
-      • Tu objetivo es usar **ESA MISMA REFERENCIA** en el texto, adaptada gramaticalmente.
-      • Usa la fórmula: "con respecto a [TEXTO DEL BASELINE REFERENCE]".
-      • Ejemplos de adaptación:
-        - Si Baseline Reference dice "vs semana anterior" → escribe "con respecto a la semana anterior"
-        - Si Baseline Reference dice "vs media de los últimos 7 días" → escribe "con respecto a la media de los últimos 7 días"
-        - Si Baseline Reference dice "vs período seleccionado (2025-05-01...)" → escribe "con respecto al período seleccionado (2025-05-01...)"
-      • **NO FORCES** "semana anterior" ni "período anterior" si el Baseline Reference dice otra cosa.
-      • NUNCA uses abreviaturas como "vs L7d", "vs baseline" o similares.
-    - **PARA CABINAS SH:** Menciona valores NPS de IB y YW por separado, incluyendo SHAP de ambos
-    - Si una cabina no tiene variaciones significativas, indica "mantuvo desempeño estable"
+    **⚠️ IMPORTANTE - CONTENIDO:**
+    - **INCLUYE TODOS LOS DATOS:** SHAP, rutas (pos/neg), verbatims, perfiles.
+    - **ATRIBUCIÓN:** Indica siempre a qué segmento pertenece el dato.
+    - **TERMINOLOGÍA DE COMPARACIÓN:** Usa la fórmula "con respecto a [TEXTO DEL BASELINE REFERENCE]" (ej: "con respecto a la semana anterior").
+    - **PARA CABINAS SH:** Menciona NPS de IB y YW por separado.
     
-    **📊 TRADUCCIÓN DE TERMINOLOGÍA (INPUT → OUTPUT):**
+    **📊 TRADUCCIÓN DE TERMINOLOGÍA:**
     - "SHAP = X" → "X ppts según Explanatory Drivers"
-    - "OTP15" → "OTP"
     - "ncs_tool" → "incidentes operativos"
     - "operative_data_tool" → "métricas operativas"
-    - "verbatims_tool" → "feedback de clientes"
-    - "customer_profile_tool" → "segmentación de clientes"

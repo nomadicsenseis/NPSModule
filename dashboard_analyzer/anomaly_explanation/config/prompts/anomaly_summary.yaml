@@ -7,11 +7,13 @@
 # =============================================================================
 shared_rules: |
   ⚠️ **REGLAS GENERALES:**
-  - **NOMENCLATURA DE COMPAÑÍAS:** Las compañías SIEMPRE se escriben como **IB** e **YW**. NUNCA uses "Iberia", "Young Wings", "Yanky Whiskey", "India Bravo", ni ninguna otra variación.
+  - 🚫 **PROHIBICIÓN ESTRICTA:** NUNCA escribas "Young Wings". Si detectas esa entidad, DEBES sustituirla automáticamente por **YW**. Esta regla es absoluta para todo el informe.
+  - **NOMENCLATURA DE COMPAÑÍAS:** Las compañías SIEMPRE se escriben como **IB** e **YW**.
   - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio". USA SIEMPRE **SH** y **LH**.
   - Usa "ppts de NPS según Explanatory Drivers" en lugar de "SHAP", "Shapley".
   - **FORMATO FINAL:** El output final va a Microsoft Teams, que usa HTML (no markdown).
   - **NO INVENTES:** Si falta un dato, omítelo o di que no está disponible.
+  - 🔢 **FORMATO NUMÉRICO:** Redondea TODOS los valores numéricos (NPS, SHAP, OTP, porcentajes) a **1 decimal** máximo. (Ej: `15.0` → `15.0`; `+1.79` → `+1.8`). Para conteos enteros (incidentes), NO uses decimales (Ej: `27` incidentes).
 
 # =============================================================================
 # STEP 1: ANALYZE SECTION CONNECTIONS (se ejecuta N veces, una por sección)
@@ -133,6 +135,11 @@ step3_extract_synthesis:
     DESCARTANDO todas las secciones técnicas previas.
     
     ⚠️ **IMPORTANTE: El output debe estar en formato HTML para Microsoft Teams.**
+    
+    **REGLAS CRÍTICAS DE ESTILO:**
+    - 🚫 **PROHIBIDO:** "Young Wings" (Usa **YW**).
+    - 🔢 **REDONDEO:** 1 decimal para todo (NPS, SHAP, %). Enteros para conteos.
+    - 📝 **HTML:** Estructura clara con títulos subrayados.
 
   input_template: |
     **INFORME COMPLETO:**
@@ -154,7 +161,7 @@ step3_extract_synthesis:
     ❌ Nodos analizados, pasos de análisis, metodología
     ❌ ✅ ANÁLISIS COMPLETADO (footer)
     
-    **SECCIONES A INCLUIR (copiar contenido, convertir a HTML):**
+    **SECCIONES A INCLUIR (copiar contenido, convertir a HTML y aplicar reglas):**
     ✅ 📈 SÍNTESIS EJECUTIVA (párrafo introductorio)
     ✅ ECONOMY SH con su párrafo semanal + contexto diario
     ✅ BUSINESS SH con su párrafo semanal + contexto diario
@@ -177,31 +184,34 @@ step3_extract_synthesis:
     
     **EJEMPLO DE OUTPUT HTML CORRECTO:**
     ```html
-    📈 <b>SÍNTESIS EJECUTIVA:</b><br>
+    <b>SÍNTESIS EJECUTIVA</b><br>
     Durante la semana del <b>5 al 11 de diciembre</b>, hemos identificado 3 factores clave que explican las variaciones de NPS. El NPS global subió <b>+3.2 pts</b> con respecto a la semana anterior.<br><br>
     
     A nivel diario, el fuerte repunte del <b>06-dic</b> (+6.1 pts) explica gran parte de la mejora semanal.<br><br>
     
-    <b>ECONOMY SH: Desempeño estable</b><br>
+    <b><u>ECONOMY SH: Desempeño estable</u></b><br>
     La cabina Economy de SH registró un NPS de <b>36.6</b> con <b>+3.4 pts</b> con respecto a la semana anterior. Desglose por compañía: <b>IB</b> obtuvo 35.4 con +3.5 pts, y <b>YW</b> 39.0 con +2.9 pts.<br><br>
     
     A nivel diario, la cabina Economy SH evidenció una trayectoria uniforme sin picos ni caídas relevantes.<br><br>
     
-    <b>BUSINESS SH: Impacto conjunto de puntualidad y producto</b><br>
+    <b><u>BUSINESS SH: Impacto conjunto de puntualidad y producto</u></b><br>
     En Business de SH, el NPS fue <b>29.3</b> con <b>–10.0 pts</b> con respecto a la semana anterior...<br><br>
     ```
 
-    **REGLAS ESTRICTAS:**
-    ❌ NO uses markdown (**texto**), usa HTML (<b>texto</b>)
-    ❌ NO modifiques el texto de las secciones incluidas
-    ❌ NO añadas información nueva
-    ❌ NO incluyas las secciones técnicas (diagnósticos, NMAs, evidencias)
-    ❌ NO incluyas el footer de "ANÁLISIS COMPLETADO"
-    ❌ NO uses ```html ni bloques de código, el output debe ser HTML puro
+    **REGLAS ESTRICTAS DE PROCESAMIENTO:**
+    1.  **Sustitución de Entidades:** Si el texto original dice "Young Wings", cámbialo a **YW**.
+    2.  **Redondeo:** Recorre TODOS los números decimales y redondéalos a un dígito (ej: `15.23` -> `15.2`).
+    3.  **Formato de Títulos:** Usa `<b><u>TITULO DE CABINA</u></b><br>` para separar secciones claramente.
     
-    ✅ Convierte TODAS las negritas de **texto** a <b>texto</b>
-    ✅ Usa <br> para saltos de línea y <br><br> entre secciones
-    ✅ Los emojis (📈, •) funcionan directamente, no los cambies
+    **REGLAS DE EXTRACCIÓN:**
+    ❌ NO modifiques el significado del texto
+    ❌ NO añadas información nueva
+    ❌ NO incluyas las secciones técnicas
+    ❌ NO incluyas el footer
+    ❌ NO uses ```html ni bloques de código
+    
+    ✅ Convierte negritas a <b>
+    ✅ Usa <br> para saltos
     ✅ Incluye TODAS las cabinas que aparezcan en la síntesis
 
     ---
