@@ -6723,6 +6723,18 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
     def _extract_causes_from_llm_response(self, llm_response: str) -> list:
         """Extract identified causes from LLM analysis response"""
         import re
+        # If the model produced our structured NCS_REFLEXION format, parse that instead of keyword-snippets
+        if llm_response and "NCS_REFLEXION" in llm_response:
+            parsed = self._parse_ncs_reflexion(llm_response)
+            incident_delta = parsed.get("incidentes_delta_compact")
+            dark_horses = parsed.get("dark_horses_compact")
+            out = []
+            if incident_delta:
+                out.append(f"INCIDENTES_DELTA: {incident_delta}")
+            if dark_horses:
+                out.append(f"DARK_HORSES: {dark_horses}")
+            return out[:5]
+
         causes = []
         
         # Look for common cause indicators in the response
@@ -6749,6 +6761,43 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
                     break  # One example per pattern
         
         return causes[:5]  # Return top 5
+
+    def _parse_ncs_reflexion(self, llm_response: str) -> dict:
+        """
+        Parse the structured NCS_REFLEXION block emitted by the LLM.
+        Returns compact strings that are safe to show in collected_data_summary.
+        """
+        import re
+        text = llm_response or ""
+        # Normalize
+        text = text.replace("\r\n", "\n")
+
+        # Extract INCIDENTES_DELTA section (until DARK_HORSES or HIPOTESIS)
+        inc = ""
+        m_inc = re.search(r"INCIDENTES_DELTA\s*:\s*(.*?)(?:\n\s*DARK_HORSES\s*:|\n\s*HIPOTESIS_DE_RELACION\s*:|\n\s*NIVEL_DE_CONFIANZA\s*:|\Z)", text, re.DOTALL | re.IGNORECASE)
+        if m_inc:
+            inc = m_inc.group(1).strip()
+            inc = re.sub(r"\s+", " ", inc)
+            # Compact bullet-ish content
+            inc = inc.replace("•", "").strip()
+
+        # Extract DARK_HORSES section similarly
+        dh = ""
+        m_dh = re.search(r"DARK_HORSES\s*:\s*(.*?)(?:\n\s*HIPOTESIS_DE_RELACION\s*:|\n\s*NIVEL_DE_CONFIANZA\s*:|\Z)", text, re.DOTALL | re.IGNORECASE)
+        if m_dh:
+            dh = m_dh.group(1).strip()
+            dh = re.sub(r"\s+", " ", dh)
+            dh = dh.replace("•", "").strip()
+
+        # Tighten length so it doesn't pollute summaries
+        def clip(s: str, n: int = 180) -> str:
+            s = s.strip()
+            return s if len(s) <= n else s[: n - 3] + "..."
+
+        return {
+            "incidentes_delta_compact": clip(inc, 220) if inc else "",
+            "dark_horses_compact": clip(dh, 220) if dh else "",
+        }
 
     def _extract_routes_from_llm_response(self, llm_response: str) -> list:
         """Extract affected routes from LLM analysis response"""
