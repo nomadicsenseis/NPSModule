@@ -6790,7 +6790,45 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
                 matches = route_pattern.findall(text_upper)
             
                 if not matches:
-                    # No se encontraron rutas en el texto
+                    # No se encontraron rutas explícitas (XXX-YYY). Intentar fallback:
+                    # si aparece un IATA suelto, asumir ruta MAD-IATA (y su inversa) para atribuir haul.
+                    # Esto permite filtrar casos tipo: "por meteorología en GRX" => MAD-GRX.
+                    iata_candidates = re.findall(r'\b[A-Z]{3}\b', text_upper)
+                    # Eliminar tokens comunes/no-aeropuertos
+                    stop = {
+                        'IB', 'YW', 'NPS', 'OTP', 'UTC', 'MAD', 'NOC', 'PAX', 'CTO', 'ETA', 'ETD',
+                        'ATC', 'IT', 'AOG', 'PIR'
+                    }
+                    iata_candidates = [c for c in iata_candidates if c not in stop]
+
+                    # Solo considerar IATAs que existan en el diccionario (como destino u origen)
+                    known_iatas = set()
+                    for r in route_to_haul.keys():
+                        if '-' in r:
+                            a, b = r.split('-', 1)
+                            known_iatas.add(a)
+                            known_iatas.add(b)
+                    iata_candidates = [c for c in iata_candidates if c in known_iatas]
+
+                    found_target_route = False
+                    found_opposite_route = False
+                    for code in iata_candidates:
+                        assumed_routes = [f"MAD-{code}", f"{code}-MAD"]
+                        for route in assumed_routes:
+                            route_haul = route_to_haul.get(route)
+                            if not route_haul:
+                                continue
+                            if route_haul == target_haul:
+                                found_target_route = True
+                            elif route_haul == opposite_haul:
+                                found_opposite_route = True
+
+                    if found_opposite_route and not found_target_route:
+                        return False
+                    if found_target_route:
+                        return True
+
+                    # Si no se puede inferir nada, aplicar política por defecto
                     return True if allow_unknown_route_incidents else False
                 
                 found_target_route = False
