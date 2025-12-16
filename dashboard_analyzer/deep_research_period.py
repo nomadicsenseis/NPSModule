@@ -49,6 +49,13 @@ def generate_comparison_context(anomaly_detection_mode: str, aggregation_days: i
     - For DAILY analysis (aggregation_days == 1): "vs media de los últimos X días" (WITH "media")
     """
     if anomaly_detection_mode == 'vslast':
+        # If we have an explicit baseline description (e.g., "período seleccionado (...)"),
+        # prefer it over the generic "período previo".
+        if baseline_description:
+            if aggregation_days >= 7:
+                return f"• **Comparación**: vs {baseline_description}"
+            else:
+                return f"• **Comparación**: vs media de los {baseline_description}"
         if aggregation_days == 7:
             return "• **Comparación**: vs semana anterior"
         elif aggregation_days == 1:
@@ -482,10 +489,24 @@ async def process_single_period(
         ai_interpretation = None
         if ai_available and ai_agent and nodes_with_anomalies:
             try:
+                # Derive baseline_description from NPS values if available (e.g., "período seleccionado (...)")
+                baseline_description = None
+                root_segment = normalize_segment_to_root(segment)
+                if period_nps_values and root_segment in period_nps_values:
+                    nps_data_root = period_nps_values[root_segment]
+                    if isinstance(nps_data_root, dict):
+                        baseline_description = nps_data_root.get('baseline_description')
+                if not baseline_description and period_nps_values:
+                    for _k, _v in period_nps_values.items():
+                        if isinstance(_v, dict) and _v.get('baseline_description'):
+                            baseline_description = _v.get('baseline_description')
+                            break
+
                 interpreter_comparison_context = generate_comparison_context(
-                    analysis_data.get('anomaly_detection_mode', 'mean'),
-                    analysis_data.get('aggregation_days', 1),
-                    analysis_data.get('baseline_periods', 7)
+                    analysis_data.get('anomaly_detection_mode', 'target'),
+                    analysis_data.get('aggregation_days', aggregation_days),
+                    analysis_data.get('baseline_periods', 7),
+                    baseline_description
                 )
 
                 ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
@@ -1793,7 +1814,6 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
         print(f"❌ Exception in analysis loop: {e}")
         import traceback
         print(traceback.format_exc())
-        print(exception_traceback)
         return None
     
     return {

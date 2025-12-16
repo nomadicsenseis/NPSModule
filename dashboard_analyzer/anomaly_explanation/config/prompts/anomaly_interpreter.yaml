@@ -363,6 +363,12 @@ hierarchical_diagnostic_helpers:
     🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**
     
     **Enfoque requerido:** Genera un informe ejecutivo NARRATIVO orientado a causas. Usa las evidencias extraídas en el paso anterior (4B).
+
+    **⚠️ FORMATO TEAMS (CRÍTICO):**
+    - El output FINAL debe ser **HTML** (NO Markdown).
+    - Usa solo: `<b>...</b>`, `<br>`, `<ul>`, `<li>`.
+    - No uses `**negrita**`, `#`, `-` ni backticks.
+    - No uses emojis. (Los encabezados del input pueden traerlos; tú no los repitas.)
     
     **⚠️ REGLAS DE LENGUAJE EJECUTIVO:**
     - NUNCA uses términos técnicos internos: "nodo", "árbol", "NMA", "burbujeo", "jerarquía", "agregación"
@@ -371,15 +377,16 @@ hierarchical_diagnostic_helpers:
     - Escribe como si fuera un informe para dirección ejecutiva
     - **NO ENUMERES las causas** (nada de "CAUSA 1:", "CAUSA 2:"). Nárralas de forma fluida.
     
-    **Formato esperado:**
+    **Formato esperado (HTML):**
     
-    📈 **SÍNTESIS EJECUTIVA:**
+    Empieza SIEMPRE con:
+    `<b>SÍNTESIS EJECUTIVA</b><br>`
     
-    **PÁRRAFO INTRODUCTORIO (2-3 líneas):**
-    "Durante la semana del [fecha], hemos identificado [N] causas principales que explican las variaciones de NPS. [Resultado global: subida/bajada de X pts]."
+    **PÁRRAFO INTRODUCTORIO (2-3 líneas) en HTML:**
+    Usa texto normal + `<br>` al final del párrafo.
     
-    **DESARROLLO NARRATIVO DE LAS CAUSAS (2-4 párrafos):**
-    Escribe de forma NARRATIVA y FLUIDA, desarrollando cada causa identificada en el paso 4. NO uses listas enumeradas ni formato "CAUSA N:". En su lugar, narra las causas como un texto continuo que apoya y desarrolla lo dicho en la introducción.
+    **DESARROLLO NARRATIVO DE LAS CAUSAS (2-4 párrafos) en HTML:**
+    Texto corrido (no enumerado). Separa párrafos con `<br><br>`.
     
     Cada causa debe incluir (integrado naturalmente en la narrativa):
     - Qué segmento afecta y cuánto impacta el NPS
@@ -392,14 +399,13 @@ hierarchical_diagnostic_helpers:
     
     En contraste, SH mostró una dinámica opuesta..."
     
-    ---
-    
-    **DETALLE POR CABINA:**
+    **DETALLE POR CABINA (HTML):**
+    Después del texto narrativo, añade `<br><br><b>DETALLE POR CABINA</b><br>` y luego pega `{CABIN_SECTIONS}` (también en HTML).
 
     {CABIN_SECTIONS}
 
     **⚠️ IMPORTANTE:**
-    - EMPIEZA DIRECTAMENTE CON "📈 **SÍNTESIS EJECUTIVA:**"
+    - EMPIEZA DIRECTAMENTE con `<b>SÍNTESIS EJECUTIVA</b><br>`
     - El párrafo introductorio debe ser MUY BREVE (2-3 líneas)
     - El desarrollo de causas debe ser NARRATIVO, no enumerado
     - **INCLUYE TODOS LOS DATOS DEL PASO 4B** - no omitas ninguna evidencia:
