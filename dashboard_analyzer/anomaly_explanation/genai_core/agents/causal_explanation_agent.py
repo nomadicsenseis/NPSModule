@@ -6106,6 +6106,113 @@ ORDER BY 'Route_Master'[route]
         # Simple placeholder - return empty list for now
         return []
 
+    def _aggregate_ncs_incidents(self, incidents_list: List[Dict[str, str]]) -> List[str]:
+        """
+        Group identical incidents and add count: '[Date] (xCount) Text'
+        Reduces volume before sending to LLM.
+        """
+        grouped = {} # (date, text) -> count
+        
+        for inc in incidents_list:
+            text_normalized = inc['text'].strip()
+            date_normalized = inc['date'].strip()
+            
+            # Use tuple key for grouping
+            key = (date_normalized, text_normalized)
+            grouped[key] = grouped.get(key, 0) + 1
+            
+        # Format output
+        aggregated = []
+        # Sort by date
+        sorted_keys = sorted(grouped.keys(), key=lambda x: x[0])
+        
+        for (date, text) in sorted_keys:
+            count = grouped[(date, text)]
+            if count > 1:
+                aggregated.append(f"[{date}] (x{count}) {text}")
+            else:
+                aggregated.append(f"[{date}] {text}")
+                
+        return aggregated
+
+    async def _filter_incidents_sequentially(self, incidents: List[str], max_final: int = 30, batch_size: int = 50) -> List[str]:
+        """
+        Sequential tournament to select top dark horses using LLM.
+        """
+        if len(incidents) <= max_final:
+            return incidents
+            
+        current_top = []
+        
+        # Split into batches
+        batches = [incidents[i:i + batch_size] for i in range(0, len(incidents), batch_size)]
+        
+        self.logger.info(f"🐎 Starting sequential Dark Horse filtering: {len(incidents)} candidates in {len(batches)} batches")
+        
+        from langchain_core.messages import HumanMessage, SystemMessage
+        
+        for i, batch in enumerate(batches):
+            # Combine current winners with new challengers
+            candidates = current_top + batch
+            
+            # If total candidates fit in max_final, just keep them all (no need to filter yet)
+            if len(candidates) <= max_final:
+                current_top = candidates
+                continue
+                
+            # Otherwise, ask LLM to select the best
+            self.logger.info(f"🐎 Filtering batch {i+1}/{len(batches)}: {len(candidates)} candidates -> top {max_final}")
+            
+            candidates_str = "\n".join(candidates)
+            
+            prompt_content = f"""
+            ACT AS: Operational Analyst for an airline.
+            TASK: Select the top {max_final} most significant "Dark Horse" events from the list below.
+            
+            CRITERIA FOR "DARK HORSE" (Prioritize in this order):
+            1. High Impact/Severity: Strikes, Weather storms, System failures (IT/Baggage), Security alerts, Geopolitics.
+            2. Volume/Repetition: Higher incident counts (e.g. "(x50)") indicate higher impact.
+            3. Specificity: Prefer specific events (e.g. "Storm in EAS") over generic codes (e.g. "W0").
+            4. REJECT: Routine operational delays (crew rotation, cleaning, late arrival), single isolated minor delays, generic codes without context.
+            
+            CANDIDATES LIST:
+            {candidates_str}
+            
+            OUTPUT FORMAT:
+            Return ONLY the selected lines from the list, exactly as they appear. One per line. Do not add bullets or comments.
+            """
+            
+            try:
+                response = await self.llm.ainvoke([
+                    SystemMessage(content="You are an expert Airline Operations Analyst. You filter noise to find critical disruptions."),
+                    HumanMessage(content=prompt_content)
+                ])
+                
+                selection = response.content.strip().split('\n')
+                # Clean up selection
+                cleaned_selection = [s.strip().replace('•', '').replace('-', '').strip() for s in selection if s.strip()]
+                # Keep only valid lines that were in candidates
+                current_top = []
+                for s in cleaned_selection:
+                    # Simple matching: if s is contained in a candidate line
+                    matched = next((c for c in candidates if s in c), None)
+                    if matched and matched not in current_top:
+                        current_top.append(matched)
+                
+                # If LLM returned nothing or garbage, fallback to top N by length/count?
+                if not current_top:
+                    self.logger.warning("🐎 LLM returned empty selection, keeping top N of candidates")
+                    current_top = candidates[:max_final]
+                    
+                # Hard limit
+                current_top = current_top[:max_final]
+                
+            except Exception as e:
+                self.logger.error(f"🐎 Error in sequential filtering: {e}. Keeping first {max_final}.")
+                current_top = candidates[:max_final]
+                
+        return current_top
+
     async def _ncs_reflection_with_agent(
         self, 
         filtered_ncs_data: pd.DataFrame, 
@@ -6172,24 +6279,33 @@ ORDER BY 'Route_Master'[route]
             incident_col = filtered_ncs_data.columns[0]
             self.logger.info(f"🔍 DEBUG: Using incident column: '{incident_col}' (empty name is normal)")
             
-            # Prepare sample of incidents for agent analysis
-            incident_count = len(filtered_ncs_data)
-            sample_size = min(150, incident_count)  # Show up to 150 incidents for dark horse detection (increased from 30)
+            # Prepare incidents for dark horse detection (ALL incidents -> Aggregated -> Filtered)
             
-            # Extract incidents WITH DATES from current period
-            current_incidents_with_dates = self._extract_incidents_with_dates(filtered_ncs_data, sample_size)
+            # 1. Extract ALL incidents (with dates) from current period
+            current_incidents_raw = self._extract_incidents_with_dates(filtered_ncs_data, max_incidents=None)
+            incident_count = len(current_incidents_raw)
             
-            # Extract incidents WITH DATES from comparison period (if available)
-            comparison_incidents_with_dates = []
+            # 2. Aggregate identical incidents (add counts)
+            current_aggregated = self._aggregate_ncs_incidents(current_incidents_raw)
+            self.logger.info(f"🐎 Current incidents aggregated: {len(current_incidents_raw)} raw -> {len(current_aggregated)} unique events")
+            
+            # 3. Sequential Filtering Tournament (LLM)
+            current_final_list = await self._filter_incidents_sequentially(current_aggregated, max_final=30)
+            
+            # Comparison Period
+            comparison_final_list = []
             if comparison_data is not None and not comparison_data.empty:
-                comparison_sample_size = min(150, len(comparison_data))
-                comparison_incidents_with_dates = self._extract_incidents_with_dates(comparison_data, comparison_sample_size)
+                comp_raw = self._extract_incidents_with_dates(comparison_data, max_incidents=None)
+                comp_agg = self._aggregate_ncs_incidents(comp_raw)
+                self.logger.info(f"🐎 Comparison incidents aggregated: {len(comp_raw)} raw -> {len(comp_agg)} unique events")
+                comparison_final_list = await self._filter_incidents_sequentially(comp_agg, max_final=30)
             
-            self.logger.info(f"🔍 DEBUG: Extracted {len(current_incidents_with_dates)} current incidents, {len(comparison_incidents_with_dates)} comparison incidents")
+            self.logger.info(f"🔍 DEBUG: Filtered down to {len(current_final_list)} current dark horses, {len(comparison_final_list)} comparison dark horses")
             
             # ENHANCEMENT: Pre-analyze routes for disruption counting
-            sample_incidents = [inc['text'] for inc in current_incidents_with_dates]
-            all_incidents_text = "\n".join(sample_incidents)
+            # Use ALL raw incidents text for accurate route statistics
+            all_raw_texts = [inc['text'] for inc in current_incidents_raw]
+            all_incidents_text = "\n".join(all_raw_texts[:3000])
             route_disruption_summary = self._extract_route_disruption_counts(all_incidents_text)
             
             # Build NPS variation context
@@ -6238,30 +6354,32 @@ ORDER BY 'Route_Master'[route]
             else:
                 ncs_helper_prompt += "\n   • No se encontraron patrones de ruta claros"
 
-            # Add current period incidents WITH DATES
+            # Add current period incidents WITH DATES (FILTERED DARK HORSES)
             ncs_helper_prompt += f"""
 
 📋 **COMENTARIOS PERÍODO ACTUAL ({current_start_date or 'N/A'} a {current_end_date or 'N/A'}):**"""
             
-            for inc in current_incidents_with_dates:
-                incident_text = inc['text'][:250] + "..." if len(inc['text']) > 250 else inc['text']
-                ncs_helper_prompt += f"\n• [{inc['date']}] {incident_text}"
+            if current_final_list:
+                for inc_str in current_final_list:
+                    ncs_helper_prompt += f"\n• {inc_str}"
+            else:
+                ncs_helper_prompt += "\n• No se encontraron eventos significativos tras el filtrado."
             
-            if incident_count > sample_size:
-                ncs_helper_prompt += f"\n... y {incident_count - sample_size} incidentes adicionales"
+            ncs_helper_prompt += f"\n(Selección inteligente de eventos significativos de un total de {incident_count} incidentes)"
             
             # Add comparison period incidents WITH DATES (if available)
-            if comparison_incidents_with_dates:
+            if comparison_data is not None and not comparison_data.empty:
                 ncs_helper_prompt += f"""
 
 📋 **COMENTARIOS PERÍODO COMPARATIVO ({comparison_start_date or 'N/A'} a {comparison_end_date or 'N/A'}):**"""
                 
-                for inc in comparison_incidents_with_dates:
-                    incident_text = inc['text'][:250] + "..." if len(inc['text']) > 250 else inc['text']
-                    ncs_helper_prompt += f"\n• [{inc['date']}] {incident_text}"
+                if comparison_final_list:
+                    for inc_str in comparison_final_list:
+                        ncs_helper_prompt += f"\n• {inc_str}"
+                else:
+                    ncs_helper_prompt += "\n• No se encontraron eventos significativos tras el filtrado."
                 
-                if comparison_data is not None and len(comparison_data) > len(comparison_incidents_with_dates):
-                    ncs_helper_prompt += f"\n... y {len(comparison_data) - len(comparison_incidents_with_dates)} incidentes adicionales"
+                ncs_helper_prompt += f"\n(Selección inteligente de eventos significativos de un total de {len(comparison_data)} incidentes)"
 
             # Add unattributed incidents (no route / no MAD-IATA inference). These are intentionally excluded from
             # LH/SH quantitative counts but should be classified by the LLM using the Iberia heuristic.
@@ -6271,27 +6389,28 @@ ORDER BY 'Route_Master'[route]
             def _format_unattributed(df, label: str) -> str:
                 if df is None or df.empty:
                     return f"\n📌 **INCIDENTES NO ATRIBUIDOS ({label}):** No disponible"
-                # Use the incident text column (first col) + date hints if present
-                incident_col_local = df.columns[0] if len(df.columns) > 0 else None
-                rows = []
-                max_rows = min(25, len(df))
-                for _, r in df.head(max_rows).iterrows():
-                    txt = str(r.get(incident_col_local, "")).strip() if incident_col_local is not None else ""
-                    if not txt or txt == "nan":
-                        continue
-                    date_hint = r.get("collection_date") or r.get("email_date") or r.get("source_file") or "N/A"
-                    # compact date
-                    date_str = str(date_hint)
-                    m = re.search(r"(\d{4}-\d{2}-\d{2})", date_str)
-                    if m:
-                        date_str = m.group(1)
-                    rows.append(f"• [{date_str}] {txt[:220]}{'...' if len(txt) > 220 else ''}")
-                more = f"\n... y {len(df) - max_rows} adicionales" if len(df) > max_rows else ""
-                return (
-                    f"\n📌 **INCIDENTES NO ATRIBUIDOS ({label})** (sin ruta/IATA → clasificar con heurística):\n"
-                    + "\n".join(rows)
-                    + more
-                )
+                
+                # Use standard extraction (with aggregation) logic
+                # Extract all to aggregate properly
+                try:
+                    raw_incidents = self._extract_incidents_with_dates(df, max_incidents=None)
+                    aggregated = self._aggregate_ncs_incidents(raw_incidents)
+                    
+                    rows = []
+                    max_rows = 50
+                    for inc_str in aggregated[:max_rows]:
+                        rows.append(f"• {inc_str}")
+                    
+                    more = f"\n... y {len(aggregated) - max_rows} grupos adicionales" if len(aggregated) > max_rows else ""
+                    
+                    return (
+                        f"\n📌 **INCIDENTES NO ATRIBUIDOS ({label})** (sin ruta/IATA → clasificar con heurística):\n"
+                        + "\n".join(rows)
+                        + more
+                    )
+                except Exception as e:
+                    self.logger.error(f"Error formating unattributed incidents: {e}")
+                    return f"\n📌 **INCIDENTES NO ATRIBUIDOS ({label}):** Error al procesar ({str(e)})"
 
             ncs_helper_prompt += _format_unattributed(unattributed_current, "PERÍODO ACTUAL")
             if comparison_data is not None:
@@ -6344,7 +6463,7 @@ Luego incluye estas secciones (en este orden):
             self.logger.info(f"🤖 Enviando {incident_count} incidentes NCS al agente para reflexión con datos de disrupciones por ruta")
             
             # Check if we have valid incidents
-            if not sample_incidents:
+            if not current_incidents_raw:
                 self.logger.error("❌ DEBUG: No valid incidents found after extraction and filtering")
                 return {
                     'identified_causes': [],
@@ -6397,7 +6516,7 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
             self.tracker.log_message("USER", ncs_helper_prompt)
             
             # Get LLM analysis
-            self.logger.info(f"🔄 DEBUG: About to call LLM with {len(current_incidents_with_dates)} current + {len(comparison_incidents_with_dates)} comparison incidents...")
+            self.logger.info(f"🔄 DEBUG: About to call LLM with {len(current_final_list)} filtered current + {len(comparison_final_list)} filtered comparison dark horses...")
             
             response, _, _ = await self.agent.invoke(
                 messages=message_history.get_messages(),
@@ -6424,11 +6543,11 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
                 'confidence_level': 'high_agent_analysis',
                 'analysis_summary': llm_analysis,
                 'incident_count': incident_count,
-                'sample_size': sample_size,
+                'sample_size': incident_count,
                 'route_disruption_counts': route_disruption_summary,
                 'method': 'agent_reflection_ncs',
                 'dark_horses_analysis_included': comparison_data is not None and not comparison_data.empty,
-                'comparison_incidents_analyzed': len(comparison_incidents_with_dates)
+                'comparison_incidents_analyzed': len(comparison_final_list)
             }
             
         except Exception as e:
@@ -6443,13 +6562,13 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
                 'method': 'agent_reflection_failed'
             }
 
-    def _extract_incidents_with_dates(self, ncs_data: pd.DataFrame, max_incidents: int = 30) -> List[Dict[str, str]]:
+    def _extract_incidents_with_dates(self, ncs_data: pd.DataFrame, max_incidents: Optional[int] = 30) -> List[Dict[str, str]]:
         """
         Extract incidents from NCS data with their associated dates.
         
         Args:
             ncs_data: DataFrame with NCS incident data
-            max_incidents: Maximum number of incidents to extract
+            max_incidents: Maximum number of incidents to extract (None for all)
             
         Returns:
             List of dicts with 'date' and 'text' keys
@@ -6479,7 +6598,7 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
             
             # Select data to process: distributed sampling if we have more than max_incidents
             # This ensures we cover the entire period range instead of just the first N incidents (which might be all on day 1)
-            if len(ncs_data) > max_incidents:
+            if max_incidents is not None and len(ncs_data) > max_incidents:
                 # Use linspace to get evenly spaced indices
                 import numpy as np
                 indices = np.linspace(0, len(ncs_data) - 1, max_incidents, dtype=int)
