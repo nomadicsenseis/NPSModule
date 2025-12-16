@@ -6196,15 +6196,31 @@ ORDER BY 'Route_Master'[route]
                 cleaned_selection = [s.strip().replace('•', '').replace('-', '').strip() for s in selection if s.strip()]
                 # Keep only valid lines that were in candidates
                 current_top = []
+                
+                # Helper for fuzzy matching
+                def clean_line_for_match(line):
+                    # Remove [Date] and (xCount) patterns to compare core text content
+                    # This handles cases where LLM strips metadata or changes format
+                    return re.sub(r'\[.*?\]|\(x\d+\)', '', line).strip()
+
                 for s in cleaned_selection:
-                    # Simple matching: if s is contained in a candidate line
+                    # 1. Direct containment (most reliable)
                     matched = next((c for c in candidates if s in c), None)
+                    
+                    # 2. Fuzzy match based on core text content
+                    if not matched:
+                        s_clean = clean_line_for_match(s)
+                        # Only try fuzzy match if we have enough content (>5 chars) to avoid false positives
+                        if len(s_clean) > 5:
+                            # Check if core text of selection matches core text of any candidate
+                            matched = next((c for c in candidates if s_clean in clean_line_for_match(c)), None)
+                    
                     if matched and matched not in current_top:
                         current_top.append(matched)
                 
                 # If LLM returned nothing or garbage, fallback to top N by length/count?
                 if not current_top:
-                    self.logger.warning("🐎 LLM returned empty selection, keeping top N of candidates")
+                    self.logger.warning(f"🐎 LLM returned empty selection. Raw response preview: {str(response.content)[:200]}")
                     current_top = candidates[:max_final]
                     
                 # Hard limit
