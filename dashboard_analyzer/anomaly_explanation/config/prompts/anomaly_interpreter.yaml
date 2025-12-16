@@ -416,14 +416,14 @@ hierarchical_diagnostic_helpers:
     - **ATRIBUCIÓN OBLIGATORIA:** Cada métrica debe indicar a qué segmento pertenece
     - **TERMINOLOGÍA DE COMPARACIÓN (CRÍTICO):** 
       • Lee el "BASELINE REFERENCE" del contexto inicial (<tree_data>)
-      • USA EXACTAMENTE esa terminología para expresar las variaciones. Ejemplos:
-        - Si dice "vs semana anterior" → escribe "con respecto a la semana anterior"
-        - Si dice "vs últimos 7 días" → escribe "con respecto a los últimos 7 días"
-        - Si dice "vs media de los últimos 7 días" → escribe "con respecto a la media de los últimos 7 días"
-      • NUNCA uses abreviaturas como "vs L7d", "vs baseline" o similares
-      • La terminología debe ser explícita y ejecutiva
-      • Para análisis SEMANALES: usa "con respecto a la semana anterior" (sin "media")
-      • Para análisis DIARIOS: usa "con respecto a la media de los últimos 7 días" (con "media")
+      • Tu objetivo es usar **ESA MISMA REFERENCIA** en el texto, adaptada gramaticalmente.
+      • Usa la fórmula: "con respecto a [TEXTO DEL BASELINE REFERENCE]".
+      • Ejemplos de adaptación:
+        - Si Baseline Reference dice "vs semana anterior" → escribe "con respecto a la semana anterior"
+        - Si Baseline Reference dice "vs media de los últimos 7 días" → escribe "con respecto a la media de los últimos 7 días"
+        - Si Baseline Reference dice "vs período seleccionado (2025-05-01...)" → escribe "con respecto al período seleccionado (2025-05-01...)"
+      • **NO FORCES** "semana anterior" ni "período anterior" si el Baseline Reference dice otra cosa.
+      • NUNCA uses abreviaturas como "vs L7d", "vs baseline" o similares.
     - **PARA CABINAS SH:** Menciona valores NPS de IB y YW por separado, incluyendo SHAP de ambos
     - Si una cabina no tiene variaciones significativas, indica "mantuvo desempeño estable"
     
