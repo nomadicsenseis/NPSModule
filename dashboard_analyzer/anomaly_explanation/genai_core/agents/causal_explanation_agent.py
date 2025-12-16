@@ -5604,7 +5604,7 @@ class CausalExplanationAgent:
                     # Key point: for non-Global nodes we must avoid cross-contamination.
                     # Incidents without explicit routes (XXX-YYY) cannot be reliably assigned to LH/SH,
                     # so we exclude them for haul-specific segments.
-                    allow_unknown_route_incidents=("Global" in node_path)
+                    allow_unknown_route_incidents=(node_path.strip() == "Global")
                 )
             
             # STEP 2: Apply cabin filtering ONLY when we're at cabin level AND need to exclude incidents that affect ONLY other cabins
@@ -5646,7 +5646,7 @@ class CausalExplanationAgent:
                         self.logger.info(f"After cabin filtering: {len(filtered_ncs)} incidents remain (keeping incidents that don't specify cabin or affect our cabin)")
             
             # STEP 3: If no incidents remain after filtering, return original data for Global analysis
-            if len(filtered_ncs) == 0 and "Global" in node_path:
+            if len(filtered_ncs) == 0 and node_path.strip() == "Global":
                 self.logger.info("No incidents remain after filtering, returning all NCS data for Global analysis")
                 return ncs_data
             
