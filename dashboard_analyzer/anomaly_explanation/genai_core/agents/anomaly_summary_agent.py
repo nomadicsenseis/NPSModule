@@ -14,6 +14,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
+import importlib.resources
 
 # Import GenAI Core components (adjusted for new location)
 from ..agents.agent import Agent
@@ -99,23 +100,40 @@ class AnomalySummaryAgent:
         return logger
     
     def _load_prompt_config(self, config_path: str) -> Dict[str, Any]:
-        """Load prompt configuration from YAML file."""
+        """Load prompt configuration using importlib.resources for package support"""
         try:
-            # Get the directory of this file to resolve relative paths
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            full_path = os.path.join(current_dir, config_path)
+            # Try loading as package resource first
+            config_filename = Path(config_path).name
+            package_path = "dashboard_analyzer.anomaly_explanation.config.prompts"
             
-            with open(full_path, 'r', encoding='utf-8') as file:
-                config = yaml.safe_load(file)
+            try:
+                ref = importlib.resources.files(package_path) / config_filename
+                with ref.open('r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+                self.logger.debug(f"Loaded configuration from package resource: {package_path}/{config_filename}")
+                return config
+            except (ImportError, FileNotFoundError, TypeError) as e:
+                # Fallback to direct file path (development/relative mode)
+                self.logger.debug(f"Could not load from package ({e}), trying file path")
+                
+                # Get the directory of this file to resolve relative paths if config_path is relative
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                full_path = os.path.join(current_dir, config_path)
+                
+                if not os.path.exists(full_path):
+                    # Try workspace root fallback
+                    full_path = Path("/workspace") / "dashboard_analyzer/anomaly_explanation/config/prompts" / config_filename
+                
+                if os.path.exists(full_path):
+                    with open(full_path, 'r', encoding='utf-8') as file:
+                        config = yaml.safe_load(file)
+                    self.logger.debug(f"Loaded summary prompt configuration from {full_path}")
+                    return config
+                else:
+                    raise FileNotFoundError(f"Configuration file not found: {config_path} or package resource")
             
-            self.logger.debug(f"Loaded summary prompt configuration from {full_path}")
-            return config
-            
-        except FileNotFoundError:
-            self.logger.error(f"Configuration file not found: {config_path}")
-            raise
-        except yaml.YAMLError as e:
-            self.logger.error(f"Error parsing YAML configuration: {e}")
+        except Exception as e:
+            self.logger.error(f"Error loading prompt configuration: {e}")
             raise
     
     def _create_llm(self, llm_type: LLMType):

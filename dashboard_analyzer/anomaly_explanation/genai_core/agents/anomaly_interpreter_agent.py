@@ -15,6 +15,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
+import importlib.resources
 
 # Import GenAI Core components (adjusted for new location)
 from ..agents.agent import Agent
@@ -204,19 +205,31 @@ class AnomalyInterpreterAgent:
         return logger
 
     def _load_prompt_config(self, config_path: str) -> Dict[str, Any]:
-        """Load prompt configuration from YAML file."""
+        """Load prompt configuration from YAML file using importlib.resources."""
         try:
-            # Use relative path from this file's location
-            # config_path is like "dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml"
-            # Extract just the filename
+            # Try loading as package resource first
             config_filename = Path(config_path).name
-            full_path = _CONFIG_DIR / config_filename
+            package_path = "dashboard_analyzer.anomaly_explanation.config.prompts"
             
-            if not full_path.exists():
-                raise FileNotFoundError(f"Prompt config file not found at {full_path}")
+            try:
+                ref = importlib.resources.files(package_path) / config_filename
+                with ref.open('r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+                self.logger.info(f"Prompt configuration loaded from package resource: {package_path}/{config_filename}")
+            except (ImportError, FileNotFoundError, TypeError) as e:
+                # Fallback to direct file path
+                self.logger.debug(f"Could not load from package ({e}), trying fallback path logic")
+                full_path = _CONFIG_DIR / config_filename
+                
+                if not full_path.exists():
+                    # Try relative to workspace root if _CONFIG_DIR resolution failed
+                    full_path = Path("/workspace") / config_path
+                    if not full_path.exists():
+                        raise FileNotFoundError(f"Prompt config file not found at {full_path}")
 
-            with open(full_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+                self.logger.info(f"Prompt configuration loaded from {full_path}")
             
             # Validate that the config has the expected structure
             required_keys = ['comparative_prompts', 'single_prompts', 'hierarchical_diagnostic_helpers']
@@ -224,7 +237,6 @@ class AnomalyInterpreterAgent:
             if missing_keys:
                 self.logger.warning(f"⚠️ Config loaded but missing keys: {missing_keys}")
             
-            self.logger.info(f"Prompt configuration loaded from {full_path}")
             return config
             
         except Exception as e:

@@ -24,6 +24,7 @@ import time
 import re
 import traceback
 from dotenv import load_dotenv
+import importlib.resources
 
 from pydantic import BaseModel, Field
 
@@ -442,18 +443,39 @@ class CausalExplanationAgent:
         return comp_start, comp_end
     
     def _load_prompt_config(self, config_path: str) -> Dict[str, Any]:
-        """Load prompt configuration"""
+        """Load prompt configuration using importlib.resources for package support"""
         try:
-            full_path = Path(config_path)
-            if not full_path.exists():
-                full_path = Path("/workspace") / config_path
+            # Try loading as package resource first (preferred for installed package)
+            filename = Path(config_path).name
+            package_path = "dashboard_analyzer.anomaly_explanation.config.prompts"
             
-            with open(full_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            self.logger.info(f"Loaded causal explanation configuration from {full_path}")
-            return config
-            
+            try:
+                # Python 3.9+ style
+                ref = importlib.resources.files(package_path) / filename
+                with ref.open('r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+                self.logger.info(f"Loaded configuration from package resource: {package_path}/{filename}")
+                return config
+            except (ImportError, FileNotFoundError, TypeError) as e:
+                # Fallback to direct file path (development mode)
+                self.logger.debug(f"Could not load from package ({e}), trying file path: {config_path}")
+                
+                full_path = Path(config_path)
+                if not full_path.exists():
+                    # Try relative to workspace root if not absolute
+                    full_path = Path("/workspace") / config_path
+                    if not full_path.exists():
+                        # Try relative to current working directory
+                        full_path = Path.cwd() / config_path
+                
+                if full_path.exists():
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        config = yaml.safe_load(f)
+                    self.logger.info(f"Loaded configuration from file: {full_path}")
+                    return config
+                else:
+                    raise FileNotFoundError(f"Config file not found at {config_path} or in package resources")
+
         except Exception as e:
             self.logger.warning(f"Failed to load config from {config_path}: {e}")
             # Fallback configuration (minimal - should use YAML)
@@ -6135,9 +6157,10 @@ ORDER BY 'Route_Master'[route]
                 
         return aggregated
 
-    async def _filter_incidents_sequentially(self, incidents: List[str], max_final: int = 30, batch_size: int = 50) -> List[str]:
+    async def _filter_incidents_sequentially(self, incidents: List[str], max_final: int = 30, batch_size: int = 150) -> List[str]:
         """
         Sequential tournament to select top dark horses using LLM.
+        batch_size increased to 150 to reduce LLM round-trips and prevent timeouts.
         """
         if len(incidents) <= max_final:
             return incidents
