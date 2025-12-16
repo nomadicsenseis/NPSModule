@@ -6174,7 +6174,7 @@ ORDER BY 'Route_Master'[route]
             
             # Prepare sample of incidents for agent analysis
             incident_count = len(filtered_ncs_data)
-            sample_size = min(30, incident_count)  # Show up to 30 incidents for dark horse detection
+            sample_size = min(150, incident_count)  # Show up to 150 incidents for dark horse detection (increased from 30)
             
             # Extract incidents WITH DATES from current period
             current_incidents_with_dates = self._extract_incidents_with_dates(filtered_ncs_data, sample_size)
@@ -6182,7 +6182,7 @@ ORDER BY 'Route_Master'[route]
             # Extract incidents WITH DATES from comparison period (if available)
             comparison_incidents_with_dates = []
             if comparison_data is not None and not comparison_data.empty:
-                comparison_sample_size = min(30, len(comparison_data))
+                comparison_sample_size = min(150, len(comparison_data))
                 comparison_incidents_with_dates = self._extract_incidents_with_dates(comparison_data, comparison_sample_size)
             
             self.logger.info(f"🔍 DEBUG: Extracted {len(current_incidents_with_dates)} current incidents, {len(comparison_incidents_with_dates)} comparison incidents")
@@ -6477,8 +6477,20 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
             if date_col is None and 'source_file' in ncs_data.columns:
                 date_col = 'source_file'  # Will extract date from filename
             
+            # Select data to process: distributed sampling if we have more than max_incidents
+            # This ensures we cover the entire period range instead of just the first N incidents (which might be all on day 1)
+            if len(ncs_data) > max_incidents:
+                # Use linspace to get evenly spaced indices
+                import numpy as np
+                indices = np.linspace(0, len(ncs_data) - 1, max_incidents, dtype=int)
+                # Remove duplicates if any (though unlikely with large ncs_data) and sort
+                indices = sorted(list(set(indices)))
+                data_to_process = ncs_data.iloc[indices]
+            else:
+                data_to_process = ncs_data
+
             # Extract incidents with dates
-            for idx, row in ncs_data.head(max_incidents).iterrows():
+            for idx, row in data_to_process.iterrows():
                 incident_text = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
                 
                 if not incident_text or incident_text == 'nan':
