@@ -3329,7 +3329,7 @@ class CausalExplanationAgent:
                 ncs_data = ncs_collector.collect_ncs_data_for_date_range(start_dt, end_dt)
                 print(f"✅ DEBUG: Current period data collected: {len(ncs_data)} rows")
                 # 🔄 Filter current period data by segment immediately
-                ncs_data = await self._filter_ncs_by_segment(ncs_data, node_path)
+                ncs_data = await self._filter_ncs_by_segment(ncs_data, node_path, collect_unattributed_key="current")
                 print(f"🔧 DEBUG: After segment filter ({node_path}) rows: {len(ncs_data)}")
                 if ncs_data.empty:
                     print(f"⚠️ WARNING: Current period data is EMPTY - no incidents found for period {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}")
@@ -3361,7 +3361,7 @@ class CausalExplanationAgent:
                     comparison_data = ncs_collector.collect_ncs_data_for_date_range(comparison_start_dt, comparison_end_dt)
                     print(f"✅ DEBUG: Comparison data collected: {len(comparison_data)} rows")
                     # 🔄 Filter comparison data by segment immediately
-                    comparison_data = await self._filter_ncs_by_segment(comparison_data, node_path)
+                    comparison_data = await self._filter_ncs_by_segment(comparison_data, node_path, collect_unattributed_key="comparison")
                     print(f"🔧 DEBUG: After segment filter ({node_path}) rows: {len(comparison_data)}")
                     if comparison_data.empty:
                         print(f"⚠️ WARNING: Comparison data is EMPTY - no incidents found for period {comparison_start_dt.strftime('%Y-%m-%d')} to {comparison_end_dt.strftime('%Y-%m-%d')}")
@@ -5537,7 +5537,12 @@ class CausalExplanationAgent:
             summary[msg_type] = summary.get(msg_type, 0) + 1
         return summary
 
-    async def _filter_ncs_by_segment(self, ncs_data: pd.DataFrame, node_path: str) -> pd.DataFrame:
+    async def _filter_ncs_by_segment(
+        self,
+        ncs_data: pd.DataFrame,
+        node_path: str,
+        collect_unattributed_key: str | None = None
+    ) -> pd.DataFrame:
         """
         Simple NCS filtering by segment characteristics without external dependencies.
         Focuses on the specific incidents for the analyzed segment.
@@ -5559,7 +5564,11 @@ class CausalExplanationAgent:
             cabins, companies, hauls = self.pbi_collector._get_node_filters(node_path)
             
             # Apply contextual filtering based on segment characteristics
-            filtered_ncs = await self._apply_contextual_filtering(ncs_data, node_path)
+            filtered_ncs = await self._apply_contextual_filtering(
+                ncs_data,
+                node_path,
+                collect_unattributed_key=collect_unattributed_key
+            )
             
             # Log filtering results
             if len(filtered_ncs) < len(ncs_data):
@@ -5575,7 +5584,12 @@ class CausalExplanationAgent:
             # Return original data on error to ensure analysis continues
             return ncs_data
     
-    async def _apply_contextual_filtering(self, ncs_data: pd.DataFrame, node_path: str) -> pd.DataFrame:
+    async def _apply_contextual_filtering(
+        self,
+        ncs_data: pd.DataFrame,
+        node_path: str,
+        collect_unattributed_key: str | None = None
+    ) -> pd.DataFrame:
         """
         Apply contextual filtering with the correct NCS logic:
         1. ALWAYS filter by haul (Global, LH, SH) based on routes/airports
@@ -5597,15 +5611,38 @@ class CausalExplanationAgent:
                 haul_type = hauls[0]
                 
                 # Use routes dictionary instead of hardcoded keywords
-                filtered_ncs = await self._filter_using_routes_dictionary(
-                    filtered_ncs,
-                    haul_type,
-                    incident_col,
-                    # Key point: for non-Global nodes we must avoid cross-contamination.
-                    # Incidents without explicit routes (XXX-YYY) cannot be reliably assigned to LH/SH,
-                    # so we exclude them for haul-specific segments.
-                    allow_unknown_route_incidents=(node_path.strip() == "Global")
-                )
+                # IMPORTANT: for LH/SH nodes we keep ONLY attributable incidents in the quantitative pipeline,
+                # but we optionally collect the "unattributed" ones (no route / no MAD-IATA inference) to pass
+                # to the LLM for step (3) using the Iberia heuristic.
+                is_global_root = node_path.strip() == "Global"
+                if is_global_root:
+                    filtered_ncs = await self._filter_using_routes_dictionary(
+                        filtered_ncs,
+                        haul_type,
+                        incident_col,
+                        allow_unknown_route_incidents=True
+                    )
+                else:
+                    # A) strictly attributable to this haul (metrics / counts)
+                    target_only = await self._filter_using_routes_dictionary(
+                        filtered_ncs,
+                        haul_type,
+                        incident_col,
+                        allow_unknown_route_incidents=False
+                    )
+                    # B) attributable + unknown (for extracting the unknown slice only)
+                    if collect_unattributed_key:
+                        target_plus_unknown = await self._filter_using_routes_dictionary(
+                            filtered_ncs,
+                            haul_type,
+                            incident_col,
+                            allow_unknown_route_incidents=True
+                        )
+                        unknown_only = target_plus_unknown[~target_plus_unknown.index.isin(target_only.index)]
+                        if not hasattr(self, "_ncs_unattributed"):
+                            self._ncs_unattributed = {}
+                        self._ncs_unattributed[collect_unattributed_key] = unknown_only
+                    filtered_ncs = target_only
             
             # STEP 2: Apply cabin filtering ONLY when we're at cabin level AND need to exclude incidents that affect ONLY other cabins
             if cabins and len(cabins) == 1:
@@ -6225,6 +6262,40 @@ ORDER BY 'Route_Master'[route]
                 
                 if comparison_data is not None and len(comparison_data) > len(comparison_incidents_with_dates):
                     ncs_helper_prompt += f"\n... y {len(comparison_data) - len(comparison_incidents_with_dates)} incidentes adicionales"
+
+            # Add unattributed incidents (no route / no MAD-IATA inference). These are intentionally excluded from
+            # LH/SH quantitative counts but should be classified by the LLM using the Iberia heuristic.
+            unattributed_current = getattr(self, "_ncs_unattributed", {}).get("current") if hasattr(self, "_ncs_unattributed") else None
+            unattributed_comparison = getattr(self, "_ncs_unattributed", {}).get("comparison") if hasattr(self, "_ncs_unattributed") else None
+
+            def _format_unattributed(df, label: str) -> str:
+                if df is None or df.empty:
+                    return f"\n📌 **INCIDENTES NO ATRIBUIDOS ({label}):** No disponible"
+                # Use the incident text column (first col) + date hints if present
+                incident_col_local = df.columns[0] if len(df.columns) > 0 else None
+                rows = []
+                max_rows = min(25, len(df))
+                for _, r in df.head(max_rows).iterrows():
+                    txt = str(r.get(incident_col_local, "")).strip() if incident_col_local is not None else ""
+                    if not txt or txt == "nan":
+                        continue
+                    date_hint = r.get("collection_date") or r.get("email_date") or r.get("source_file") or "N/A"
+                    # compact date
+                    date_str = str(date_hint)
+                    m = re.search(r"(\d{4}-\d{2}-\d{2})", date_str)
+                    if m:
+                        date_str = m.group(1)
+                    rows.append(f"• [{date_str}] {txt[:220]}{'...' if len(txt) > 220 else ''}")
+                more = f"\n... y {len(df) - max_rows} adicionales" if len(df) > max_rows else ""
+                return (
+                    f"\n📌 **INCIDENTES NO ATRIBUIDOS ({label})** (sin ruta/IATA → clasificar con heurística):\n"
+                    + "\n".join(rows)
+                    + more
+                )
+
+            ncs_helper_prompt += _format_unattributed(unattributed_current, "PERÍODO ACTUAL")
+            if comparison_data is not None:
+                ncs_helper_prompt += _format_unattributed(unattributed_comparison, "PERÍODO COMPARATIVO")
             
             ncs_helper_prompt += f"""
 
@@ -6252,6 +6323,11 @@ Genera una **REFLEXIÓN NCS** que pueda persistirse y reutilizarse en la síntes
 - Si el comentario menciona destinos en **América, Asia u Oriente Medio**, interprétalo como **LH**.
 - En caso contrario (principalmente **Europa**, **norte de África**, etc.), interprétalo como **SH**.
 - Si no hay suficiente información para inferir el radio con confianza, indícalo como **“no concluyente”** (no inventes rutas).
+
+📌 **REGLA DE USO DE INCIDENTES NO ATRIBUIDOS (OBLIGATORIA):**
+- Los bloques “INCIDENTES NO ATRIBUIDOS” NO están en los conteos cuantitativos por radio/cabina.
+- Clasifícalos tú en: **RELEVANTES para este radio**, **RELEVANTES para el radio opuesto**, o **NO CONCLUYENTE (solo Global)**.
+- Solo usa los **RELEVANTES para este radio** para explicar NPS/incidentes del nodo.
 
 🧩 **FORMATO DE SALIDA (OBLIGATORIO, para persistencia):**
 Empieza EXACTAMENTE con:
