@@ -6247,6 +6247,12 @@ Genera una **REFLEXIÓN NCS** que pueda persistirse y reutilizarse en la síntes
    - Si el cuantitativo parece NO alinearse con el NPS, dilo y sugiere hipótesis alternativas.
    - **No asumas causalidad**: etiqueta como “posible”, “consistente con”, “no concluyente”.
 
+📌 **HEURÍSTICA DE RADIO (solo si NO aparece la ruta completa):**
+- Asume que Iberia vuela **en** o **desde** la península ibérica.
+- Si el comentario menciona destinos en **América, Asia u Oriente Medio**, interprétalo como **LH**.
+- En caso contrario (principalmente **Europa**, **norte de África**, etc.), interprétalo como **SH**.
+- Si no hay suficiente información para inferir el radio con confianza, indícalo como **“no concluyente”** (no inventes rutas).
+
 🧩 **FORMATO DE SALIDA (OBLIGATORIO, para persistencia):**
 Empieza EXACTAMENTE con:
 NCS_REFLEXION:
