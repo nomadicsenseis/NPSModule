@@ -2193,7 +2193,8 @@ class CausalExplanationAgent:
                 return await self._verbatims_tool(
                     node_path=node_path,
                     start_date=start_date,
-                    end_date=end_date
+                    end_date=end_date,
+                    anomaly_type=getattr(self, 'current_anomaly_type', 'unknown')
                 )
             elif tool_name == "ncs_tool":
                 return await self._ncs_tool(
@@ -2662,8 +2663,54 @@ class CausalExplanationAgent:
     # =========================================================================
     # VERBATIMS TOOL - Refactored clean implementation
     # =========================================================================
+
+    def _format_smart_verbatims(self, df: pd.DataFrame, limit: int = 30) -> str:
+        """Format smart verbatims for LLM consumption"""
+        if df.empty:
+            return "No hay verbatims disponibles."
+            
+        formatted_list = []
+        # Ensure we don't exceed limit (though query should handle it)
+        df_subset = df.head(limit)
+        
+        for idx, row in df_subset.iterrows():
+            # Support both query aliases and raw names for robustness
+            nps = row.get('NPS_Score', row.get('surveys_maritz[nps_all]', row.get('nps_all', 'N/A')))
+            route = row.get('Route', row.get('Route_Master[route]', row.get('route', 'Unknown')))
+            date_val = row.get('Date', row.get('Date_Master[Date]', ''))
+            verbatim = row.get('Verbatim', '').strip()
+            
+            # Fix date format
+            date_str = str(date_val)
+            if hasattr(date_val, 'strftime'):
+                date_str = date_val.strftime('%Y-%m-%d')
+            elif ' ' in date_str:
+                date_str = date_str.split(' ')[0]
+                
+            formatted_list.append(f"- [{date_str}] [NPS {nps}] ({route}): \"{verbatim}\"")
+            
+        return "\n".join(formatted_list)
+
+    def _extract_routes_from_verbatims(self, df: pd.DataFrame) -> List[str]:
+        """Extract unique routes from verbatims dataframe"""
+        if df.empty:
+            return []
+            
+        # Try clean alias first, then fallback
+        route_col = 'Route' if 'Route' in df.columns else None
+        if not route_col:
+             # Try alternatives
+             for col in ['Route_Master[route]', 'route', 'OD', 'Flight_Master[OD_Show]']:
+                 if col in df.columns:
+                     route_col = col
+                     break
+        
+        if not route_col:
+            return []
+            
+        return df[route_col].dropna().unique().tolist()
     
-    async def _verbatims_tool(self, node_path: str, start_date: str, end_date: str) -> str:
+    async def _verbatims_tool(self, node_path: str, start_date: str, end_date: str, anomaly_type: str = "neutral") -> str:
         """
         Verbatims tool for COMPARATIVE mode
         Analyzes verbatims from TWO periods and compares the changes
@@ -2672,6 +2719,7 @@ class CausalExplanationAgent:
             node_path: Node path for filtering  
             start_date: Target period start date (YYYY-MM-DD)
             end_date: Target period end date (YYYY-MM-DD)
+            anomaly_type: Type of anomaly (positive/negative/neutral) to filter verbatims
             
         Returns:
             Comparative analysis showing what changed between periods
@@ -2735,7 +2783,8 @@ class CausalExplanationAgent:
                 target_start=start_date,
                 target_end=end_date,
                 comparison_start=comparison_start,
-                comparison_end=comparison_end
+                comparison_end=comparison_end,
+                anomaly_type=anomaly_type
             )
             
             if result:
@@ -2749,7 +2798,7 @@ class CausalExplanationAgent:
             self.logger.error(f"❌ Error in comparative verbatims analysis: {e}")
             return f"ERROR in verbatims analysis: {str(e)}"
     
-    async def _verbatims_tool_single_period(self, node_path: str, start_date: str, end_date: str) -> str:
+    async def _verbatims_tool_single_period(self, node_path: str, start_date: str, end_date: str, anomaly_type: str = "neutral") -> str:
         """
         Verbatims tool for SINGLE PERIOD mode
         Analyzes verbatims from ONLY the target period (no comparison)
@@ -2758,12 +2807,13 @@ class CausalExplanationAgent:
             node_path: Node path for filtering
             start_date: Period start date (YYYY-MM-DD)
             end_date: Period end date (YYYY-MM-DD)
+            anomaly_type: Type of anomaly (positive/negative/neutral)
             
         Returns:
             Analysis of the single period
         """
         try:
-            self.logger.info(f"🤖 VERBATIMS_TOOL SINGLE PERIOD MODE")
+            self.logger.info(f"🤖 VERBATIMS_TOOL SINGLE PERIOD MODE ({anomaly_type})")
             self.logger.info(f"📅 Period: {start_date} to {end_date}")
             
             # Extract filters from node_path
@@ -2806,7 +2856,8 @@ class CausalExplanationAgent:
             result = await self._analyze_verbatims_single_pbi(
                 node_path=node_path,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                anomaly_type=anomaly_type
             )
             
             if result:
@@ -2968,58 +3019,68 @@ class CausalExplanationAgent:
         target_start: str,
         target_end: str,
         comparison_start: str,
-        comparison_end: str
+        comparison_end: str,
+        anomaly_type: str = "neutral"
     ) -> str:
-        """Analyze verbatims using PBI for TWO periods and compare"""
+        """Analyze verbatims using PBI for TWO periods and compare (SMART MODE)"""
         try:
             from datetime import datetime
             
-            self.logger.info("📊 Collecting verbatims from PBI for target period...")
+            self.logger.info(f"📊 Collecting SMART verbatims from PBI for target period ({anomaly_type})...")
             
-            # Get target period verbatims - convert to datetime if needed
+            # Get target period verbatims
             target_start_dt = target_start if isinstance(target_start, datetime) else datetime.strptime(target_start, '%Y-%m-%d')
             target_end_dt = target_end if isinstance(target_end, datetime) else datetime.strptime(target_end, '%Y-%m-%d')
             
-            df_target = self._collect_verbatims_with_query_tracking(
-                node_path, target_start_dt, target_end_dt
+            # Use SMART collection
+            df_target = self.pbi_collector.collect_smart_verbatims(
+                node_path, target_start_dt, target_end_dt, anomaly_type
             )
             
-            # Get comparison period verbatims - convert to datetime if needed
-            self.logger.info("📊 Collecting verbatims from PBI for comparison period...")
+            # Extract routes from target period (crucial for triangulation)
+            target_routes = self._extract_routes_from_verbatims(df_target)
+            if target_routes:
+                self.logger.info(f"🛣️ Extracted {len(target_routes)} routes from target verbatims: {target_routes}")
+                # Store in collected_data for later triangulation
+                if 'affected_routes' not in self.collected_data:
+                    self.collected_data['affected_routes'] = {}
+                self.collected_data['affected_routes']['verbatims'] = target_routes
+            
+            # Get comparison period verbatims
+            self.logger.info("📊 Collecting SMART verbatims from PBI for comparison period...")
             
             comparison_start_dt = comparison_start if isinstance(comparison_start, datetime) else datetime.strptime(comparison_start, '%Y-%m-%d')
             comparison_end_dt = comparison_end if isinstance(comparison_end, datetime) else datetime.strptime(comparison_end, '%Y-%m-%d')
             
-            df_comparison = self._collect_verbatims_with_query_tracking(
-                node_path, comparison_start_dt, comparison_end_dt
+            df_comparison = self.pbi_collector.collect_smart_verbatims(
+                node_path, comparison_start_dt, comparison_end_dt, anomaly_type
             )
             
             if df_target.empty and df_comparison.empty:
                 return None
             
-            # Analyze both periods
-            target_summary = self._summarize_verbatims_period(df_target, "ANALIZADO")
-            comparison_summary = self._summarize_verbatims_period(df_comparison, "COMPARACIÓN")
-            
-            # Compare
-            changes = self._compare_verbatims_periods(df_target, df_comparison)
+            # Format using smart formatter
+            target_text = self._format_smart_verbatims(df_target)
+            comparison_text = self._format_smart_verbatims(df_comparison)
             
             segment_desc = self._get_segment_description(node_path)
             
-            result = f"""📊 ANÁLISIS COMPARATIVO DE VERBATIMS (PBI)
+            result = f"""📊 ANÁLISIS COMPARATIVO DE VERBATIMS (SMART - {anomaly_type.upper()})
 
 🎯 SEGMENTO: {segment_desc}
 
-📅 PERÍODO ANALIZADO: {target_start} a {target_end}
-{target_summary}
+📅 PERÍODO ANALIZADO ({target_start} a {target_end}):
+Se muestran los comentarios más relevantes (Top 30 por longitud) filtrados por tipo de anomalía ({anomaly_type}).
+{target_text}
 
-📅 PERÍODO DE COMPARACIÓN: {comparison_start} a {comparison_end}
-{comparison_summary}
+📅 PERÍODO DE COMPARACIÓN ({comparison_start} a {comparison_end}):
+{comparison_text}
 
-🔄 CAMBIOS DETECTADOS:
-{changes}
+🔄 INSTRUCCIÓN PARA EL AGENTE:
+Analiza los comentarios del período analizado para encontrar patrones repetitivos.
+Busca coincidencias con las rutas extraídas: {', '.join(target_routes)}
+Compara si estos temas aparecían en el período anterior.
 """
-            
             return result
             
         except Exception as e:
@@ -3109,32 +3170,50 @@ class CausalExplanationAgent:
         self,
         node_path: str,
         start_date: str,
-        end_date: str
+        end_date: str,
+        anomaly_type: str = "neutral"
     ) -> str:
-        """Analyze verbatims using PBI for a single period"""
+        """Analyze verbatims using PBI for a single period (SMART MODE)"""
         try:
             from datetime import datetime
             
-            self.logger.info("📊 Collecting verbatims from PBI...")
+            self.logger.info(f"📊 Collecting SMART verbatims from PBI ({anomaly_type})...")
             
             # Convert to datetime if needed
             start_dt = start_date if isinstance(start_date, datetime) else datetime.strptime(start_date, '%Y-%m-%d')
             end_dt = end_date if isinstance(end_date, datetime) else datetime.strptime(end_date, '%Y-%m-%d')
             
-            df = self._collect_verbatims_with_query_tracking(node_path, start_dt, end_dt)
+            # Use SMART collection
+            df = self.pbi_collector.collect_smart_verbatims(
+                node_path, start_dt, end_dt, anomaly_type
+            )
             
             if df.empty:
                 return None
             
-            summary = self._summarize_verbatims_period(df, "ANALIZADO")
+            # Extract routes
+            target_routes = self._extract_routes_from_verbatims(df)
+            if target_routes:
+                self.logger.info(f"🛣️ Extracted {len(target_routes)} routes: {target_routes}")
+                if 'affected_routes' not in self.collected_data:
+                    self.collected_data['affected_routes'] = {}
+                self.collected_data['affected_routes']['verbatims'] = target_routes
+            
+            # Format
+            text = self._format_smart_verbatims(df)
+            
             segment_desc = self._get_segment_description(node_path)
             
-            result = f"""📊 ANÁLISIS DE VERBATIMS (PBI)
+            result = f"""📊 ANÁLISIS DE VERBATIMS (SMART - {anomaly_type.upper()})
 
 🎯 SEGMENTO: {segment_desc}
 📅 PERÍODO: {start_date} a {end_date}
 
-{summary}
+COMENTARIOS RELEVANTES (Top 30, {anomaly_type}):
+{text}
+
+🔄 INSTRUCCIÓN PARA EL AGENTE:
+Analiza los problemas recurrentes y su relación con las rutas: {', '.join(target_routes)}
 """
             
             return result
@@ -4146,10 +4225,14 @@ class CausalExplanationAgent:
             return {"routes": [], "analysis": f"❌ NCS routes error: {str(e)[:100]}", "source": "ncs"}
 
     async def _get_verbatims_routes(self, node_path: str, cabins: List[str], companies: List[str], hauls: List[str], start_dt, end_dt) -> dict:
-        """Get routes mentioned in verbatims/customer feedback"""
+        """Get routes mentioned in verbatims/customer feedback from all sources"""
         try:
-            # Get routes identified from verbatims conversation
+            # Source 1: Smart Verbatims (PBI) - NEW
             verbatims_routes = []
+            if 'affected_routes' in self.collected_data and 'verbatims' in self.collected_data['affected_routes']:
+                verbatims_routes.extend(self.collected_data['affected_routes']['verbatims'])
+            
+            # Source 2: Chatbot Conversation (Legacy/Non-prod)
             if 'verbatims_conversation' in self.collected_data:
                 conversation_data = self.collected_data['verbatims_conversation']
                 conversation_log = conversation_data.get('conversation_log', [])
@@ -4166,7 +4249,7 @@ class CausalExplanationAgent:
             if not verbatims_routes:
                 return {"routes": [], "analysis": "📊 No routes mentioned in customer verbatims", "source": "verbatims"}
             
-            self.logger.info(f"🎯 Analyzing verbatims-mentioned routes: {verbatims_routes}")
+            self.logger.info(f"🎯 Analyzing verbatims-mentioned routes from all sources: {verbatims_routes}")
             
             # Get data for these routes using the same method as explanatory drivers
             # to ensure we get the correct NPS_diff values

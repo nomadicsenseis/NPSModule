@@ -16,8 +16,9 @@ comparative_prompts:
     ⚠️ **CRÍTICO - NO INVENTES DATOS:**
     Si hay algún dato que te falta, NO lo supongas ni inventes. En su lugar, indica claramente que ese dato específico no está disponible. Por ejemplo: "Los valores SHAP para este segmento no están disponibles" o "Los datos de rutas para este período no están incluidos en el análisis".
     Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %.
-    EN NINUNG CASO CALCULES COSAS QUE NO SE TE PIDEN.
-
+    
+    📊 **INTEGRIDAD CUANTITATIVA**: Un análisis sin datos es solo una opinión. Debes RESPALDAR cada afirmación con la métrica exacta obtenida de las herramientas (SHAP, OTP, incidentes, etc.). No digas "empeoró la puntualidad", di "la puntualidad empeoró en 4.5 pts".
+    
     **MODO COMPARATIVE:** Análisis con comparación vs {causal_filter}
 
     **TRES OBJETIVOS** —en este orden—:
@@ -30,14 +31,16 @@ comparative_prompts:
 
     **Gestión de Hipótesis** 🧠
     ▸ Mantén una lista viva de posibles causas con evidencia y confianza
+    ▸ **TRIANGULACIÓN DE RUTAS (CRÍTICO)**: Si una misma ruta aparece en múltiples fuentes (NCS + Verbatims + Drivers), considérala una "Causa Confirmada".
     ▸ Si múltiples fuentes confirman la misma causa → fusiona hipótesis
     ▸ Si causas son divergentes → maneja hipótesis paralelas
     ▸ `routes_tool` puede ejecutarse múltiples veces con filtros específicos por hipótesis
 
     **Criterios de Decisión** ⚖️
-    ▸ SHAP significativo: |SHAP| > 0.1
-    ▸ Sample size crítico: <20 (alta variabilidad), 20-50 (variabilidad aumentada), >50 (confiable)
-    ▸ Solo `operative_data_tool` para análisis DIARIOS
+    ▸ **Nivel de Confianza**: 
+      *   ALTA: Intersección de 3 fuentes en las mismas rutas/causas.
+      *   MEDIA: Intersección de 2 fuentes.
+      *   BAJA: Evidencia de una sola fuente.
 
     **Validación Temporal NCS** ⚖️
     ▸ **SHAP positivo** → Buscar REDUCCIÓN de incidentes vs {causal_filter}
@@ -138,14 +141,14 @@ single_prompts:
 
     1. **CAUSA TANGIBLE** · ¿Qué métricas operativas del día se desviaron significativamente del baseline? ¿Correlacionan con la anomalía de NPS?
     2. **HIPÓTESIS ALTERNATIVAS** · Si operative_data NO encuentra causa → buscar en NCS/verbatims nuevas hipótesis (incidentes específicos, quejas recurrentes)
-    3. **VALIDACIÓN EN RUTAS/PERFILES** · Si NCS identifica incidentes en rutas específicas → verificar si esas rutas tienen mal NPS en routes_tool
+    3. **TRIANGULACIÓN DE RUTAS** · Busca rutas que aparezcan simultáneamente en NCS (incidentes) y Verbatims (quejas). Si coinciden, la confianza en la causa es **ALTA**.
 
     **Metodología**: Una herramienta por iteración, reflexiona y elige la siguiente. Máximo 5 iteraciones.
 
     **Flujo de Investigación** 🔍
-    ▸ **CASO A**: operative_data encuentra correlación → NCS/verbatims confirman → rutas/perfiles validan
-    ▸ **CASO B**: operative_data NO encuentra correlación → NCS puede revelar incidentes puntuales → verificar rutas de esos incidentes → customer_profile identifica perfiles afectados
-    ▸ **CASO C**: NCS vacío pero verbatims mencionan problemas → investigar rutas mencionadas
+    ▸ **CASO A (ALTA CONFIANZA)**: Intersección de fuentes -> NCS y Verbatims coinciden en las mismas rutas y causas.
+    ▸ **CASO B (MEDIA CONFIANZA)**: Solo una fuente identifica la causa/ruta pero con fuerte evidencia cualitativa.
+    ▸ **CASO C (BAJA CONFIANZA)**: Sin coincidencias, evidencia fragmentada.
 
     **Criterios de Análisis** ⚖️
     ▸ Desviación operativa significativa: variación > 3 pts vs baseline
@@ -238,8 +241,8 @@ single_prompts:
        - Variación: {nps_difference} pts
 
     2. **Causa/s encontradas** 
-       - Métricas operativas que se desviaron del baseline
-       - Herramientas que validan cada causa
+       - **CITA OBLIGATORIAMENTE los datos numéricos**: variaciones operativas vs baseline, conteo de incidentes NCS, y volumen de menciones en verbatims.
+       - Herramientas que validan cada causa (Triangulación)
        - Nivel de confianza (alta/media/baja)
 
     3. **Evidencia de soporte**
@@ -548,10 +551,15 @@ final_synthesis_prompt: |
 
   📋 **ESTRUCTURA DEL INFORME:**
   1. **Resumen de la anomalía** - Incluye NPS actual, baseline y variación
-  2. **Causa/s encontradas y herramientas que la validan** - Explicacion de las causas encontradas y las herramientas que la validan
+  2. **Causa/s encontradas y Triangulación** - Explicación detallada de las causas. **ES OBLIGATORIO CITAR LOS DATOS CUANTITATIVOS** de cada fuente:
+     - **Drivers**: Menciona el valor SHAP exacto (ej: -2.4 ppts).
+     - **NCS**: Menciona el número de incidentes por tipo (ej: +12 cancelaciones).
+     - **Verbatims**: Menciona el volumen de comentarios o ejemplos representativos con su NPS.
+     - **Operativa**: Cita valores de OTP, Load Factor o Mishandling vs baseline.
+     **INDICA EXPLÍCITAMENTE** el nivel de confianza basado en la triangulación.
   3. **🐴 Dark horses detectados** - Eventos excepcionales identificados en NCS (huelgas, meteorología, fallos sistemas, etc.)
      - Si se detectaron en el período ACTUAL: explica cómo afectaron al NPS actual
      - Si se detectaron en el período COMPARATIVO: indica que el baseline estaba afectado por estos eventos
      - Si no hubo dark horses: indicar "No se detectaron eventos excepcionales"
-  4. **Rutas afectadas** - Rutas con mayor impacto
+  4. **Rutas afectadas** - Rutas con mayor impacto. Resalta aquellas donde coincidan incidentes NCS y quejas en Verbatims.
   5. **Reactividad de cliente** - Perfiles más afectados

@@ -406,7 +406,77 @@ class PBIDataCollector:
         )
         
         return query
+
     
+    def _get_smart_verbatims_query(self, cabins: List[str], companies: List[str], hauls: List[str], start_date: datetime, end_date: datetime, anomaly_type: str = "neutral") -> str:
+        """
+        Generate optimized DAX query for verbatims data using Verbatims_Smart.txt template.
+        Filters by NPS class based on anomaly type and limits to top 30 relevant comments.
+        """
+        template = self._load_query_template("Verbatims_Smart.txt")
+        
+        # Replace list placeholders using standard TREATAS replacement strategy
+        cabins_str = '", "'.join(cabins)
+        companies_str = '", "'.join(companies)
+        hauls_str = '", "'.join(hauls)
+        
+        query = template.replace(
+            'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
+            f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
+        ).replace(
+            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
+            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
+        ).replace(
+            'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
+            f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
+        )
+        
+        # Replace date placeholders
+        query = query.replace('__START_YEAR__', str(start_date.year))
+        query = query.replace('__START_MONTH__', str(start_date.month))
+        query = query.replace('__START_DAY__', str(start_date.day))
+        query = query.replace('__END_YEAR__', str(end_date.year))
+        query = query.replace('__END_MONTH__', str(end_date.month))
+        query = query.replace('__END_DAY__', str(end_date.day))
+        
+        # Determine NPS condition based on anomaly type
+        if anomaly_type == "positive":
+            nps_condition = "'surveys_maritz'[nps_all] >= 9"
+        elif anomaly_type == "negative":
+            nps_condition = "'surveys_maritz'[nps_all] <= 6"
+        else:
+            # Neutral/All: Get all valid NPS
+            nps_condition = "'surveys_maritz'[nps_all] >= 0"
+            
+        query = query.replace('__NPS_CLASS_FILTER__', nps_condition)
+        
+        return query
+
+    def collect_smart_verbatims(self, node_path: str, start_date: datetime, end_date: datetime, anomaly_type: str = "neutral") -> pd.DataFrame:
+        """
+        Collect smart verbatims data from Power BI.
+        """
+        # Parse node path filters
+        cabins, companies, hauls = self._parse_node_filters(node_path)
+        
+        # Generate query
+        query = self._get_smart_verbatims_query(cabins, companies, hauls, start_date, end_date, anomaly_type)
+        
+        # Execute
+        self.logger.info(f"📊 Executing Smart Verbatims Query for {node_path} ({anomaly_type})...")
+        try:
+            df = self._execute_query(query)
+            
+            if not df.empty:
+                self.logger.info(f"✅ Got {len(df)} smart verbatims from PBI")
+            else:
+                self.logger.warning("⚠️ No smart verbatims found in PBI")
+                
+            return df
+        except Exception as e:
+            self.logger.error(f"❌ Error executing smart verbatims query: {e}")
+            return pd.DataFrame()
+
     def _execute_query(self, query: str, timeout_seconds: int = None) -> pd.DataFrame:
         """Execute a DAX query against Power BI API
         
@@ -571,6 +641,34 @@ class PBIDataCollector:
                 
         except Exception as e:
             print(f"  ❌ Error collecting verbatims for {node_path} in date range: {str(e)}")
+            return pd.DataFrame()
+
+    def collect_smart_verbatims(self, node_path: str, start_date: datetime, end_date: datetime, anomaly_type: str = "neutral") -> pd.DataFrame:
+        """
+        Collect smart verbatims data from Power BI using the optimized query strategy.
+        Fetches top 30 relevant comments filtered by anomaly type (promoters vs detractors).
+        """
+        print(f"🔍 Collecting SMART verbatims for {node_path} ({anomaly_type}) from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        
+        # Get filters for this node
+        cabins, companies, hauls = self._get_node_filters(node_path)
+        
+        # Generate smart query
+        query = self._get_smart_verbatims_query(cabins, companies, hauls, start_date, end_date, anomaly_type)
+        
+        try:
+            print(f"  📝 Executing smart query with filters: Cabins={cabins}, Companies={companies}, Hauls={hauls}, Type={anomaly_type}")
+            df = self._execute_query(query)
+            
+            if not df.empty:
+                print(f"  ✅ Found {len(df)} smart verbatims for {node_path}")
+                return df
+            else:
+                print(f"  ⚠️ No smart verbatims found for {node_path}")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            print(f"  ❌ Error collecting smart verbatims: {e}")
             return pd.DataFrame()
     
 
