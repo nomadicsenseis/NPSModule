@@ -24,9 +24,10 @@ DEFINE
                 SELECTCOLUMNS(
                     surveys_maritz,
                     "Verbatim", surveys_maritz[nps_all_t],
-                    "Route", RELATED('Route_Master'[route]),
-                    "Date", RELATED('Date_Master'[Date]),
-                    "NPS_Score", surveys_maritz[nps_all]
+                    "Route", surveys_maritz[route],
+                    "Date", surveys_maritz[date_flight_local],
+                    "NPS_Score", surveys_maritz[nps_100],
+                    "NPS_Category", surveys_maritz[nps_category]
                 ),
                 __DS0FilterTable,
                 __DS0FilterTable2,

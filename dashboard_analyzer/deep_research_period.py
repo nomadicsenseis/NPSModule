@@ -461,7 +461,7 @@ async def process_single_period(
                                 comparison_context=comparison_context_local,
                                 baseline_periods=analysis_data.get('baseline_periods', 7)
                             ),
-                            timeout=600.0
+                            timeout=1200.0
                         )
                         
                         investigation_log = []
@@ -470,6 +470,9 @@ async def process_single_period(
                         
                         return node_path, explanation, investigation_log, True
                     except Exception as e:
+                        print(f"❌ DEBUG: Exception in process_node_anomaly for {node_path}: {type(e).__name__} - {e}")
+                        import traceback
+                        traceback.print_exc()
                         return node_path, f"Analysis failed: {e}", [], False
 
             # Process nodes in parallel

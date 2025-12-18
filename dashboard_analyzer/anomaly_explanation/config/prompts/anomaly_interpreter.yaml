@@ -315,7 +315,7 @@ hierarchical_diagnostic_helpers:
 
     4. **VERBATIMS/FEEDBACK:**
        - Busca: "verbatims", "comentarios", "menciones positivas/negativas"
-       - Formato: Resume los temas principales mencionados
+       - Formato: Extrae los temas específicos, rutas citadas en verbatims y, si hay, ejemplos representativos. NO resumas en una sola frase genérica.
 
     5. **RUTAS AFECTADAS:**
        - Busca: "rutas", "routes", nombres de rutas (MAD-XXX, XXX-MAD)
@@ -379,9 +379,10 @@ hierarchical_diagnostic_helpers:
     
     **🔢 FORMATO NUMÉRICO (CRÍTICO):**
     - Redondea TODOS los valores numéricos (NPS, SHAP, OTP, porcentajes) a **1 decimal** máximo.
-      *   Ejemplos: `15.0` → `15.0`; `+1.79` → `+1.8`; `3.23` → `3.2`.
+    - **OBLIGATORIO:** Siempre que menciones una variación de NPS, debes incluir primero el valor absoluto actual. 
+      *   **Formato:** "NPS de X (Y pts)" o "NPS de X con una variación de Y pts".
+      *   Ejemplos: `NPS de 27.9 (+0.6 pts)`; `NPS de 8.7 (–3.7 pts)`.
     - Para números enteros (conteos de incidentes, pasajeros), NO uses decimales.
-      *   Ejemplo: `27` incidentes (NO `27.0`).
 
     **Formato esperado (HTML):**
     
@@ -389,16 +390,19 @@ hierarchical_diagnostic_helpers:
     `<b>SÍNTESIS EJECUTIVA</b><br>`
     
     **PÁRRAFO INTRODUCTORIO (2-3 líneas):**
-    Texto normal + `<br>` al final.
+    Debe resumir el resultado GLOBAL mencionando el NPS absoluto y su variación.
+    Ejemplo: "La red global registró un **NPS de 27.9 (+0.6 pts)** con respecto a la semana anterior..."
     
     **DESARROLLO NARRATIVO DE LAS CAUSAS (2-4 párrafos):**
     Texto corrido. Separa párrafos con `<br><br>`.
     
     **✍️ NARRATIVA DE INCIDENTES (NCS):** 
     No uses listas densas entre paréntesis. Integra los datos en la frase de forma fluida y natural.
-    *   **Mal:** "Los incidentes aumentaron (cancelaciones +15.0, retrasos +9.0) debido a meteorología..."
-    *   **Bien:** "La operatividad se vio lastrada por un aumento de **15 cancelaciones** y **9 retrasos**, provocados principalmente por la meteorología adversa en..."
-    *   Agrupa las causas (meteorología, huelgas, técnico) y lístalas de forma clara.
+    - **⚠️ ESPECIFICIDAD:** NUNCA digas simplemente "otras incidencias" o "limitaciones" si el dato original especifica el motivo (ej: equipaje, puertas, huelgas). DEBES mencionar el motivo concreto.
+    - **Bien:** "La operatividad se vio lastrada por un aumento de **15 cancelaciones** y **9 incidencias de equipaje**, provocadas principalmente por..."
+    
+    **✍️ DETALLE DE VERBATIMS:**
+    No generalices el feedback. Cita los problemas concretos (ej: asientos que no reclinan, falta de comida, trato descortés) y menciona al menos 1 o 2 rutas donde el feedback fue más intenso.
 
     **DETALLE POR CABINA (HTML):**
     Añade `<br><br><b><u>DETALLE POR CABINA</u></b><br>` y luego pega `{CABIN_SECTIONS}` (también en HTML) **SOLAMENTE SI** hay más de una cabina analizada.

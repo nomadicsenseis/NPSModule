@@ -81,7 +81,8 @@ class AWSLLM(LLM):
             LLMType.CLAUDE_3_5_SONNET.value,
             LLMType.CLAUDE_3_5_SONNET_V2.value,
             LLMType.CLAUDE_SONNET_4.value,
-            LLMType.CLAUDE_3_7_SONNET.value
+            LLMType.CLAUDE_3_7_SONNET.value,
+            LLMType.CLAUDE_OPUS_4_5.value
         ]:
             return "anthropic"
         elif self.llm_type.value in [
@@ -113,6 +114,8 @@ class AWSLLM(LLM):
             self.model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
         elif self.llm_type.value == LLMType.CLAUDE_SONNET_4.value:
             self.model_id = "arn:aws:bedrock:us-east-1:737192913161:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0"
+        elif self.llm_type.value == LLMType.CLAUDE_OPUS_4_5.value:
+            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:inference-profile/eu.anthropic.claude-opus-4-5-20251101-v1:0"
         elif self.llm_type.value == LLMType.CLAUDE_3_7_SONNET.value:
             # Use MODEL_ARN from environment for inference profile
             model_arn = os.getenv('MODEL_ARN')

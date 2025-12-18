@@ -2669,6 +2669,9 @@ class CausalExplanationAgent:
         if df.empty:
             return "No hay verbatims disponibles."
             
+        # Clean column names (remove brackets if they exist)
+        df.columns = [col.replace('[', '').replace(']', '') for col in df.columns]
+        
         formatted_list = []
         # Ensure we don't exceed limit (though query should handle it)
         df_subset = df.head(limit)
@@ -2678,16 +2681,22 @@ class CausalExplanationAgent:
             nps = row.get('NPS_Score', row.get('surveys_maritz[nps_all]', row.get('nps_all', 'N/A')))
             route = row.get('Route', row.get('Route_Master[route]', row.get('route', 'Unknown')))
             date_val = row.get('Date', row.get('Date_Master[Date]', ''))
-            verbatim = row.get('Verbatim', '').strip()
+            verbatim = row.get('Verbatim', '').strip() if isinstance(row.get('Verbatim'), str) else ""
             
             # Fix date format
-            date_str = str(date_val)
-            if hasattr(date_val, 'strftime'):
-                date_str = date_val.strftime('%Y-%m-%d')
-            elif ' ' in date_str:
-                date_str = date_str.split(' ')[0]
+            date_str = "N/A"
+            if date_val and date_val != "":
+                date_str = str(date_val)
+                if hasattr(date_val, 'strftime'):
+                    date_str = date_val.strftime('%Y-%m-%d')
+                elif ' ' in date_str:
+                    date_str = date_str.split(' ')[0]
                 
-            formatted_list.append(f"- [{date_str}] [NPS {nps}] ({route}): \"{verbatim}\"")
+            if verbatim:
+                formatted_list.append(f"- [{date_str}] [NPS {nps}] ({route}): \"{verbatim}\"")
+            
+        if not formatted_list:
+            return "No hay comentarios con texto disponibles."
             
         return "\n".join(formatted_list)
 
@@ -2695,6 +2704,9 @@ class CausalExplanationAgent:
         """Extract unique routes from verbatims dataframe"""
         if df.empty:
             return []
+            
+        # Clean column names
+        df.columns = [col.replace('[', '').replace(']', '') for col in df.columns]
             
         # Try clean alias first, then fallback
         route_col = 'Route' if 'Route' in df.columns else None
@@ -2708,7 +2720,7 @@ class CausalExplanationAgent:
         if not route_col:
             return []
             
-        return df[route_col].dropna().unique().tolist()
+        return [r for r in df[route_col].dropna().unique().tolist() if r and r != 'Unknown']
     
     async def _verbatims_tool(self, node_path: str, start_date: str, end_date: str, anomaly_type: str = "neutral") -> str:
         """

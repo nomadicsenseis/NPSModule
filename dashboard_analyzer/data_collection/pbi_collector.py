@@ -441,12 +441,12 @@ class PBIDataCollector:
         
         # Determine NPS condition based on anomaly type
         if anomaly_type == "positive":
-            nps_condition = "'surveys_maritz'[nps_all] >= 9"
+            nps_condition = "'surveys_maritz'[nps_category] = \"Promoter\""
         elif anomaly_type == "negative":
-            nps_condition = "'surveys_maritz'[nps_all] <= 6"
+            nps_condition = "'surveys_maritz'[nps_category] = \"Detractor\""
         else:
             # Neutral/All: Get all valid NPS
-            nps_condition = "'surveys_maritz'[nps_all] >= 0"
+            nps_condition = "NOT(ISBLANK('surveys_maritz'[nps_category]))"
             
         query = query.replace('__NPS_CLASS_FILTER__', nps_condition)
         
