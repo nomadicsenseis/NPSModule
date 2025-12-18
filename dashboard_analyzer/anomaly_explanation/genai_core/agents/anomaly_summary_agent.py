@@ -148,7 +148,7 @@ class AnomalySummaryAgent:
         elif llm_type in [
             LLMType.CLAUDE_3_HAIKU, LLMType.CLAUDE_3_5_HAIKU, LLMType.CLAUDE_3_OPUS,
             LLMType.CLAUDE_3_5_SONNET, LLMType.CLAUDE_3_5_SONNET_V2, LLMType.CLAUDE_3_7_SONNET,
-            LLMType.CLAUDE_SONNET_4, LLMType.LLAMA3_70, LLMType.LLAMA3_1_70, LLMType.LLAMA3_1_405
+            LLMType.CLAUDE_SONNET_4, LLMType.CLAUDE_OPUS_4_5, LLMType.LLAMA3_70, LLMType.LLAMA3_1_70, LLMType.LLAMA3_1_405
         ]:
             return self._create_aws_llm(llm_type)
         
@@ -359,6 +359,12 @@ class AnomalySummaryAgent:
             if comprehensive_response:
                 self.logger.info(f"✅ Generated comprehensive summary: weekly + {len(daily_single_analyses)} daily analyses")
                 
+                # STEP 2: Generate Adaptive Card
+                adaptive_card_json = await self._generate_adaptive_card(comprehensive_response)
+                
+                # Combine synthesis and adaptive card
+                final_output = f"{comprehensive_response}\n\n---ADAPTIVE_CARD_JSON---\n\n{adaptive_card_json}"
+
                 # Upload to S3 if metadata is provided
                 if (execution_metadata and weekly_analysis_params and 
                     daily_analysis_params and date_ranges):
@@ -373,7 +379,7 @@ class AnomalySummaryAgent:
                             weekly_analysis_params=weekly_analysis_params,
                             daily_analysis_params=daily_analysis_params,
                             date_ranges=date_ranges,
-                            final_synthesis=comprehensive_response,
+                            final_synthesis=adaptive_card_json if self.environment == "prod" else final_output,
                             comparison_start_date=date_ranges.get('comparison_start_date'),
                             comparison_end_date=date_ranges.get('comparison_end_date')
                         )
@@ -385,7 +391,7 @@ class AnomalySummaryAgent:
                         self.logger.error(f"❌ Error uploading to S3: {str(e)}")
                         # Don't fail the entire process if S3 upload fails
                 
-                return comprehensive_response
+                return final_output
             else:
                 return "⚠️ Failed to generate comprehensive summary"
                 
@@ -560,6 +566,19 @@ class AnomalySummaryAgent:
             self.logger.info(f"✅ Step 3 complete: Executive synthesis extracted ({len(executive_synthesis)} chars)")
             
             # =========================================================
+            # STEP 4: Generate Adaptive Card
+            # =========================================================
+            adaptive_card_json = await self._generate_adaptive_card(polished_report)
+            
+            self.logger.info(f"✅ Step 4 complete: Adaptive Card generated")
+
+            # =========================================================
+            # Combine synthesis and adaptive card
+            # =========================================================
+            # Use a clear separator for the downstream consumer
+            final_output = f"{executive_synthesis}\n\n---ADAPTIVE_CARD_JSON---\n\n{adaptive_card_json}"
+            
+            # =========================================================
             # Save debug files and export conversation
             # =========================================================
             try:
@@ -575,11 +594,13 @@ class AnomalySummaryAgent:
                     dbg.write(polished_report)
                     dbg.write("\n\n===== STEP 3: EXECUTIVE SYNTHESIS =====\n\n")
                     dbg.write(executive_synthesis)
+                    dbg.write("\n\n===== STEP 4: ADAPTIVE CARD JSON =====\n\n")
+                    dbg.write(adaptive_card_json)
                 self.logger.info(f"📝 Saved stratified debug to: {debug_path}")
             except Exception as e:
                 self.logger.warning(f"Could not write debug file: {e}")
             
-            # Export ALL conversations (all 3 steps) for complete audit trail
+            # Export ALL conversations (all 4 steps) for complete audit trail
             all_conversations = {
                 'step1_section_connections': daily_context_paragraphs,  # Step 1 results by section
                 'step2_full_report': {
@@ -599,6 +620,9 @@ class AnomalySummaryAgent:
                         } for msg in message_history_step3.get_messages()
                     ],
                     'result': executive_synthesis
+                },
+                'step4_adaptive_card': {
+                    'result': adaptive_card_json
                 }
             }
             conversation_file = await self.export_full_stratified_conversation(
@@ -607,10 +631,10 @@ class AnomalySummaryAgent:
             if conversation_file:
                 self.logger.info(f"🗂️ Full stratified conversation saved: {conversation_file}")
             
-            # Upload to S3 if metadata is provided (use executive_synthesis, not full report)
-            if executive_synthesis and execution_metadata and weekly_analysis_params and daily_analysis_params and date_ranges:
+            # Upload to S3 if metadata is provided (use final_output which includes synthesis and card)
+            if final_output and execution_metadata and weekly_analysis_params and daily_analysis_params and date_ranges:
                 try:
-                    self.logger.info("📤 Uploading executive synthesis to S3...")
+                    self.logger.info("📤 Uploading executive synthesis and adaptive card to S3...")
                     s3_key = await self.s3_uploader.upload_comprehensive_report(
                         execution_date=datetime.now(),
                         analysis_date=execution_metadata.get('analysis_date', ''),
@@ -620,7 +644,7 @@ class AnomalySummaryAgent:
                         weekly_analysis_params=weekly_analysis_params,
                         daily_analysis_params=daily_analysis_params,
                         date_ranges=date_ranges,
-                        final_synthesis=executive_synthesis,
+                        final_synthesis=adaptive_card_json if self.environment == "prod" else final_output,
                         comparison_start_date=date_ranges.get('comparison_start_date'),
                         comparison_end_date=date_ranges.get('comparison_end_date')
                     )
@@ -629,7 +653,7 @@ class AnomalySummaryAgent:
                 except Exception as e:
                     self.logger.error(f"❌ Error uploading to S3: {str(e)}")
             
-            return executive_synthesis
+            return final_output
             
         except Exception as e:
             self.logger.error(f"❌ Error in stratified summary: {str(e)}")
@@ -981,6 +1005,43 @@ PERÍODO {period} ({date_range}):
         except Exception as e:
             self.logger.error(f"❌ Failed to export summary conversation: {e}")
             return ""
+
+    async def _generate_adaptive_card(self, report_text: str) -> str:
+        """Helper to generate Adaptive Card JSON from a report text"""
+        try:
+            self.logger.info("📋 Generating Adaptive Card JSON...")
+            
+            step4_config = self.config.get('step4_generate_adaptive_card', {})
+            step4_system = step4_config.get('system_prompt', '')
+            step4_input = step4_config.get('input_template', '').format(
+                full_report=report_text
+            )
+            
+            message_history = MessageHistory()
+            message_history.create_and_add_message(content=step4_system, message_type=MessageType.SYSTEM)
+            message_history.create_and_add_message(content=step4_input, message_type=MessageType.USER)
+            
+            response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+            adaptive_card_json = response.content if hasattr(response, 'content') else str(response)
+            
+            # Clean up JSON if it contains markdown code blocks
+            if "```json" in adaptive_card_json:
+                adaptive_card_json = adaptive_card_json.split("```json")[1].split("```")[0].strip()
+            elif "```" in adaptive_card_json:
+                adaptive_card_json = adaptive_card_json.split("```")[1].split("```")[0].strip()
+            
+            # Validate JSON if possible
+            try:
+                json.loads(adaptive_card_json)
+                self.logger.info(f"✅ Adaptive Card JSON validated ({len(adaptive_card_json)} chars)")
+            except json.JSONDecodeError:
+                self.logger.warning("⚠️ Generated Adaptive Card is not valid JSON")
+                # Attempt to fix common issues if needed, but for now just log it
+            
+            return adaptive_card_json
+        except Exception as e:
+            self.logger.error(f"❌ Error generating adaptive card: {e}")
+            return "{}"
 
 
 # Convenience function for standalone usage

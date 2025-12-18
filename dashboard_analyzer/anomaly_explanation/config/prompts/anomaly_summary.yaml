@@ -219,6 +219,87 @@ step3_extract_synthesis:
     **GENERA LA SÍNTESIS EJECUTIVA EN HTML:**
 
 # =============================================================================
+# STEP 4: GENERATE ADAPTIVE CARD (JSON FORMAT)
+# =============================================================================
+step4_generate_adaptive_card:
+  system_prompt: |
+    Eres un experto en JSON y Adaptive Cards para Microsoft Teams.
+    Tu tarea es rellenar la PLANTILLA ESTRUCTURAL proporcionada con los datos del INFORME FINAL.
+
+    ⚠️ **REGLAS DE PROCESAMIENTO:**
+    - **ALINEACIÓN:** Mantén estrictamente los anchos de columna (`stretch`, `50px`, `60px`) para que la tabla sea legible.
+    - **COLORES:** Para la columna de variación, usa `color: "Good"` si el valor es positivo (+) y `color: "Attention"` si es negativo (-).
+    - **DATOS:** Extrae el NPS, la variación, el resumen semanal y el contexto diario para GLOBAL y las 5 cabinas.
+    - **YW:** Si aparece "Young Wings", sustitúyelo por **YW**.
+    - **SIN DATOS:** Si una cabina no tiene información en el informe, pon "N/A" en los valores y "Sin datos relevantes para este periodo" en el detalle.
+
+  input_template: |
+    **INFORME FINAL PARA MAPEAR:**
+    {full_report}
+
+    ---
+
+    **PLANTILLA ESTRUCTURAL (RELLENA LOS CAMPOS ENTRE []):**
+    ```json
+    {{
+      "type": "AdaptiveCard",
+      "version": "1.5",
+      "body": [
+        {{
+          "type": "Container",
+          "items": [
+            {{ "type": "TextBlock", "text": "Reporte de NPS y Variaciones", "weight": "Bolder", "size": "Large", "color": "Accent" }},
+            {{ "type": "TextBlock", "text": "Período: [Fechas del informe] (vs semana anterior)", "isSubtle": true, "spacing": "None" }}
+          ]
+        }},
+        {{
+          "type": "Container",
+          "spacing": "Medium",
+          "items": [
+            {{
+              "type": "ColumnSet",
+              "columns": [
+                {{ "type": "Column", "width": "stretch", "items": [{{ "type": "TextBlock", "text": "Segmento", "weight": "Bolder", "size": "Small" }}] }},
+                {{ "type": "Column", "width": "50px", "items": [{{ "type": "TextBlock", "text": "NPS", "weight": "Bolder", "size": "Small", "horizontalAlignment": "Center" }}] }},
+                {{ "type": "Column", "width": "60px", "items": [{{ "type": "TextBlock", "text": "Var.", "weight": "Bolder", "size": "Small", "horizontalAlignment": "Right" }}] }}
+              ]
+            }},
+            {{
+              "type": "ColumnSet",
+              "separator": true,
+              "columns": [
+                {{ "type": "Column", "width": "stretch", "items": [{{ "type": "TextBlock", "text": "🌐 GLOBAL", "weight": "Bolder" }}] }},
+                {{ "type": "Column", "width": "50px", "items": [{{ "type": "TextBlock", "text": "[Valor NPS Global]", "horizontalAlignment": "Center" }}] }},
+                {{ "type": "Column", "width": "60px", "items": [{{ "type": "TextBlock", "text": "[Var Global]", "horizontalAlignment": "Right", "color": "[Good/Attention]", "weight": "Bolder" }}] }}
+              ]
+            }},
+            [... REPETIR COLUMNSET PARA LAS 5 CABINAS: ECONOMY SH, BUSINESS SH, ECONOMY LH, BUSINESS LH, PREMIUM LH ...]
+          ]
+        }}
+      ],
+      "actions": [
+        {{
+          "type": "Action.ShowCard",
+          "title": "GLOBAL",
+          "card": {{
+            "type": "AdaptiveCard",
+            "body": [
+              {{ "type": "TextBlock", "text": "Análisis Semanal: GLOBAL", "weight": "Bolder", "color": "Accent" }},
+              {{ "type": "TextBlock", "text": "[Párrafo Síntesis Global]", "wrap": true }},
+              {{ "type": "TextBlock", "text": "Contexto Diario:", "weight": "Bolder", "spacing": "Medium" }},
+              {{ "type": "TextBlock", "text": "[Párrafo Diario Global]", "wrap": true }}
+            ],
+            "version": "1.5"
+          }}
+        }},
+        [... REPETIR ACTION.SHOWCARD PARA LAS 5 CABINAS ...]
+      ]
+    }}
+    ```
+
+    **TAREA:** Genera el JSON completo sustituyendo todos los placeholders. NO incluyas texto explicativo, solo el JSON.
+
+# =============================================================================
 # STEP 4: INTEGRATE INTO WEEKLY REPORT (legacy, kept for reference)
 # =============================================================================
 step4_legacy_integrate_report:

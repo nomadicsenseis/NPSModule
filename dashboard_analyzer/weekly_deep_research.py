@@ -310,6 +310,11 @@ async def run_weekly_comprehensive_analysis(
                     'comparison_end_date': comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None
                 }
                 
+                # In prod, only upload the adaptive card JSON as the final synthesis
+                final_synthesis_to_upload = executive_summary
+                if environment == "prod" and "---ADAPTIVE_CARD_JSON---" in executive_summary:
+                    final_synthesis_to_upload = executive_summary.split("---ADAPTIVE_CARD_JSON---")[-1].strip()
+
                 s3_key = await s3_uploader.upload_comprehensive_report(
                     execution_date=datetime.now(),
                     analysis_date=analysis_date.strftime('%Y-%m-%d'),
@@ -319,7 +324,7 @@ async def run_weekly_comprehensive_analysis(
                     weekly_analysis_params=weekly_analysis_params,
                     daily_analysis_params=daily_analysis_params,
                     date_ranges=date_ranges,
-                    final_synthesis=executive_summary,
+                    final_synthesis=final_synthesis_to_upload,
                     comparison_start_date=comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date else None,
                     comparison_end_date=comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None
                 )
