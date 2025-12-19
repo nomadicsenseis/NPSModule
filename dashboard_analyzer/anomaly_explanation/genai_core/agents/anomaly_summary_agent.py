@@ -681,14 +681,14 @@ class AnomalySummaryAgent:
         sections = {}
         
         # Define section patterns to look for
-        # Patterns match both "**ECONOMY SH:" and "ECONOMY SH:" formats
+        # Patterns match both "**ECONOMY SH:" and "ECONOMY SH:" formats, and HTML variants
         section_patterns = [
-            ('GLOBAL', r'(?:📈\s*\*\*SÍNTESIS EJECUTIVA|Durante la semana)'),
-            ('ECONOMY SH', r'(?:\*\*)?ECONOMY SH[:\s]'),
-            ('BUSINESS SH', r'(?:\*\*)?BUSINESS SH[:\s]'),
-            ('ECONOMY LH', r'(?:\*\*)?ECONOMY LH[:\s]'),
-            ('BUSINESS LH', r'(?:\*\*)?BUSINESS LH[:\s]'),
-            ('PREMIUM LH', r'(?:\*\*)?PREMIUM LH[:\s]'),
+            ('GLOBAL', r'(?:📈|📋)?\s*(?:\*\*|<b>)?SÍNTESIS EJECUTIVA|Durante la semana'),
+            ('ECONOMY SH', r'(?:(?:\*\*|<b>|<u>)\s*)*ECONOMY SH[:\s]'),
+            ('BUSINESS SH', r'(?:(?:\*\*|<b>|<u>)\s*)*BUSINESS SH[:\s]'),
+            ('ECONOMY LH', r'(?:(?:\*\*|<b>|<u>)\s*)*ECONOMY LH[:\s]'),
+            ('BUSINESS LH', r'(?:(?:\*\*|<b>|<u>)\s*)*BUSINESS LH[:\s]'),
+            ('PREMIUM LH', r'(?:(?:\*\*|<b>|<u>)\s*)*PREMIUM LH[:\s]'),
         ]
         
         # Find all section headers and their positions
@@ -700,6 +700,15 @@ class AnomalySummaryAgent:
         
         # Sort by position
         section_positions.sort(key=lambda x: x[0])
+        
+        # Safety net: Check if there is text before the first section that should be GLOBAL
+        # This handles cases where GLOBAL header is missing or not matched
+        if section_positions and section_positions[0][0] > 0:
+            intro_text = weekly_analysis[0:section_positions[0][0]].strip()
+            # Only use intro as GLOBAL if the first detected section is NOT GLOBAL
+            if len(intro_text) > 50 and section_positions[0][1] != 'GLOBAL':
+                sections['GLOBAL'] = intro_text
+                self.logger.info(f"   ⚠️ Recovered {len(intro_text)} chars of intro text as GLOBAL section")
         
         # Extract content for each section
         for i, (pos, section_name, _) in enumerate(section_positions):

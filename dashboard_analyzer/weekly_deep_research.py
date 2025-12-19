@@ -132,7 +132,12 @@ async def run_weekly_comprehensive_analysis(
                 study_mode="comparative",
                 environment=environment
             )
-            if result and "Error" not in str(result):
+            
+            # Check for success (list or non-error string)
+            # Avoid using "Error" in str(result) as it might appear in the content
+            is_success = isinstance(result, list) or (isinstance(result, str) and not result.strip().startswith("Error") and not result.strip().startswith("❌"))
+            
+            if result and is_success:
                 print(f"✅ [STEP 1] Weekly analysis completed. Data length: {len(str(result))} chars")
                 return {'type': 'weekly', 'data': result, 'success': True}
             else:
@@ -163,7 +168,12 @@ async def run_weekly_comprehensive_analysis(
                 study_mode="single",
                 environment=environment
             )
-            if result and "Error" not in str(result):
+            
+            # Check for success (list or non-error string)
+            # Avoid using "Error" in str(result) as it might appear in the content
+            is_success = isinstance(result, list) or (isinstance(result, str) and not result.strip().startswith("Error") and not result.strip().startswith("❌"))
+            
+            if result and is_success:
                 print(f"✅ [STEP 2] Daily analysis completed. Data length: {len(str(result))} chars")
                 return {'type': 'daily', 'data': result, 'success': True}
             else:
@@ -228,7 +238,10 @@ async def run_weekly_comprehensive_analysis(
         for report in generated_reports:
             if report['type'] == 'weekly':
                 weekly_comparative_analysis = report['data']
-                print(f"✅ Found weekly report: {len(weekly_comparative_analysis)} chars")
+                if isinstance(weekly_comparative_analysis, list):
+                    print(f"✅ Found weekly report: {len(weekly_comparative_analysis)} items")
+                else:
+                    print(f"✅ Found weekly report: {len(str(weekly_comparative_analysis))} chars")
             elif report['type'] == 'daily':
                 daily_single_analyses = report['data']
                 print(f"✅ Found daily analysis data: {len(daily_single_analyses)} periods")
