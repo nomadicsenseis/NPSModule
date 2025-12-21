@@ -20,7 +20,7 @@ import importlib.resources
 from ..agents.agent import Agent
 from ..llms.openai_llm import OpenAiLLM
 from ..llms.aws_llm import AWSLLM
-from ..utils.enums import LLMType, MessageType, AgentName, get_default_llm_type
+from ..utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, load_aws_credentials_from_temp_file, get_agent_conversations_folder
 from ..message_history import MessageHistory
 
 # Import S3 uploader
@@ -148,7 +148,10 @@ class AnomalySummaryAgent:
         elif llm_type in [
             LLMType.CLAUDE_3_HAIKU, LLMType.CLAUDE_3_5_HAIKU, LLMType.CLAUDE_3_OPUS,
             LLMType.CLAUDE_3_5_SONNET, LLMType.CLAUDE_3_5_SONNET_V2, LLMType.CLAUDE_3_7_SONNET,
-            LLMType.CLAUDE_SONNET_4, LLMType.CLAUDE_OPUS_4_5, LLMType.LLAMA3_70, LLMType.LLAMA3_1_70, LLMType.LLAMA3_1_405
+            LLMType.CLAUDE_SONNET_4, LLMType.CLAUDE_OPUS_4_5, LLMType.LLAMA3_70, LLMType.LLAMA3_1_70, LLMType.LLAMA3_1_405,
+            # New models
+            LLMType.AMAZON_NOVA_2_LITE, LLMType.AMAZON_NOVA_PRO, LLMType.AMAZON_TITAN_EMBED_TEXT_V2,
+            LLMType.CLAUDE_HAIKU_4_5, LLMType.CLAUDE_SONNET_4_5, LLMType.GPT_OSS_120B
         ]:
             return self._create_aws_llm(llm_type)
         
@@ -177,17 +180,16 @@ class AnomalySummaryAgent:
     
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
         """Create AWS Bedrock LLM instance."""
-        region_name = os.getenv("AWS_REGION", "us-east-1")
-        aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
-        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-        profile_name = os.getenv("AWS_PROFILE")
+        # Load credentials from temp_aws_credentials.env (uses sbx_* credentials)
+        creds = load_aws_credentials_from_temp_file()
         
         return AWSLLM(
             llm_type=llm_type,
-            region_name=region_name,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            profile_name=profile_name
+            region_name=creds['region_name'],
+            aws_access_key_id=creds['aws_access_key_id'],
+            aws_secret_access_key=creds['aws_secret_access_key'],
+            aws_session_token=creds['aws_session_token'],
+            profile_name=os.getenv("AWS_PROFILE")
         )
     
     async def generate_summary_report(self, periods_data: List[Dict[str, Any]]) -> str:
@@ -448,10 +450,15 @@ class AnomalySummaryAgent:
             self.logger.info(f"🔄 Starting stratified summary: {num_days} days to analyze")
             
             # =========================================================
-            # Parse weekly analysis into sections
+            # Extract executive synthesis and parse into sections
             # =========================================================
-            sections = self._parse_weekly_sections(weekly_comparative_analysis)
-            self.logger.info(f"📊 Parsed {len(sections)} sections from weekly analysis")
+            # First, extract only the executive synthesis (discard technical sections)
+            weekly_synthesis_only = self._extract_executive_synthesis_from_weekly(weekly_comparative_analysis)
+            self.logger.info(f"📊 Extracted executive synthesis: {len(weekly_synthesis_only)} chars (from {len(weekly_comparative_analysis)} total)")
+            
+            # Parse sections from the SYNTHESIS only (not the full technical report)
+            sections = self._parse_weekly_sections(weekly_synthesis_only)
+            self.logger.info(f"📊 Parsed {len(sections)} sections from executive synthesis")
             
             # =========================================================
             # STEP 1: Analyze connections for each section
@@ -467,16 +474,15 @@ class AnomalySummaryAgent:
             for section_name, section_content in sections.items():
                 self.logger.info(f"   📌 Analyzing: {section_name}")
                 
-                # Filter daily analyses for this section
+                # Get daily analyses for this section (SIEMPRE devuelve contenido con fechas)
                 daily_for_section = self._filter_daily_for_section(
                     daily_analyses_combined, 
                     section_name
                 )
                 
-                # Skip sections without relevant daily data (except GLOBAL which always has data)
-                if not daily_for_section and section_name != 'GLOBAL':
-                    self.logger.info(f"   ⏭️ Skipping {section_name}: no specific daily data found")
-                    continue
+                # Log what we're passing to the model
+                has_specific = "específicos" in daily_for_section if daily_for_section else False
+                self.logger.info(f"   📊 Daily context for {section_name}: {len(daily_for_section)} chars, specific={has_specific}")
                 
                 step1_input = step1_template.format(
                     section_name=section_name,
@@ -501,6 +507,9 @@ class AnomalySummaryAgent:
             # =========================================================
             self.logger.info("📝 STEP 2: Integrating into final report...")
             
+            # Note: weekly_synthesis_only was already extracted before Step 1
+            # Reuse it here to avoid duplicate extraction
+            
             # Format the context paragraphs for Step 2
             context_formatted = "\n\n".join([
                 f"**{name}:**\n{para}" 
@@ -510,7 +519,7 @@ class AnomalySummaryAgent:
             step2_config = self.config.get('step2_integrate_final', {})
             step2_system = step2_config.get('system_prompt', '')
             step2_input = step2_config.get('input_template', '').format(
-                weekly_analysis=weekly_comparative_analysis,
+                weekly_analysis=weekly_synthesis_only,  # Use extracted synthesis, not full report
                 daily_context_paragraphs=context_formatted
             )
             
@@ -669,6 +678,68 @@ class AnomalySummaryAgent:
                 date_ranges=date_ranges
             )
     
+    def _extract_executive_synthesis_from_weekly(self, weekly_analysis: str) -> str:
+        """
+        Extract only the SÍNTESIS EJECUTIVA FINAL section from the weekly analysis.
+        
+        This reduces the input to Step 2, passing only the relevant executive content
+        instead of the full technical report with all diagnostic sections.
+        
+        Args:
+            weekly_analysis: Full weekly analysis including technical sections
+            
+        Returns:
+            Only the executive synthesis section (much shorter than full report)
+        """
+        import re
+        
+        # Patterns to find the start of executive synthesis
+        synthesis_patterns = [
+            r'##\s*📋\s*SÍNTESIS EJECUTIVA FINAL',
+            r'##\s*📋\s*SÍNTESIS EJECUTIVA',
+            r'\*\*SÍNTESIS EJECUTIVA\*\*',
+            r'<b>SÍNTESIS EJECUTIVA</b>',
+            r'SÍNTESIS EJECUTIVA FINAL',
+        ]
+        
+        # Patterns to find the end (footer to exclude)
+        end_patterns = [
+            r'---\s*\n\s*✅\s*\*\*ANÁLISIS COMPLETADO\*\*',
+            r'✅\s*\*\*ANÁLISIS COMPLETADO\*\*',
+            r'---\s*\n\s*\*Nodos procesados:',
+            r'\*Este análisis utiliza metodología conversacional',
+        ]
+        
+        # Find the start of executive synthesis
+        start_pos = None
+        for pattern in synthesis_patterns:
+            match = re.search(pattern, weekly_analysis, re.IGNORECASE)
+            if match:
+                start_pos = match.start()
+                self.logger.info(f"   📍 Found synthesis start at position {start_pos} with pattern: {pattern[:30]}...")
+                break
+        
+        if start_pos is None:
+            # Fallback: if no synthesis header found, return the full analysis
+            self.logger.warning("   ⚠️ Could not find SÍNTESIS EJECUTIVA section, using full analysis")
+            return weekly_analysis
+        
+        # Find the end (exclude footer)
+        end_pos = len(weekly_analysis)
+        for pattern in end_patterns:
+            match = re.search(pattern, weekly_analysis[start_pos:], re.IGNORECASE)
+            if match:
+                end_pos = start_pos + match.start()
+                self.logger.info(f"   📍 Found synthesis end at position {end_pos}")
+                break
+        
+        # Extract the synthesis
+        synthesis = weekly_analysis[start_pos:end_pos].strip()
+        
+        self.logger.info(f"   ✅ Extracted executive synthesis: {len(synthesis)} chars (from {len(weekly_analysis)} total)")
+        
+        return synthesis
+    
     def _parse_weekly_sections(self, weekly_analysis: str) -> Dict[str, str]:
         """
         Parse the weekly analysis into sections (Global, Economy SH, Business SH, etc.)
@@ -733,23 +804,22 @@ class AnomalySummaryAgent:
     
     def _filter_daily_for_section(self, daily_analyses: str, section_name: str) -> str:
         """
-        Filter daily analyses to show only content relevant to a specific section.
+        Filter daily analyses to show content relevant to a specific section.
         
-        For GLOBAL, returns all daily analyses.
-        For specific cabins (Economy SH, Business LH, etc.), filters to show
-        only paragraphs/sections mentioning that cabin.
+        IMPORTANTE: Siempre devuelve TODAS las fechas para que el modelo tenga
+        contexto temporal correcto. Para secciones específicas, prioriza entradas
+        que mencionen esa cabina, pero NUNCA devuelve vacío.
         """
         if section_name == 'GLOBAL':
-            # For global, return all daily analyses
             return daily_analyses
         
         # Map section names to keywords to search for
         keyword_map = {
-            'ECONOMY SH': ['economy sh', 'economy de sh', 'sh economy', 'short haul economy'],
-            'BUSINESS SH': ['business sh', 'business de sh', 'sh business', 'short haul business'],
-            'ECONOMY LH': ['economy lh', 'economy de lh', 'lh economy', 'long haul economy'],
-            'BUSINESS LH': ['business lh', 'business de lh', 'lh business', 'long haul business'],
-            'PREMIUM LH': ['premium lh', 'premium de lh', 'lh premium', 'long haul premium'],
+            'ECONOMY SH': ['economy sh', 'economy de sh', 'sh economy', 'short haul economy', 'economy short', 'economía sh', 'turista sh'],
+            'BUSINESS SH': ['business sh', 'business de sh', 'sh business', 'short haul business', 'business short', 'negocios sh'],
+            'ECONOMY LH': ['economy lh', 'economy de lh', 'lh economy', 'long haul economy', 'economy long', 'economía lh', 'turista lh'],
+            'BUSINESS LH': ['business lh', 'business de lh', 'lh business', 'long haul business', 'business long', 'negocios lh'],
+            'PREMIUM LH': ['premium lh', 'premium de lh', 'lh premium', 'long haul premium', 'premium long', 'premium economy lh'],
         }
         
         keywords = keyword_map.get(section_name, [section_name.lower()])
@@ -757,19 +827,42 @@ class AnomalySummaryAgent:
         # Split into daily entries
         daily_entries = daily_analyses.split('---')
         
-        # Filter entries that mention this section
+        # Separate entries into relevant and other
         relevant_entries = []
-        for entry in daily_entries:
-            entry_lower = entry.lower()
-            if any(kw in entry_lower for kw in keywords):
-                relevant_entries.append(entry.strip())
+        other_entries = []
         
+        for entry in daily_entries:
+            entry_stripped = entry.strip()
+            if not entry_stripped:
+                continue
+            entry_lower = entry_stripped.lower()
+            if any(kw in entry_lower for kw in keywords):
+                relevant_entries.append(entry_stripped)
+            else:
+                other_entries.append(entry_stripped)
+        
+        # SIEMPRE devolver contenido con fechas para evitar alucinaciones
         if relevant_entries:
-            return "\n\n---\n\n".join(relevant_entries)
+            # Si hay entradas específicas de esta cabina, mostrarlas primero
+            result = f"**Análisis específicos de {section_name}:**\n\n"
+            result += "\n\n---\n\n".join(relevant_entries)
+            
+            # También incluir resumen de fechas de otros días para contexto temporal
+            if other_entries:
+                # Extraer solo las fechas de las otras entradas
+                other_dates = []
+                for entry in other_entries:
+                    if entry.startswith("📅"):
+                        date_line = entry.split('\n')[0]
+                        other_dates.append(date_line)
+                if other_dates:
+                    result += f"\n\n**Otros días analizados (sin mención específica a {section_name}):**\n"
+                    result += ", ".join(other_dates[:5])  # Máximo 5 fechas adicionales
+            return result
         else:
-            # If no specific entries found for this cabin, return empty
-            # This prevents copying the GLOBAL paragraph to all sections
-            return ""
+            # Si NO hay entradas específicas, devolver TODOS los análisis diarios
+            # para que el modelo tenga el contexto temporal correcto
+            return f"**Análisis diarios disponibles (sin mención específica a {section_name}, usar como contexto general):**\n\n{daily_analyses}"
     
     def _format_periods_for_summary(self, periods_data: List[Dict[str, Any]]) -> str:
         """Format periods data into a structured text for AI analysis."""
@@ -917,7 +1010,7 @@ PERÍODO {period} ({date_range}):
             filename = f"summary_{period_identifier}_{timestamp}.json"
             
             # Create agent_conversations directory structure in current working directory
-            base_dir = Path.cwd() / 'agent_conversations' / 'anomaly_summary'
+            base_dir = Path.cwd() / get_agent_conversations_folder() / 'anomaly_summary'
             base_dir.mkdir(parents=True, exist_ok=True)
             
             full_path = base_dir / filename
@@ -969,7 +1062,7 @@ PERÍODO {period} ({date_range}):
             filename = f"summary_{period_identifier}_{timestamp}.json"
             
             # Create agent_conversations directory structure in current working directory
-            base_dir = Path.cwd() / 'agent_conversations' / 'anomaly_summary'
+            base_dir = Path.cwd() / get_agent_conversations_folder() / 'anomaly_summary'
             base_dir.mkdir(parents=True, exist_ok=True)
             
             full_path = base_dir / filename

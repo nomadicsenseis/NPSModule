@@ -36,7 +36,7 @@ from dashboard_analyzer.anomaly_explanation.genai_core.llms.aws_llm import AWSLL
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../..'))
 from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
-from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, MessageType, AgentName, get_default_llm_type
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, load_aws_credentials_from_temp_file, get_agent_conversations_folder
 from dashboard_analyzer.anomaly_explanation.genai_core.message_history import MessageHistory
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.agent import Agent
 
@@ -584,23 +584,16 @@ class CausalExplanationAgent:
     
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
         """Create AWS Bedrock LLM instance."""
-        # Load environment variables from .env in current working directory only if not in prod
-        if self.environment != "prod":
-            dotenv_path = Path.cwd() / '.env'
-            if dotenv_path.exists():
-                load_dotenv(dotenv_path)
-        
-        region_name = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
-        aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
-        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-        profile_name = os.getenv("AWS_PROFILE")
+        # Load credentials from temp_aws_credentials.env (uses sbx_* credentials)
+        creds = load_aws_credentials_from_temp_file()
         
         return AWSLLM(
             llm_type=llm_type,
-            region_name=region_name,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            profile_name=profile_name
+            region_name=creds['region_name'],
+            aws_access_key_id=creds['aws_access_key_id'],
+            aws_secret_access_key=creds['aws_secret_access_key'],
+            aws_session_token=creds['aws_session_token'],
+            profile_name=os.getenv("AWS_PROFILE")
         )
     
     # Removed _create_tools method - tools are now implemented directly
@@ -3044,6 +3037,23 @@ class CausalExplanationAgent:
             target_start_dt = target_start if isinstance(target_start, datetime) else datetime.strptime(target_start, '%Y-%m-%d')
             target_end_dt = target_end if isinstance(target_end, datetime) else datetime.strptime(target_end, '%Y-%m-%d')
             
+            # Get filters for tracking
+            cabins, companies, hauls = self.pbi_collector._get_node_filters(node_path)
+            
+            # Track target period query
+            query_target = self.pbi_collector._get_smart_verbatims_query(cabins, companies, hauls, target_start_dt, target_end_dt, anomaly_type)
+            parameters_target = {
+                "node_path": node_path,
+                "period": "target",
+                "start_date": target_start_dt.strftime('%Y-%m-%d'),
+                "end_date": target_end_dt.strftime('%Y-%m-%d'),
+                "anomaly_type": anomaly_type,
+                "cabins": cabins,
+                "companies": companies,
+                "hauls": hauls
+            }
+            self.tracker.add_dax_query("verbatims_tool_smart_target", query_target, parameters_target)
+            
             # Use SMART collection
             df_target = self.pbi_collector.collect_smart_verbatims(
                 node_path, target_start_dt, target_end_dt, anomaly_type
@@ -3063,6 +3073,20 @@ class CausalExplanationAgent:
             
             comparison_start_dt = comparison_start if isinstance(comparison_start, datetime) else datetime.strptime(comparison_start, '%Y-%m-%d')
             comparison_end_dt = comparison_end if isinstance(comparison_end, datetime) else datetime.strptime(comparison_end, '%Y-%m-%d')
+            
+            # Track comparison period query
+            query_comparison = self.pbi_collector._get_smart_verbatims_query(cabins, companies, hauls, comparison_start_dt, comparison_end_dt, anomaly_type)
+            parameters_comparison = {
+                "node_path": node_path,
+                "period": "comparison",
+                "start_date": comparison_start_dt.strftime('%Y-%m-%d'),
+                "end_date": comparison_end_dt.strftime('%Y-%m-%d'),
+                "anomaly_type": anomaly_type,
+                "cabins": cabins,
+                "companies": companies,
+                "hauls": hauls
+            }
+            self.tracker.add_dax_query("verbatims_tool_smart_comparison", query_comparison, parameters_comparison)
             
             df_comparison = self.pbi_collector.collect_smart_verbatims(
                 node_path, comparison_start_dt, comparison_end_dt, anomaly_type
@@ -3194,6 +3218,22 @@ Compara si estos temas aparecían en el período anterior.
             # Convert to datetime if needed
             start_dt = start_date if isinstance(start_date, datetime) else datetime.strptime(start_date, '%Y-%m-%d')
             end_dt = end_date if isinstance(end_date, datetime) else datetime.strptime(end_date, '%Y-%m-%d')
+            
+            # Get filters for tracking
+            cabins, companies, hauls = self.pbi_collector._get_node_filters(node_path)
+            
+            # Track the DAX query
+            query = self.pbi_collector._get_smart_verbatims_query(cabins, companies, hauls, start_dt, end_dt, anomaly_type)
+            parameters = {
+                "node_path": node_path,
+                "start_date": start_dt.strftime('%Y-%m-%d'),
+                "end_date": end_dt.strftime('%Y-%m-%d'),
+                "anomaly_type": anomaly_type,
+                "cabins": cabins,
+                "companies": companies,
+                "hauls": hauls
+            }
+            self.tracker.add_dax_query("verbatims_tool_smart", query, parameters)
             
             # Use SMART collection
             df = self.pbi_collector.collect_smart_verbatims(
@@ -3350,7 +3390,7 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                 elif part == 'IB':
                     descriptions.append('Iberia')
                 elif part == 'YW':
-                    descriptions.append('Air Europa')
+                    descriptions.append('Iberia Express')
                 else:
                     descriptions.append(part)
             
@@ -3577,7 +3617,7 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                     'days_analyzed': total_days,
                     'date_range': f"{start_date} to {end_date}"
                 }
-                return f"📊 Se encontraron {total_global_incidents} incidentes operacionales durante el período de {total_days} días ({start_date} a {end_date}), pero ninguno afectó las rutas del segmento {node_path}. Esto sugiere que los problemas operacionales ocurrieron en otros segmentos."
+                return f"📊 Se encontraron {total_global_incidents} incidentes operacionales durante el período de {total_days} días ({start_date} a {end_date}), pero ninguno afectó las rutas del segmento {node_path}. El segmento analizado no se vio impactado por estos incidentes."
             
             # EXTRACT STRUCTURED NCS DATA for multi-day aggregation analysis
             incident_col = self._find_column(filtered_ncs_data, ['incident', 'incidents', ''])
@@ -5218,9 +5258,10 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
             self.logger.info(f"🔍 DEBUG LLM: Final reflection_prompt size: {prompt_size} chars")
             self.logger.info(f"🔍 DEBUG LLM: reflection_prompt preview: {reflection_prompt[:500]}...")
             
-            if prompt_size > 60000:  # 60KB limit for reflection
+            # Claude Sonnet 4.5 can handle larger contexts - increase limits
+            if prompt_size > 200000:  # 200KB limit for reflection (was 60KB)
                 self.logger.warning(f"⚠️ Reflection prompt very large ({prompt_size} chars) - truncating tool result")
-                truncated_result = tool_result[:30000] + "\n\n[... TOOL RESULT TRUNCATED DUE TO SIZE ...]"
+                truncated_result = tool_result[:100000] + "\n\n[... TOOL RESULT TRUNCATED DUE TO SIZE ...]"
                 reflection_template = self._get_reflection_prompt(mode, tool_name, flow_type)
                 if reflection_template:
                     # Ensure causal_filter has a safe value for template formatting
@@ -5323,13 +5364,18 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
 """
         
         # Check if request is too large
+        # Claude Sonnet 4.5 has 200K tokens (~600K chars) context window
+        # We use 400K as limit to leave room for response
+        MAX_REQUEST_SIZE = 400000  # 400KB - safe for Claude's 200K token context
+        MAX_TRUNCATED_SIZE = 150000  # 150KB - still preserves most data if truncation needed
+        
         request_size = len(enhanced_final_request)
         self.logger.info(f"📏 Final request size: {request_size} chars")
         
-        if request_size > 100000:  # 100KB limit
+        if request_size > MAX_REQUEST_SIZE:
             self.logger.warning(f"⚠️ Final request very large ({request_size} chars) - truncating data summary")
-            # Truncate data summary to prevent LLM overload
-            truncated_summary = data_summary[:25000] + "\n\n[... DATA TRUNCATED DUE TO SIZE ...]"
+            # Truncate data summary but preserve as much as possible
+            truncated_summary = data_summary[:MAX_TRUNCATED_SIZE] + "\n\n[... DATA TRUNCATED DUE TO SIZE ...]"
             enhanced_final_request = f"""
 {self.config.get('final_synthesis_prompt', 'Genera un informe causal consolidado basado en los datos recolectados.')}
 
@@ -5595,7 +5641,7 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                 print(f"🔍 DEBUG EXPORT: Final filename: '{filename}'")
             
             # Create agent_conversations directory structure in current working directory
-            base_dir = Path.cwd() / 'agent_conversations' / 'causal_explanation'
+            base_dir = Path.cwd() / get_agent_conversations_folder() / 'causal_explanation'
             base_dir.mkdir(parents=True, exist_ok=True)
             
             full_path = base_dir / filename

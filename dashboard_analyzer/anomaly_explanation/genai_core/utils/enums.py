@@ -1,7 +1,74 @@
 from enum import Enum
+from pathlib import Path
+import os
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # Global model configuration - change this to switch all agents at once
-DEFAULT_LLM_TYPE = "O4_MINI"  # Options: O4_MINI, CLAUDE_SONNET_4, O3, etc.
+DEFAULT_LLM_TYPE = "O4_MINI"  # Options: O4_MINI, CLAUDE_SONNET_4, O3, CLAUDE_SONNET_4_5, etc.
+
+
+def load_aws_credentials_from_temp_file(temp_env_file: str = None) -> dict:
+    """
+    Load AWS credentials from temp_aws_credentials.env file.
+    Uses sbx_* (sandbox) credentials which have access to the Bedrock inference profiles.
+    
+    Same pattern as NCSDataCollector and S3ReportUploader - expects file in cwd.
+    
+    Args:
+        temp_env_file: Optional explicit path to credentials file. 
+                       If not provided, uses Path.cwd() / 'temp_aws_credentials.env'
+    
+    Returns:
+        dict with keys: aws_access_key_id, aws_secret_access_key, aws_session_token, region_name
+    """
+    creds = {
+        'aws_access_key_id': None,
+        'aws_secret_access_key': None,
+        'aws_session_token': None,
+        'region_name': 'eu-west-1'  # Default region for inference profiles
+    }
+    
+    # Use provided path or default to cwd (same pattern as NCSDataCollector)
+    if temp_env_file:
+        creds_path = Path(temp_env_file)
+    else:
+        creds_path = Path.cwd() / 'temp_aws_credentials.env'
+    
+    if not creds_path.exists():
+        # Fallback to environment variables
+        logger.warning(f"⚠️ {creds_path} not found! Falling back to environment variables.")
+        
+        creds['aws_access_key_id'] = os.getenv('AWS_ACCESS_KEY_ID')
+        creds['aws_secret_access_key'] = os.getenv('AWS_SECRET_ACCESS_KEY')
+        creds['aws_session_token'] = os.getenv('AWS_SESSION_TOKEN')
+        creds['region_name'] = os.getenv('AWS_REGION', 'eu-west-1')
+        
+        return creds
+    
+    # Read and parse the credentials file
+    logger.info(f"✅ Loading Bedrock credentials from: {creds_path}")
+    with open(creds_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip()
+            
+            # Use sbx_* credentials (sandbox) - these have access to inference profiles
+            if key == 'sbx_aws_access_key_id':
+                creds['aws_access_key_id'] = value
+            elif key == 'sbx_aws_secret_access_key':
+                creds['aws_secret_access_key'] = value
+            elif key == 'sbx_aws_session_token':
+                creds['aws_session_token'] = value
+    
+    return creds
 
 class MessageType(Enum):
     """
@@ -39,6 +106,14 @@ class LLMType(Enum):
     LLAMA3_1_70 = 'LLAMA3_1_70'
     LLAMA3_1_405 = 'LLAMA3_1_405'
     CLAUDE_3_7_SONNET = 'CLAUDE_3_7_SONNET'
+    
+    # New models
+    AMAZON_NOVA_2_LITE = 'AMAZON_NOVA_2_LITE'
+    AMAZON_NOVA_PRO = 'AMAZON_NOVA_PRO'
+    AMAZON_TITAN_EMBED_TEXT_V2 = 'AMAZON_TITAN_EMBED_TEXT_V2'
+    CLAUDE_HAIKU_4_5 = 'CLAUDE_HAIKU_4_5'
+    CLAUDE_SONNET_4_5 = 'CLAUDE_SONNET_4_5'
+    GPT_OSS_120B = 'GPT_OSS_120B'
 
 def get_default_llm_type() -> LLMType:
     """Get the default LLM type from the global configuration"""
@@ -47,6 +122,18 @@ def get_default_llm_type() -> LLMType:
     except KeyError:
         # Fallback to O4_MINI if the configured type doesn't exist
         return LLMType.O4_MINI
+
+
+def get_agent_conversations_folder() -> str:
+    """
+    Get the agent conversations folder name with the LLM type prefix.
+    
+    Returns:
+        Folder name in format: {DEFAULT_LLM_TYPE}_agent_conversations
+        Example: O4_MINI_agent_conversations, CLAUDE_SONNET_4_agent_conversations
+    """
+    return f"{DEFAULT_LLM_TYPE}_agent_conversations"
+
 
 class AgentName(Enum):
     """

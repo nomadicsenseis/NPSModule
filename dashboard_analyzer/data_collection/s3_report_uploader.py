@@ -6,6 +6,8 @@ from typing import Dict, Any, Optional
 import logging
 from botocore.exceptions import ClientError, NoCredentialsError
 
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_agent_conversations_folder
+
 
 class S3ReportUploader:
     """
@@ -261,8 +263,8 @@ class S3ReportUploader:
                 self.logger.warning("⚠️ Invalid conversation data or filename, skipping S3 upload")
                 return None
             
-            # Generate S3 key
-            s3_key = f"{self.base_prefix}agent_conversations/{agent_type}/{filename}"
+            # Generate S3 key (includes LLM type prefix in folder name)
+            s3_key = f"{self.base_prefix}{get_agent_conversations_folder()}/{agent_type}/{filename}"
             
             # Convert to JSON string
             json_content = json.dumps(conversation_data, indent=2, ensure_ascii=False)

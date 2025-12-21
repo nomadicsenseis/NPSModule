@@ -252,13 +252,56 @@ The interpreter uses a sophisticated "bubbling" algorithm to determine how anoma
 - 👥 **Customer Profiles** (Reactive segments with spread)
 
 ### **📋 Anomaly Summary Agent**
-Consolidates multi-period analysis into executive reports.
+Consolidates multi-period analysis into executive reports using a **3-step stratified approach**.
 
 **Features:**
 - Weekly + Daily integration with narrative flow
 - Trend analysis across time periods
 - Strategic insights with actionable recommendations
 - Spanish language executive reporting
+
+**Stratified Summary Flow:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  INPUT: weekly_comparative_analysis (full report ~20K)      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  _extract_executive_synthesis_from_weekly()                 │
+│  → Extracts only SÍNTESIS EJECUTIVA (~3K chars)             │
+│  → Discards: Diagnósticos, Nodos, Evidencias                │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+              weekly_synthesis_only (~3K chars)
+                              │
+          ┌───────────────────┴───────────────────┐
+          │                                       │
+          ▼                                       ▼
+┌─────────────────────────┐           ┌─────────────────────────┐
+│  STEP 1: Parse sections │           │  STEP 2: Integrate      │
+│  from SYNTHESIS only    │           │  synthesis + daily      │
+│                         │           │  context paragraphs     │
+│  For each section:      │           │                         │
+│  → GLOBAL               │           │  Receives:              │
+│  → ECONOMY SH           │──────────▶│  - weekly_synthesis_only│
+│  → BUSINESS SH          │  daily    │  - daily_context_paragraphs
+│  → ECONOMY LH           │  context  │                         │
+│  → BUSINESS LH          │  (from    │  Outputs integrated     │
+│  → PREMIUM LH           │  Step 1)  │  report with daily      │
+│                         │           │  insights per section   │
+│  Generates 1 daily      │           └─────────────────────────┘
+│  context paragraph      │                       │
+│  per section            │                       ▼
+└─────────────────────────┘           ┌─────────────────────────┐
+                                      │  STEP 3: Extract final  │
+                                      │  executive synthesis    │
+                                      │  in HTML for Teams      │
+                                      └─────────────────────────┘
+```
+
+**Key Optimization:** By extracting only the executive synthesis (~3K chars) instead of the full technical report (~20K chars), we reduce LLM cognitive load by ~85%, enabling more accurate integration of daily context into each cabin section.
 
 ---
 
@@ -549,18 +592,21 @@ python -u dashboard_analyzer/weekly_deep_research.py
 
 ```
 dashboard_analyzer/
-├── agent_conversations/           # AI agent conversation logs
-│   ├── causal_explanation/        # Individual segment investigations
-│   ├── interpreter/               # Tree-wide analysis results
-│   └── interpreter_outputs/       # Extracted final interpretations
-├── summary_reports/               # Consolidated executive reports
-└── tables/                        # Raw data downloads
+├── {LLM_TYPE}_agent_conversations/  # AI agent conversation logs (e.g., O4_MINI_agent_conversations/)
+│   ├── causal_explanation/          # Individual segment investigations
+│   ├── anomaly_interpreter/         # Tree-wide analysis results
+│   ├── anomaly_summary/             # Executive summary conversations
+│   └── interpreter_debug/           # Debug data for interpreter
+├── summary_reports/                 # Consolidated executive reports
+└── tables/                          # Raw data downloads
     └── [date]_[mode]_[aggregation]/
         └── [segment]/
             ├── flexible_NPS_Xd.csv
             ├── flexible_operative_Xd.csv
             └── [other_data].csv
 ```
+
+> **Note:** The agent conversations folder is prefixed with the LLM type (e.g., `O4_MINI_agent_conversations`, `CLAUDE_SONNET_4_agent_conversations`) to easily distinguish outputs from different models.
 
 ### **S3 Report Upload**
 

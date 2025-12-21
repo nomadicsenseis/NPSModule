@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_agent_conversations_folder
 
 
 def load_interpreter_json(filepath: str) -> dict:
@@ -50,7 +51,7 @@ async def run_test():
     """Run the summary agent test."""
     
     # Path to interpreter JSONs
-    interpreter_dir = Path(__file__).parent / 'agent_conversations' / 'anomaly_interpreter'
+    interpreter_dir = Path(__file__).parent / get_agent_conversations_folder() / 'anomaly_interpreter'
     
     print("=" * 80)
     print("🧪 SUMMARY AGENT TEST")

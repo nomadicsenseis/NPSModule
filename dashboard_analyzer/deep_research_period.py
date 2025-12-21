@@ -21,7 +21,7 @@ from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUpload
 from dashboard_analyzer.anomaly_detection.flexible_detector import FlexibleAnomalyDetector
 from dashboard_analyzer.anomaly_detection.flexible_anomaly_interpreter import FlexibleAnomalyInterpreter
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
-from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type, get_agent_conversations_folder
 
 # Global debug flag
 DEBUG_MODE = True
@@ -93,7 +93,7 @@ def debug_save_hierarchical_data(hierarchical_explanation: str, period: int, dat
     """Save hierarchical explanation data for interpreter debugging"""
     try:
         # Create debug folder in current working directory
-        debug_folder = Path.cwd() / "agent_conversations" / "interpreter_debug"
+        debug_folder = Path.cwd() / get_agent_conversations_folder() / "interpreter_debug"
         debug_folder.mkdir(parents=True, exist_ok=True)
         
         # Create filename with timestamp

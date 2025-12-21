@@ -21,7 +21,7 @@ import importlib.resources
 from ..agents.agent import Agent
 from ..llms.openai_llm import OpenAiLLM
 from ..llms.aws_llm import AWSLLM
-from ..utils.enums import LLMType, MessageType, AgentName
+from ..utils.enums import LLMType, MessageType, AgentName, load_aws_credentials_from_temp_file, get_agent_conversations_folder
 from ..message_history import MessageHistory
 
 # Import S3 uploader
@@ -357,17 +357,16 @@ Confirma que has recibido la información y estás listo para el análisis paso 
 
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
         """Create AWS Bedrock LLM instance."""
-        region_name = os.getenv("AWS_REGION", "us-east-1")
-        aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
-        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-        profile_name = os.getenv("AWS_PROFILE")
+        # Load credentials from temp_aws_credentials.env (uses sbx_* credentials)
+        creds = load_aws_credentials_from_temp_file()
         
         return AWSLLM(
             llm_type=llm_type,
-            region_name=region_name,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            profile_name=profile_name
+            region_name=creds['region_name'],
+            aws_access_key_id=creds['aws_access_key_id'],
+            aws_secret_access_key=creds['aws_secret_access_key'],
+            aws_session_token=creds['aws_session_token'],
+            profile_name=os.getenv("AWS_PROFILE")
         )
     
     async def interpret_anomaly_tree(self, tree_data: str, date: Optional[str] = None, segment: Optional[str] = None) -> str:
@@ -894,7 +893,7 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             filename = f"interpreter_{period_identifier}_{timestamp}.json"
             
             # Create agent_conversations directory structure in current working directory
-            base_dir = Path.cwd() / 'agent_conversations' / 'anomaly_interpreter'
+            base_dir = Path.cwd() / get_agent_conversations_folder() / 'anomaly_interpreter'
             base_dir.mkdir(parents=True, exist_ok=True)
             
             full_path = base_dir / filename
