@@ -2,7 +2,7 @@ import os
 import json
 import boto3
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 import logging
 from botocore.exceptions import ClientError, NoCredentialsError
 
@@ -110,7 +110,7 @@ class S3ReportUploader:
                           weekly_analysis_params: Dict[str, Any],
                           daily_analysis_params: Dict[str, Any],
                           date_ranges: Dict[str, Any],
-                          final_synthesis: str) -> Dict[str, Any]:
+                          final_synthesis: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
         """
         Build the complete report JSON structure
         
@@ -119,7 +119,7 @@ class S3ReportUploader:
             weekly_analysis_params: Parameters for weekly analysis
             daily_analysis_params: Parameters for daily analysis
             date_ranges: Date range information
-            final_synthesis: The final executive summary text
+            final_synthesis: The final synthesis - can be string (HTML) or dict (Adaptive Card JSON)
             
         Returns:
             Complete report dictionary
@@ -142,7 +142,7 @@ class S3ReportUploader:
                                         weekly_analysis_params: Dict[str, Any],
                                         daily_analysis_params: Dict[str, Any],
                                         date_ranges: Dict[str, Any],
-                                        final_synthesis: str,
+                                        final_synthesis: Union[str, Dict[str, Any]],
                                         comparison_start_date: Optional[str] = None,
                                         comparison_end_date: Optional[str] = None) -> Optional[str]:
         """
@@ -157,7 +157,7 @@ class S3ReportUploader:
             weekly_analysis_params: Weekly analysis parameters
             daily_analysis_params: Daily analysis parameters
             date_ranges: Date range information
-            final_synthesis: Final executive summary
+            final_synthesis: Final synthesis - can be string (HTML) or dict (Adaptive Card JSON)
             comparison_start_date: Start of comparison period
             comparison_end_date: End of comparison period
             
@@ -166,7 +166,11 @@ class S3ReportUploader:
         """
         try:
             # Validate inputs
-            if not final_synthesis or not final_synthesis.strip():
+            if not final_synthesis:
+                self.logger.warning("⚠️ Final synthesis is empty, skipping S3 upload")
+                return None
+            # For string synthesis, also check if it's empty after stripping
+            if isinstance(final_synthesis, str) and not final_synthesis.strip():
                 self.logger.warning("⚠️ Final synthesis is empty, skipping S3 upload")
                 return None
             

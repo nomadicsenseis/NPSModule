@@ -381,7 +381,8 @@ class AnomalySummaryAgent:
                             weekly_analysis_params=weekly_analysis_params,
                             daily_analysis_params=daily_analysis_params,
                             date_ranges=date_ranges,
-                            final_synthesis=adaptive_card_json if self.environment == "prod" else final_output,
+                            # Parse JSON string to dict for Power Automate compatibility
+                            final_synthesis=json.loads(adaptive_card_json) if self.environment == "prod" else final_output,
                             comparison_start_date=date_ranges.get('comparison_start_date'),
                             comparison_end_date=date_ranges.get('comparison_end_date')
                         )
@@ -653,7 +654,8 @@ class AnomalySummaryAgent:
                         weekly_analysis_params=weekly_analysis_params,
                         daily_analysis_params=daily_analysis_params,
                         date_ranges=date_ranges,
-                        final_synthesis=adaptive_card_json if self.environment == "prod" else final_output,
+                        # Parse JSON string to dict for Power Automate compatibility
+                        final_synthesis=json.loads(adaptive_card_json) if self.environment == "prod" else final_output,
                         comparison_start_date=date_ranges.get('comparison_start_date'),
                         comparison_end_date=date_ranges.get('comparison_end_date')
                     )
