@@ -244,7 +244,7 @@ hierarchical_diagnostic_helpers:
   step4_nma_identification: |
     🔍 **PASO 4: IDENTIFICACIÓN DE NODOS MÁXIMO AFECTADOS (NMA)**
     
-    **Objetivo:** Usar el razonamiento de los pasos 1-3 para identificar el **Nodo Máximo Afectado (NMA)** de cada causa.
+    **Objetivo:** Usar el razonamiento de los pasos 1-3 para identificar el **Nodo Máximo Afectado (NMA)** de cada causa, y trazar su cadena de propagación hasta el segmento raíz.
 
     **⚠️ REGLA CLAVE: El "burbujeo" real SOLO ocurre en SINERGIA.**
     
@@ -272,19 +272,37 @@ hierarchical_diagnostic_helpers:
     - Si es SINERGIA en todos los niveles → NMA sube hasta el ancestro más alto
     - Si en algún nivel hay TRANSFERENCIA/DOMINANCIA/DILUCIÓN → NMA se detiene en el hijo
 
-    **Salida Esperada (SOLO identificación, sin datos específicos aún):**
+    **⚠️ CASOS ESPECIALES:**
+    
+    1. **Si NMA = Segmento raíz:**
+       - No hay cadena de propagación
+       - Escribe: "El NMA coincide con el segmento raíz, afectando directamente."
+    
+    2. **Si el segmento raíz es una cabina LH (Economy/Business/Premium LH):**
+       - No hay análisis de agregación (no existen compañías IB/YW en LH)
+       - El NMA es siempre el propio segmento
+       - Escribe: "Segmento hoja sin subniveles que analizar."
+    
+    3. **Si solo hay 1 nivel de propagación:**
+       - Escribe la propagación simplificada: "[NMA] arrastra a [padre] directamente."
+
+    **Salida Esperada:**
     ```
     CAUSA 1: [Nombre descriptivo breve]
     - Escenario: [SINERGIA/TRANSFERENCIA/DOMINANCIA/DILUCIÓN/CANCELACIÓN]
     - NMA: [Nodo path, ej: Global/LH/Economy]
     - Afecta a: [Lista de sub-segmentos impactados]
     - Tipo de impacto: [POSITIVO/NEGATIVO]
+    - Cadena de propagación hacia el segmento raíz:
+      * [NMA] → [Nodo padre] ([ESCENARIO], [hermanos estables/opuestos])
+      * [Nodo padre] → [Nodo abuelo] ([ESCENARIO], [hermanos estables/opuestos])
+      * ... hasta llegar al segmento raíz o indicar caso especial
 
     CAUSA 2: [Nombre descriptivo breve]
     ...
     ```
     
-    **⚠️ IMPORTANTE:** En este paso SOLO identifica los NMAs y escenarios. Los datos específicos (SHAP, OTP, NCS, rutas, perfiles) se extraerán en el siguiente paso.
+    **⚠️ IMPORTANTE:** En este paso identifica los NMAs, escenarios y cadenas de propagación. Los datos específicos (SHAP, OTP, NCS, rutas, perfiles) se extraerán en el siguiente paso.
 
   step4b_evidence_extraction: |
     📊 **PASO 4B: EXTRACCIÓN DE EVIDENCIAS DEL CONTEXTO INICIAL**
@@ -396,7 +414,15 @@ hierarchical_diagnostic_helpers:
     • IB: NPS [valor] ([diff]) - [causa principal 1 línea del CAUSAL EXPLANATION]
     • YW: NPS [valor] ([diff]) - [causa principal 1 línea del CAUSAL EXPLANATION]
     • Narrativa de agregación: [Quién domina o cómo se compensan, según el escenario]
+    • Rutas críticas: [Según escenario - ver regla abajo]
+    • Perfiles reactivos: [Según escenario - ver regla abajo]
     ```
+    
+    **📍 REGLA DE RUTAS Y PERFILES PARA SH (según escenario):**
+    - **SINERGIA:** Usa rutas y perfiles del CAUSAL EXPLANATION del padre (la cabina)
+    - **TRANSFERENCIA/DOMINANCIA:** Usa rutas y perfiles del CAUSAL EXPLANATION del hijo dominante (IB o YW)
+    - **CANCELACIÓN:** Lista rutas y perfiles de AMBOS: "IB: [rutas IB], [perfiles IB] | YW: [rutas YW], [perfiles YW]"
+    - **DILUCIÓN:** Usa rutas y perfiles del hijo anómalo
     
     ---
     
@@ -409,7 +435,8 @@ hierarchical_diagnostic_helpers:
     • Estado: [POSITIVE ANOMALY / NEGATIVE ANOMALY / Normal]
     • Causa principal: [Resumen de 1-2 líneas del CAUSAL EXPLANATION]
     • Evidencia clave: [Driver SHAP principal + métrica operativa más relevante]
-    • Rutas críticas: [Top 2-3 rutas del análisis]
+    • Rutas críticas: [Top 3-5 rutas del CAUSAL EXPLANATION]
+    • Perfiles reactivos: [Perfiles con spread del CAUSAL EXPLANATION, ej: "Residence Region (spread X pts)"]
     ```
     
     ---
@@ -417,16 +444,18 @@ hierarchical_diagnostic_helpers:
     **⚠️ REGLAS CRÍTICAS:**
     - USA EXACTAMENTE los valores de la tabla de referencia (NPS y variación)
     - Para el estado, usa la etiqueta del tree_data: "POSITIVE ANOMALY", "NEGATIVE ANOMALY", o "Normal"
-    - Las causas deben venir del CAUSAL EXPLANATION de cada nodo en el tree_data
+    - Las causas, rutas y perfiles deben venir del CAUSAL EXPLANATION de cada nodo en el tree_data
     - NO inventes datos que no estén en el contexto
     - Si una cabina no tiene CAUSAL EXPLANATION, indica "Sin análisis causal disponible"
+    - Si no hay rutas o perfiles en el CAUSAL EXPLANATION, indica "No disponible"
 
   step5_executive_synthesis: |
     🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**
     
     **Enfoque requerido:** Genera un informe ejecutivo NARRATIVO usando:
-    1. Las evidencias extraídas en el paso 4B (para el párrafo introductorio y causas globales)
-    2. Las reflexiones por cabina-radio del paso 4C (para el detalle por cabina)
+    1. Los NMAs identificados en el paso 4 (con sus cadenas de propagación)
+    2. Las evidencias extraídas en el paso 4B (causas, rutas, perfiles de cada NMA)
+    3. Las reflexiones por cabina-radio del paso 4C (para el detalle por cabina)
 
     **⚠️ DATOS DE REFERENCIA DEL SEGMENTO:**
     {SEGMENT_REFERENCE}
@@ -455,13 +484,26 @@ hierarchical_diagnostic_helpers:
     Empieza SIEMPRE con:
     `<b>SÍNTESIS EJECUTIVA</b><br>`
     
-    **PÁRRAFO INTRODUCTORIO (2-3 líneas):**
-    Debe resumir el resultado del SEGMENTO RAÍZ mencionando el NPS absoluto y su variación (de la tabla de referencia).
-    Ejemplo: "La red global registró un <b>NPS de 27.9 (+0.6 pts)</b> con respecto a la semana anterior..."
+    **PÁRRAFO INTRODUCTORIO (1-2 líneas):**
+    Resume el resultado del SEGMENTO RAÍZ con NPS y variación, e indica brevemente la dinámica general.
+    Ejemplo: "La red global registró un <b>NPS de 25.0 (–3.6 pts)</b> con respecto a la semana anterior, resultado de una convergencia negativa en ambos radios."
     
-    **DESARROLLO NARRATIVO DE LAS CAUSAS (2-4 párrafos):**
-    Usa las evidencias del paso 4B para explicar las causas principales del segmento raíz.
-    Texto corrido. Separa párrafos con `<br><br>`.
+    **DESARROLLO POR NMA (1-2 párrafos por cada NMA del paso 4):**
+    Para CADA NMA identificado, narra de forma fluida incluyendo:
+    1. **Localización y magnitud:** "En <b>[RADIO/CABINA]</b>, el NPS cayó/subió a <b>[valor] ([variación])</b>..."
+    2. **Causas:** "...debido a [causas del paso 4B: drivers SHAP, métricas operativas, incidentes NCS]..."
+    3. **Rutas afectadas:** "...afectando especialmente a las rutas <b>[rutas del paso 4B]</b>..."
+    4. **Perfiles reactivos:** "Los pasajeros más sensibles fueron los agrupados por <b>[perfiles del paso 4B con spread]</b>."
+    5. **Propagación:** "Esta presión en [NMA origen] se propagó a [padre] (donde [hermano] se mantuvo estable/en dirección opuesta), arrastrando a [abuelo] hacia [dirección]."
+    
+    **⚠️ CASOS ESPECIALES DE PROPAGACIÓN:**
+    - Si NMA = Segmento raíz: Omite la propagación, solo describe causas/rutas/perfiles.
+    - Si solo hay 1 nivel: Simplifica a "[NMA] arrastró directamente a [padre]."
+    - Si el segmento es hoja (ej: Economy LH): No hay propagación que describir.
+    
+    **INTERACCIÓN FINAL (1 párrafo):**
+    Explica cómo convergen los NMAs al nivel del segmento raíz:
+    "La convergencia de <b>[Radio/Cabina A] ([variación])</b> y <b>[Radio/Cabina B] ([variación])</b>, ambos en [dirección], produjo [el resultado del segmento raíz]."
     
     **✍️ NARRATIVA DE INCIDENTES (NCS):** 
     No uses listas densas entre paréntesis. Integra los datos en la frase de forma fluida y natural.
@@ -475,8 +517,17 @@ hierarchical_diagnostic_helpers:
     
     Para cada cabina en las reflexiones del paso 4C, genera un párrafo narrativo:
     - **Título:** `<b><u>[CABINA]: [Titular descriptivo]</u></b><br>`
-    - **Contenido SH:** Menciona NPS de la cabina, luego el desglose IB/YW con sus valores exactos, y explica la dinámica (quién domina o cómo se compensan)
-    - **Contenido LH:** Menciona NPS de la cabina, la causa principal y las rutas críticas
+    - **Contenido SH:** 
+      * NPS de la cabina con variación
+      * Desglose IB/YW con sus valores exactos y causas
+      * Dinámica de agregación (quién domina o cómo se compensan)
+      * Rutas críticas (del paso 4C)
+      * Perfiles reactivos (del paso 4C)
+    - **Contenido LH:** 
+      * NPS de la cabina con variación
+      * Causa principal
+      * Rutas críticas (del paso 4C)
+      * Perfiles reactivos (del paso 4C)
     
     **⚠️ REGLA DE REDUNDANCIA:** 
     Si el análisis se centra en una única cabina (nodo raíz = Economy/Business), **OMITE la sección 'DETALLE POR CABINA'**.
