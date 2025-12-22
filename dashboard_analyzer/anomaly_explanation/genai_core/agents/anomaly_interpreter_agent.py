@@ -1246,40 +1246,42 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         Returns:
             Tupla (nps_actual, variacion, estado)
         """
-        # Mapeo de nombres de cabina a patrones en el tree_data
-        cabin_path_mapping = {
-            'Economy SH': r'(?:Global/SH/Economy|Economy)[:\s]+(?:NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\(([+-]?\d+\.?\d*)\s*pts?\).*?NPS:\s*([\d.]+)',
-            'Business SH': r'(?:Global/SH/Business|Business)[:\s]+(?:NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\(([+-]?\d+\.?\d*)\s*pts?\).*?NPS:\s*([\d.]+)',
-            'Economy LH': r'(?:Global/LH/Economy|Economy)[:\s]+(?:NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\(([+-]?\d+\.?\d*)\s*pts?\).*?NPS:\s*([\d.]+)',
-            'Business LH': r'(?:Global/LH/Business|Business)[:\s]+(?:NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\(([+-]?\d+\.?\d*)\s*pts?\).*?NPS:\s*([\d.]+)',
-            'Premium LH': r'(?:Global/LH/Premium|Premium)[:\s]+(?:NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\(([+-]?\d+\.?\d*)\s*pts?\).*?NPS:\s*([\d.]+)',
-        }
-        
-        # Buscar el patrón específico para la cabina
-        # Primero intentamos encontrar la línea completa de la cabina
+        # Determinar tipo de cabina y radio
         if 'SH' in cabin:
-            radio_section = 'Short Haul|SH'
             cabin_type = cabin.replace(' SH', '')
+            radio_marker = 'Short Haul'
+            radio_abbrev = 'SH'
         else:
-            radio_section = 'Long Haul|LH'
             cabin_type = cabin.replace(' LH', '')
+            radio_marker = 'Long Haul'
+            radio_abbrev = 'LH'
         
-        # Buscar la línea de la cabina en el tree_data
-        # Formato típico: "Economy: NEGATIVE ANOMALY (-4.4 pts) (NPS: 31.91... vs baseline: 36.27...)"
-        pattern = rf'{cabin_type}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
+        # Patrón mejorado que maneja:
+        # - "Economy: NEGATIVE ANOMALY (-4.4 pts) (NPS: 31.91..."
+        # - "Business: Normal (+3.5 pts - within normal range) (NPS: 37.05..."
+        pattern = rf'{cabin_type}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?[^)]*\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
         
-        # Buscar en el contexto del radio correcto
+        # Dividir el tree_data en secciones por radio
         lines = tree_data.split('\n')
         in_correct_radio = False
+        found_radio_start = False
         
-        for i, line in enumerate(lines):
-            # Detectar si estamos en el radio correcto
-            if 'SH' in cabin and ('Short Haul' in line or 'SH' in line):
+        for line in lines:
+            # Detectar inicio del radio correcto
+            if radio_marker in line or f'({radio_abbrev})' in line:
                 in_correct_radio = True
-            elif 'LH' in cabin and ('Long Haul' in line or 'LH' in line):
-                in_correct_radio = True
+                found_radio_start = True
+                continue
             
-            if in_correct_radio:
+            # Detectar si salimos del radio (otro radio empieza)
+            if found_radio_start and in_correct_radio:
+                other_radio = 'Long Haul' if radio_abbrev == 'SH' else 'Short Haul'
+                other_abbrev = 'LH' if radio_abbrev == 'SH' else 'SH'
+                if other_radio in line or f'({other_abbrev})' in line:
+                    in_correct_radio = False
+            
+            # Buscar la cabina en el contexto correcto
+            if in_correct_radio and cabin_type in line:
                 match = re.search(pattern, line, re.IGNORECASE)
                 if match:
                     nps = float(match.group('nps'))
@@ -1287,8 +1289,10 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                     state = match.group('state')
                     return f"{nps:.1f}", f"{diff:+.1f}", state
         
-        # Fallback: buscar sin restricción de radio
-        match = re.search(pattern, tree_data, re.IGNORECASE)
+        # Fallback: buscar en todo el documento con un patrón más específico que incluya el path
+        # Esto ayuda a distinguir entre Economy SH y Economy LH
+        path_pattern = rf'Global/{radio_abbrev}/{cabin_type}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?[^)]*\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
+        match = re.search(path_pattern, tree_data, re.IGNORECASE)
         if match:
             nps = float(match.group('nps'))
             diff = float(match.group('diff'))
@@ -1309,37 +1313,52 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         Returns:
             Tupla (nps_actual, variacion, estado)
         """
-        # Formato típico: "IB: NEGATIVE ANOMALY (-7.5 pts) (NPS: 27.73... vs baseline: 35.25...)"
-        pattern = rf'{company}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
-        
-        # Buscar en el contexto de la cabina correcta
+        # Determinar tipo de cabina
         cabin_type = cabin.replace(' SH', '').replace(' LH', '')
+        radio_abbrev = 'SH' if 'SH' in cabin else 'LH'
+        
+        # Patrón mejorado que maneja "- within normal range" y otros textos
+        pattern = rf'{company}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?[^)]*\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
+        
+        # Buscar primero el path específico en el tree_data
+        # Global/SH/Economy/IB o Global/SH/Business/IB
+        path_pattern = rf'Global/{radio_abbrev}/{cabin_type}/{company}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?[^)]*\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
+        match = re.search(path_pattern, tree_data, re.IGNORECASE)
+        if match:
+            nps = float(match.group('nps'))
+            diff = float(match.group('diff'))
+            state = match.group('state')
+            return f"{nps:.1f}", f"{diff:+.1f}", state
+        
+        # Fallback: buscar en el contexto de la cabina correcta
         lines = tree_data.split('\n')
         in_correct_cabin = False
+        cabin_depth = 0
         
-        for i, line in enumerate(lines):
-            # Detectar si estamos en la cabina correcta
+        for line in lines:
+            # Detectar si estamos en la cabina correcta (bajo el radio correcto)
             if cabin_type in line and ('ANOMALY' in line or 'Normal' in line):
+                # Verificar que estamos en el radio correcto
+                # Buscamos hacia atrás para confirmar el radio
                 in_correct_cabin = True
-            # Detectar si salimos de la cabina (otra cabina empieza)
-            elif in_correct_cabin and re.search(r'(Economy|Business|Premium)[:\s]+(NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)', line) and cabin_type not in line:
-                in_correct_cabin = False
+                cabin_depth = line.count('│') + line.count('├') + line.count('└')
             
+            # Detectar si salimos de la cabina
             if in_correct_cabin:
+                current_depth = line.count('│') + line.count('├') + line.count('└')
+                # Si encontramos otra cabina al mismo nivel o superior, salimos
+                if re.search(r'(Economy|Business|Premium)[:\s]+(NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)', line) and cabin_type not in line:
+                    if current_depth <= cabin_depth:
+                        in_correct_cabin = False
+            
+            # Buscar la compañía dentro de la cabina
+            if in_correct_cabin and company in line:
                 match = re.search(pattern, line, re.IGNORECASE)
                 if match:
                     nps = float(match.group('nps'))
                     diff = float(match.group('diff'))
                     state = match.group('state')
                     return f"{nps:.1f}", f"{diff:+.1f}", state
-        
-        # Fallback: buscar en todo el documento
-        match = re.search(pattern, tree_data, re.IGNORECASE)
-        if match:
-            nps = float(match.group('nps'))
-            diff = float(match.group('diff'))
-            state = match.group('state')
-            return f"{nps:.1f}", f"{diff:+.1f}", state
         
         return "N/A", "N/A", "N/A"
 
