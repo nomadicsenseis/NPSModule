@@ -2497,7 +2497,7 @@ class CausalExplanationAgent:
             
             # Clean the operational data by replacing empty strings with NaN for numeric columns
             cleaned_data = operational_data.copy()
-            numeric_columns = ['Load_Factor', 'OTP15_adjusted', 'Misconex', 'Mishandling']
+            numeric_columns = ['Load_Factor', 'OTP15', 'Misconex', 'Mishandling']
             for col in numeric_columns:
                 if col in cleaned_data.columns:
                     # Replace empty strings with NaN, then convert to numeric
@@ -2576,12 +2576,12 @@ class CausalExplanationAgent:
                         correlation_status = "❓"
                         self.logger.info(f"🔍 DEBUG CORRELATION: metric='{metric}', anomaly_type='{anomaly_type_for_analysis}', delta={delta}")
                         if anomaly_type_for_analysis == '-':
-                            if metric in ['OTP15_adjusted', 'Otp15', 'OTP15']:  # Direct correlation - worse punctuality = lower NPS
+                            if metric in ['OTP15', 'Otp15', 'OTP15']:  # Direct correlation - worse punctuality = lower NPS
                                 correlation_status = "✅ Explica NPS↓" if delta < 0 else "❌ Contradice NPS↓"
                             elif metric in ['Load_Factor', 'Misconex', 'Mishandling']:  # Inverse correlation - more issues = lower NPS
                                 correlation_status = "✅ Explica NPS↓" if delta > 0 else "❌ Contradice NPS↓"
                         elif anomaly_type_for_analysis == '+':
-                            if metric in ['OTP15_adjusted', 'Otp15', 'OTP15']:  # Direct correlation - better punctuality = higher NPS
+                            if metric in ['OTP15', 'Otp15', 'OTP15']:  # Direct correlation - better punctuality = higher NPS
                                 correlation_status = "✅ Explica NPS↑" if delta > 0 else "❌ Contradice NPS↑"
                             elif metric in ['Load_Factor', 'Misconex', 'Mishandling']:  # Inverse correlation - fewer issues = higher NPS
                                 correlation_status = "✅ Explica NPS↑" if delta < 0 else "❌ Contradice NPS↑"
@@ -2650,7 +2650,7 @@ class CausalExplanationAgent:
         # For negative NPS anomalies, these directions support the anomaly
         negative_supporting = {
             'Load_Factor': 'higher',      # Higher LF = worse service
-            'OTP15_adjusted': 'lower',    # Lower OTP = worse experience  
+            'OTP15': 'lower',    # Lower OTP = worse experience  
             'Misconex': 'higher',         # Higher misconex = worse experience
             'Mishandling': 'higher'       # Higher mishandling = worse experience
         }
@@ -2658,7 +2658,7 @@ class CausalExplanationAgent:
         # For positive NPS anomalies, opposite directions support
         positive_supporting = {
             'Load_Factor': 'lower',       # Lower LF = better service
-            'OTP15_adjusted': 'higher',   # Higher OTP = better experience
+            'OTP15': 'higher',   # Higher OTP = better experience
             'Misconex': 'lower',          # Lower misconex = better experience  
             'Mishandling': 'lower'        # Lower mishandling = better experience
         }

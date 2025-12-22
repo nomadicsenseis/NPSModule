@@ -41,7 +41,7 @@ if (DISTINCTCOUNT(Haul_Master[Haul_Aggr])>1 && DISTINCTCOUNT(Cabin_Master[Cabin_
         CALCULATETABLE(SUMMARIZE(
             _table,[Period_Group],
             "Load_Factor", 'Measure'[Load_Factor_CATIA],
-            "OTP15_adjusted", 'Measure'[OTP15_adjusted],
+            "OTP15", 'Measure'[OTP15],
             "Misconex", 'Measure'[Misconex_CATIA],
             "Mishandling", 'Measure'[Mishandling_CATIA],
             "Min_Date", MIN('Date_Master'[Date]),

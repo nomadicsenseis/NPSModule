@@ -51,14 +51,14 @@ DEFINE
     -- OTP Measures
     MEASURE 'Measure'[OTP_Current] =
         CALCULATE(
-            'Measure'[OTP15_adjusted],
+            'Measure'[OTP15],
             __CurrentPeriodFilter,
             __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
         )
 
     MEASURE 'Measure'[OTP_Comparison] =
         CALCULATE(
-            'Measure'[OTP15_adjusted],
+            'Measure'[OTP15],
             __ComparisonPeriodFilter,
             __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
         )
@@ -108,7 +108,7 @@ DEFINE
             "Metric", STRING,
             {
                 {"Load_Factor"},
-                {"OTP15_adjusted"}, 
+                {"OTP15"}, 
                 {"Mishandling"},
                 {"Misconex"}
             }
@@ -120,28 +120,28 @@ EVALUATE
         "Current_Value", 
             SWITCH([Metric],
                 "Load_Factor", [Load_Factor_Current],
-                "OTP15_adjusted", [OTP_Current],
+                "OTP15", [OTP_Current],
                 "Mishandling", [Mishandling_Current],
                 "Misconex", [Misconex_Current]
             ),
         "Comparison_Value",
             SWITCH([Metric],
                 "Load_Factor", [Load_Factor_Comparison],
-                "OTP15_adjusted", [OTP_Comparison], 
+                "OTP15", [OTP_Comparison], 
                 "Mishandling", [Mishandling_Comparison],
                 "Misconex", [Misconex_Comparison]
             ),
         "Difference",
             SWITCH([Metric],
                 "Load_Factor", [Load_Factor_Diff],
-                "OTP15_adjusted", [OTP_Diff],
+                "OTP15", [OTP_Diff],
                 "Mishandling", [Mishandling_Diff], 
                 "Misconex", [Misconex_Diff]
             ),
         "Change_Pct",
             SWITCH([Metric],
                 "Load_Factor", [Load_Factor_Change_Pct],
-                "OTP15_adjusted", [OTP_Change_Pct],
+                "OTP15", [OTP_Change_Pct],
                 "Mishandling", [Mishandling_Change_Pct],
                 "Misconex", [Misconex_Change_Pct]
             )

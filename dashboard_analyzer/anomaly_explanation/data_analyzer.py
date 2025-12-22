@@ -177,8 +177,8 @@ class OperationalDataAnalyzer:
                     
                     # Map metric names to standard format
                     standard_name = metric_name
-                    if metric_name == "OTP15_adjusted":
-                        standard_name = "OTP15_adjusted"
+                    if metric_name == "OTP15":
+                        standard_name = "OTP15"
                     elif metric_name == "Load_Factor":
                         standard_name = "Load_Factor"
                     
@@ -393,7 +393,7 @@ class OperationalDataAnalyzer:
             if load_factor_explanation:
                 result['load_factor_explanation'] = load_factor_explanation
 
-            otp_explanation = self._explain_otp(target_row, anomaly_type, metrics_context.get('OTP15_adjusted', {}))
+            otp_explanation = self._explain_otp(target_row, anomaly_type, metrics_context.get('OTP15', {}))
             if otp_explanation:
                 result['otp_explanation'] = otp_explanation
 
@@ -475,7 +475,7 @@ class OperationalDataAnalyzer:
 
             # Calcular diferencias (misma lógica para ambos casos)
             metrics = {}
-            for col in ['Load_Factor', 'OTP15_adjusted', 'Mishandling', 'Misconex']:
+            for col in ['Load_Factor', 'OTP15', 'Mishandling', 'Misconex']:
                 if col in data.columns:
                     current_val = pd.to_numeric(current_row.get(col), errors='coerce')
                     previous_val = pd.to_numeric(previous_row.get(col), errors='coerce')
@@ -597,7 +597,7 @@ class OperationalDataAnalyzer:
 
             # Calcular diferencias (misma lógica que _analyze_vslast)
             metrics = {}
-            for col in ['Load_Factor', 'OTP15_adjusted', 'Mishandling', 'Misconex']:
+            for col in ['Load_Factor', 'OTP15', 'Mishandling', 'Misconex']:
                 if col in data.columns:
                     current_val = pd.to_numeric(current_row.get(col), errors='coerce')
                     comparison_val = pd.to_numeric(comparison_row.get(col), errors='coerce')
@@ -727,7 +727,7 @@ class OperationalDataAnalyzer:
 
             # Calcular métricas vs media histórica (misma lógica para ambos casos)
             metrics = {}
-            for col in ['Load_Factor', 'OTP15_adjusted', 'Mishandling', 'Misconex']:
+            for col in ['Load_Factor', 'OTP15', 'Mishandling', 'Misconex']:
                 if col in data.columns:
                     current_val = pd.to_numeric(current_row.get(col), errors='coerce')
                     historical_vals = pd.to_numeric(historical_data[col], errors='coerce').dropna()
@@ -779,7 +779,7 @@ class OperationalDataAnalyzer:
             # Targets por defecto (estos podrían venir de configuración)
             targets = {
                 'Load_Factor': 85.0,
-                'OTP15_adjusted': 90.0,
+                'OTP15': 90.0,
                 'Mishandling': 0.5,
                 'Misconex': 0.3
             }
@@ -870,7 +870,7 @@ class OperationalDataAnalyzer:
         """Convierte nombres técnicos a nombres de display"""
         display_names = {
             'Load_Factor': 'Load Factor',
-            'OTP15_adjusted': 'OTP',
+            'OTP15': 'OTP',
             'Mishandling': 'Mishandling',
             'Misconex': 'Conexiones Perdidas'
         }
@@ -909,7 +909,7 @@ class OperationalDataAnalyzer:
     def _explain_otp(self, row: pd.Series, anomaly_type: str, metrics_context: dict = None) -> Optional[str]:
         """Genera explicación específica para OTP"""
         try:
-            otp = pd.to_numeric(row.get('OTP15_adjusted'), errors='coerce')
+            otp = pd.to_numeric(row.get('OTP15'), errors='coerce')
             if pd.isna(otp):
                 return None
 

@@ -318,7 +318,7 @@ class FlexibleAnomalyInterpreter:
                 
                 # Clean the operational data
                 cleaned_data = operational_data.copy()
-                numeric_columns = ['Load_Factor', 'OTP15_adjusted', 'Misconex', 'Mishandling']
+                numeric_columns = ['Load_Factor', 'OTP15', 'Misconex', 'Mishandling']
                 for col in numeric_columns:
                     if col in cleaned_data.columns:
                         cleaned_data[col] = cleaned_data[col].replace('', pd.NA)
@@ -357,7 +357,7 @@ class FlexibleAnomalyInterpreter:
                 other_metrics = []
                 
                 for metric_name, metric_data in metrics.items():
-                    if metric_name not in ['OTP15_adjusted', 'Load_Factor'] and metric_data.get('is_significant', False):
+                    if metric_name not in ['OTP15', 'Load_Factor'] and metric_data.get('is_significant', False):
                         direction = "↑" if metric_data.get('delta', 0) > 0 else "↓"
                         other_metrics.append(f"{metric_name}{direction}{abs(metric_data.get('delta', 0)):.1f}pts")
                 
@@ -414,7 +414,7 @@ class FlexibleAnomalyInterpreter:
             # Define metrics with their interpretation direction (aligned with NPS relationship)
             metrics_analysis = {
                 'Load_Factor': {'name': 'Load Factor', 'unit': '%', 'good_direction': 'stable'},
-                'OTP15_adjusted': {'name': 'On-Time Performance', 'unit': '%', 'good_direction': 'higher'}, 
+                'OTP15': {'name': 'On-Time Performance', 'unit': '%', 'good_direction': 'higher'}, 
                 'Misconex': {'name': 'Misconnection Rate', 'unit': '%', 'good_direction': 'lower'},
                 'Mishandling': {'name': 'Baggage Mishandling', 'unit': 'per 1000', 'good_direction': 'lower'}
             }
@@ -490,7 +490,7 @@ class FlexibleAnomalyInterpreter:
             
             # Clean the operational data by replacing empty strings with NaN for numeric columns
             cleaned_data = operational_data.copy()
-            numeric_columns = ['Load_Factor', 'OTP15_adjusted', 'Misconex', 'Mishandling']
+            numeric_columns = ['Load_Factor', 'OTP15', 'Misconex', 'Mishandling']
             for col in numeric_columns:
                 if col in cleaned_data.columns:
                     # Replace empty strings with NaN, then convert to numeric
@@ -534,7 +534,7 @@ class FlexibleAnomalyInterpreter:
             other_metrics = []
             
             for metric_name, metric_data in metrics.items():
-                if metric_name not in ['OTP15_adjusted', 'Load_Factor'] and metric_data.get('is_significant', False):
+                if metric_name not in ['OTP15', 'Load_Factor'] and metric_data.get('is_significant', False):
                     direction = "↑" if metric_data['direction'] == 'higher' else "↓"
                     other_metrics.append(f"{metric_name}{direction}{abs(metric_data['delta']):.1f}pts")
             
