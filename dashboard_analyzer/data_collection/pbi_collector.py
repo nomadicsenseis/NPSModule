@@ -10,6 +10,14 @@ import asyncio
 import aiohttp
 import re # Added for regex replacement
 import logging
+import time
+import random
+
+# Retry configuration for PBI API calls
+PBI_MAX_RETRIES = 3  # Maximum number of retry attempts
+PBI_BASE_DELAY = 2.0  # Base delay in seconds for exponential backoff
+PBI_MAX_DELAY = 30.0  # Maximum delay between retries
+PBI_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}  # HTTP codes that trigger retry
 
 class PBIDataCollector:
     """Collects data from Power BI API for each node in the NPS tree hierarchy"""
@@ -382,24 +390,27 @@ class PBIDataCollector:
         return query
     
     def _get_verbatims_range_query(self, cabins: List[str], companies: List[str], hauls: List[str], start_date: datetime, end_date: datetime) -> str:
-        """Generate DAX query for verbatims data using date range template"""
+        """Generate DAX query for verbatims data using date range template.
+        
+        NOTE: companies is always ["IB", "YW"] for LH (no distinction) or can be ["IB"] or ["YW"] for SH.
+        """
         template = self._load_query_template("Verbatims.txt")
         
         # Replace placeholders with actual values
         cabins_str = '", "'.join(cabins)
-        companies_str = '", "'.join(companies)
         hauls_str = '", "'.join(hauls)
+        companies_str = '", "'.join(companies)
         
         # Replace the template placeholders - replace ALL occurrences
         query = template.replace(
             'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
             f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
         ).replace(
-            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
-            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
-        ).replace(
             'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
             f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
+        ).replace(
+            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
+            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
         ).replace(
             '\'Date_Master\'[Date] =date(2025,05,12)',
             f'\'Date_Master\'[Date] >= date({start_date.year},{start_date.month},{start_date.day}) && \'Date_Master\'[Date] <= date({end_date.year},{end_date.month},{end_date.day})'
@@ -412,23 +423,25 @@ class PBIDataCollector:
         """
         Generate optimized DAX query for verbatims data using Verbatims_Smart.txt template.
         Filters by NPS class based on anomaly type and limits to top 30 relevant comments.
+        
+        NOTE: companies is always ["IB", "YW"] for LH (no distinction) or can be ["IB"] or ["YW"] for SH.
         """
         template = self._load_query_template("Verbatims_Smart.txt")
         
         # Replace list placeholders using standard TREATAS replacement strategy
         cabins_str = '", "'.join(cabins)
-        companies_str = '", "'.join(companies)
         hauls_str = '", "'.join(hauls)
+        companies_str = '", "'.join(companies)
         
         query = template.replace(
             'TREATAS({"Business", "Economy", "Premium EC"}, \'Cabin_Master\'[Cabin_Show])',
             f'TREATAS({{"{cabins_str}"}}, \'Cabin_Master\'[Cabin_Show])'
         ).replace(
-            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
-            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
-        ).replace(
             'TREATAS({"SH","LH"}, \'Haul_Master\'[Haul_Aggr])',
             f'TREATAS({{"{hauls_str}"}}, \'Haul_Master\'[Haul_Aggr])'
+        ).replace(
+            'TREATAS({"IB","YW"}, \'Company_Master\'[Company])',
+            f'TREATAS({{"{companies_str}"}}, \'Company_Master\'[Company])'
         )
         
         # Replace date placeholders
@@ -452,42 +465,22 @@ class PBIDataCollector:
         
         return query
 
-    def collect_smart_verbatims(self, node_path: str, start_date: datetime, end_date: datetime, anomaly_type: str = "neutral") -> pd.DataFrame:
-        """
-        Collect smart verbatims data from Power BI.
-        """
-        # Parse node path filters
-        cabins, companies, hauls = self._parse_node_filters(node_path)
-        
-        # Generate query
-        query = self._get_smart_verbatims_query(cabins, companies, hauls, start_date, end_date, anomaly_type)
-        
-        # Execute
-        self.logger.info(f"📊 Executing Smart Verbatims Query for {node_path} ({anomaly_type})...")
-        try:
-            df = self._execute_query(query)
-            
-            if not df.empty:
-                self.logger.info(f"✅ Got {len(df)} smart verbatims from PBI")
-            else:
-                self.logger.warning("⚠️ No smart verbatims found in PBI")
-                
-            return df
-        except Exception as e:
-            self.logger.error(f"❌ Error executing smart verbatims query: {e}")
-            return pd.DataFrame()
+    # NOTE: collect_smart_verbatims is defined later in the file (line ~646) using _get_node_filters
+    # This duplicate definition was removed to avoid confusion and the missing _parse_node_filters error
 
-    def _execute_query(self, query: str, timeout_seconds: int = None) -> pd.DataFrame:
-        """Execute a DAX query against Power BI API
+    def _execute_query(self, query: str, timeout_seconds: int = None, max_retries: int = None) -> pd.DataFrame:
+        """Execute a DAX query against Power BI API with retry logic
         
         Args:
             query: DAX query string
             timeout_seconds: Timeout for the API request (uses self.api_timeout if not specified)
+            max_retries: Maximum retry attempts (uses PBI_MAX_RETRIES if not specified)
             
         Returns:
             DataFrame with query results or empty DataFrame on error
         """
         timeout = timeout_seconds if timeout_seconds is not None else self.api_timeout
+        retries = max_retries if max_retries is not None else PBI_MAX_RETRIES
         
         dax_query = {
             "queries": [{"query": query}],
@@ -500,43 +493,109 @@ class PBIDataCollector:
             "Content-Type": "application/json"
         }
         
-        try:
-            response = requests.post(url, headers=headers, json=dax_query, timeout=timeout)
-            
-            if response.status_code != 200:
-                self.logger.error(f"❌ PBI API Error {response.status_code}: {response.text}")
-                return pd.DataFrame()
+        last_error = None
+        for attempt in range(retries + 1):
+            try:
+                response = requests.post(url, headers=headers, json=dax_query, timeout=timeout)
                 
-            results = response.json()
-            
-            if not results.get('results') or not results['results'][0].get('tables'):
-                self.logger.warning("⚠️ No data returned from PBI query")
-                return pd.DataFrame()
+                # Check for retryable HTTP errors
+                if response.status_code in PBI_RETRYABLE_STATUS_CODES:
+                    last_error = f"HTTP {response.status_code}: {response.text[:200]}"
+                    if attempt < retries:
+                        delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                        self.logger.warning(f"⚠️ PBI API returned {response.status_code}, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1})")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        self.logger.error(f"❌ PBI API Error {response.status_code} after {retries + 1} attempts: {response.text}")
+                        return pd.DataFrame()
                 
-            rows = results['results'][0]['tables'][0].get('rows', [])
-            return pd.DataFrame(rows)
+                # Non-retryable HTTP errors (e.g., 400, 401, 403, 404)
+                if response.status_code != 200:
+                    self.logger.error(f"❌ PBI API Error {response.status_code}: {response.text}")
+                    return pd.DataFrame()
+                
+                results = response.json()
+                
+                # Check for empty results - this is also retryable (server might be overloaded)
+                if not results.get('results') or not results['results'][0].get('tables'):
+                    last_error = "Empty results from PBI API"
+                    if attempt < retries:
+                        delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                        self.logger.warning(f"⚠️ PBI returned empty results, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1})")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        self.logger.warning(f"⚠️ No data returned from PBI query after {retries + 1} attempts")
+                        return pd.DataFrame()
+                
+                rows = results['results'][0]['tables'][0].get('rows', [])
+                
+                # Also retry if we got a table but it's empty (possible transient issue)
+                if len(rows) == 0:
+                    last_error = "Empty rows from PBI API"
+                    if attempt < retries:
+                        delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                        self.logger.warning(f"⚠️ PBI returned 0 rows, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1})")
+                        time.sleep(delay)
+                        continue
+                
+                # Success - log if we had to retry
+                if attempt > 0:
+                    self.logger.info(f"✅ PBI query succeeded on attempt {attempt + 1}")
+                
+                return pd.DataFrame(rows)
+            
+            except requests.exceptions.Timeout:
+                last_error = f"Timeout after {timeout}s"
+                if attempt < retries:
+                    delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                    self.logger.warning(f"⏰ PBI API timeout, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1})")
+                    time.sleep(delay)
+                    continue
+                else:
+                    self.logger.error(f"⏰ PBI API timeout after {retries + 1} attempts - query may be too complex or API is overloaded")
+                    return pd.DataFrame()
+            
+            except requests.exceptions.ConnectionError as e:
+                last_error = f"Connection error: {str(e)}"
+                if attempt < retries:
+                    delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                    self.logger.warning(f"❌ PBI connection error, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1})")
+                    time.sleep(delay)
+                    continue
+                else:
+                    self.logger.error(f"❌ PBI API connection error after {retries + 1} attempts: {type(e).__name__}: {str(e)}")
+                    return pd.DataFrame()
+            
+            except Exception as e:
+                last_error = f"{type(e).__name__}: {str(e)}"
+                if attempt < retries:
+                    delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                    self.logger.warning(f"❌ PBI error, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1}): {last_error}")
+                    time.sleep(delay)
+                    continue
+                else:
+                    self.logger.error(f"❌ Error executing query after {retries + 1} attempts: {last_error}")
+                    return pd.DataFrame()
         
-        except requests.exceptions.Timeout:
-            self.logger.error(f"⏰ PBI API timeout after {timeout}s - query may be too complex or API is slow")
-            return pd.DataFrame()
-        except requests.exceptions.ConnectionError as e:
-            self.logger.error(f"❌ PBI API connection error: {type(e).__name__}: {str(e)}")
-            return pd.DataFrame()
-        except Exception as e:
-            self.logger.error(f"❌ Error executing query: {type(e).__name__}: {str(e)}")
-            return pd.DataFrame()
+        # Should not reach here, but just in case
+        self.logger.error(f"❌ All {retries + 1} attempts failed. Last error: {last_error}")
+        return pd.DataFrame()
     
-    async def _execute_query_async(self, query: str, timeout_seconds: int = None) -> pd.DataFrame:
-        """Execute a DAX query against Power BI API asynchronously
+    async def _execute_query_async(self, query: str, timeout_seconds: int = None, max_retries: int = None) -> pd.DataFrame:
+        """Execute a DAX query against Power BI API asynchronously with retry logic
         
         Args:
             query: DAX query string
             timeout_seconds: Timeout for the API request (uses self.api_timeout if not specified)
+            max_retries: Maximum retry attempts (uses PBI_MAX_RETRIES if not specified)
             
         Returns:
             DataFrame with query results or empty DataFrame on error
         """
         effective_timeout = timeout_seconds if timeout_seconds is not None else self.api_timeout
+        retries = max_retries if max_retries is not None else PBI_MAX_RETRIES
         
         dax_query = {
             "queries": [{"query": query}],
@@ -552,40 +611,110 @@ class PBIDataCollector:
         # Configure timeout for the aiohttp request
         timeout = aiohttp.ClientTimeout(total=effective_timeout)
         
-        try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, headers=headers, json=dax_query) as response:
-                    if response.status != 200:
-                        response_text = await response.text()
-                        self.logger.error(f"❌ PBI API Error {response.status}: {response_text}")
-                        return pd.DataFrame()
+        last_error = None
+        for attempt in range(retries + 1):
+            try:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(url, headers=headers, json=dax_query) as response:
+                        # Check for retryable HTTP errors
+                        if response.status in PBI_RETRYABLE_STATUS_CODES:
+                            response_text = await response.text()
+                            last_error = f"HTTP {response.status}: {response_text[:200]}"
+                            if attempt < retries:
+                                delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                                self.logger.warning(f"⚠️ PBI API returned {response.status}, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1})")
+                                await asyncio.sleep(delay)
+                                continue
+                            else:
+                                self.logger.error(f"❌ PBI API Error {response.status} after {retries + 1} attempts: {response_text}")
+                                return pd.DataFrame()
                         
-                    results = await response.json()
-                    
-                    if not results.get('results') or not results['results'][0].get('tables'):
-                        self.logger.warning("⚠️ No data returned from PBI query")
-                        return pd.DataFrame()
+                        # Non-retryable HTTP errors
+                        if response.status != 200:
+                            response_text = await response.text()
+                            self.logger.error(f"❌ PBI API Error {response.status}: {response_text}")
+                            return pd.DataFrame()
                         
-                    rows = results['results'][0]['tables'][0].get('rows', [])
-                    return pd.DataFrame(rows)
+                        results = await response.json()
+                        
+                        # Check for empty results - this is also retryable
+                        if not results.get('results') or not results['results'][0].get('tables'):
+                            last_error = "Empty results from PBI API"
+                            if attempt < retries:
+                                delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                                self.logger.warning(f"⚠️ PBI returned empty results, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1})")
+                                await asyncio.sleep(delay)
+                                continue
+                            else:
+                                self.logger.warning(f"⚠️ No data returned from PBI query after {retries + 1} attempts")
+                                return pd.DataFrame()
+                        
+                        rows = results['results'][0]['tables'][0].get('rows', [])
+                        
+                        # Also retry if we got a table but it's empty
+                        if len(rows) == 0:
+                            last_error = "Empty rows from PBI API"
+                            if attempt < retries:
+                                delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                                self.logger.warning(f"⚠️ PBI returned 0 rows, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1})")
+                                await asyncio.sleep(delay)
+                                continue
+                        
+                        # Success - log if we had to retry
+                        if attempt > 0:
+                            self.logger.info(f"✅ PBI async query succeeded on attempt {attempt + 1}")
+                        
+                        return pd.DataFrame(rows)
+            
+            except asyncio.TimeoutError:
+                last_error = f"Timeout after {effective_timeout}s"
+                if attempt < retries:
+                    delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                    self.logger.warning(f"⏰ PBI API timeout, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1})")
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    self.logger.error(f"⏰ PBI API timeout after {retries + 1} attempts - query may be too complex or API is overloaded")
+                    return pd.DataFrame()
+            
+            except aiohttp.ClientError as e:
+                last_error = f"Client error: {str(e)}"
+                if attempt < retries:
+                    delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                    self.logger.warning(f"❌ PBI connection error, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1})")
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    self.logger.error(f"❌ PBI API connection error after {retries + 1} attempts: {type(e).__name__}: {str(e)}")
+                    return pd.DataFrame()
+            
+            except Exception as e:
+                last_error = f"{type(e).__name__}: {str(e)}"
+                if attempt < retries:
+                    delay = min(PBI_BASE_DELAY * (2 ** attempt) + random.uniform(0, 1), PBI_MAX_DELAY)
+                    self.logger.warning(f"❌ PBI error, retrying in {delay:.1f}s (attempt {attempt + 1}/{retries + 1}): {last_error}")
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    self.logger.error(f"❌ Error executing async query after {retries + 1} attempts: {last_error}")
+                    return pd.DataFrame()
         
-        except asyncio.TimeoutError:
-            self.logger.error(f"⏰ PBI API timeout after {effective_timeout}s - query may be too complex or API is slow")
-            return pd.DataFrame()
-        except aiohttp.ClientError as e:
-            self.logger.error(f"❌ PBI API connection error: {type(e).__name__}: {str(e)}")
-            return pd.DataFrame()
-        except Exception as e:
-            self.logger.error(f"❌ Error executing async query: {type(e).__name__}: {str(e)}")
-            return pd.DataFrame()
+        # Should not reach here, but just in case
+        self.logger.error(f"❌ All {retries + 1} async attempts failed. Last error: {last_error}")
+        return pd.DataFrame()
     
     def _get_node_filters(self, node_path: str) -> Tuple[List[str], List[str], List[str]]:
-        """Get the filter values for cabins, companies, and hauls based on node path"""
+        """Get the filter values for cabins, companies, and hauls based on node path.
+        
+        IMPORTANT: 
+        - LH (Long Haul): Always uses BOTH companies ["IB", "YW"] - no distinction in LH
+        - SH (Short Haul): Can filter by specific company (IB or YW)
+        """
         path_parts = node_path.split('/')
         
         # Default to all values
         cabins = ["Business", "Economy", "Premium EC"]
-        companies = ["IB", "YW"]
+        companies = ["IB", "YW"]  # Always include both - this is the default
         hauls = ["SH", "LH"]
         
         # Apply filters based on path
@@ -598,8 +727,13 @@ class PBIDataCollector:
             else:
                 cabins = [path_parts[2]]
                 
-        if len(path_parts) >= 4 and path_parts[3] in ['IB', 'YW']:
+        # Company filter: 
+        # - LH: Always ["IB", "YW"] (both, no distinction)
+        # - SH: Can be filtered to specific company if in path
+        if 'LH' not in hauls and len(path_parts) >= 4 and path_parts[3] in ['IB', 'YW']:
+            # Only filter by specific company for SH segments
             companies = [path_parts[3]]
+        # For LH or SH without company in path, keep default ["IB", "YW"]
             
         return cabins, companies, hauls
     
@@ -788,11 +922,16 @@ class PBIDataCollector:
         return df
 
     def _parse_node_path(self, node_path: str) -> Tuple[List[str], List[str], List[str]]:
-        """Parse node path to extract cabins, companies, and hauls"""
+        """Parse node path to extract cabins, companies, and hauls.
+        
+        IMPORTANT: 
+        - LH (Long Haul): Always uses BOTH companies ["IB", "YW"] - no distinction in LH
+        - SH (Short Haul): Can filter by specific company (IB or YW)
+        """
         
         # Default values for Global
         cabins = ['Business', 'Economy', 'Premium EC']
-        companies = ['IB', 'YW'] 
+        companies = ['IB', 'YW']  # Always include both by default
         hauls = ['SH', 'LH']
         
         # Parse path segments
@@ -801,6 +940,7 @@ class PBIDataCollector:
         # Extract haul information
         if 'LH' in segments:
             hauls = ['LH']
+            # LH: Keep companies = ['IB', 'YW'] - no distinction, but need both
         elif 'SH' in segments:
             hauls = ['SH']
         
@@ -812,11 +952,12 @@ class PBIDataCollector:
         elif 'Premium' in segments:
             cabins = ['Premium EC']
         
-        # Extract company information
-        if 'IB' in segments:
-            companies = ['IB']
-        elif 'YW' in segments:
-            companies = ['YW']
+        # Extract company information - only filter specific company for SH
+        if 'SH' in hauls:  # Only apply specific company filter for Short Haul
+            if 'IB' in segments:
+                companies = ['IB']
+            elif 'YW' in segments:
+                companies = ['YW']
         
         return cabins, companies, hauls
 

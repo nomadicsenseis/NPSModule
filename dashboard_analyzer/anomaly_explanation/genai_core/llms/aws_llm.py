@@ -1,7 +1,7 @@
 import json
 import os
 
-from langchain_aws import ChatBedrock
+from langchain_aws import ChatBedrock, ChatBedrockConverse
 from botocore.config import Config
 import boto3
 
@@ -17,21 +17,23 @@ except (json.JSONDecodeError, KeyError):
 
 class AWSLLM(LLM):
     """
-    AWSLLM class that uses LangChain's ChatBedrock integration
+    AWSLLM class that uses LangChain's ChatBedrock or ChatBedrockConverse integration
     """
 
-    def __init__(self, llm_type: LLMType, region_name, aws_access_key_id=None, aws_secret_access_key=None, profile_name=None,
+    def __init__(self, llm_type: LLMType, region_name, aws_access_key_id=None, aws_secret_access_key=None, 
+                 aws_session_token=None, profile_name=None,
                  token_input_price: float = 11.02 / 1000000, token_output_price: float = 32.68 / 1000000):
         self.region_name = region_name
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
+        self.aws_session_token = aws_session_token
         self.profile_name = profile_name
         self.model_id = None
 
         super().__init__(llm_type, token_input_price, token_output_price)
 
     def create_llm(self):
-        """Create the LangChain ChatBedrock client for the specified model"""
+        """Create the LangChain ChatBedrock or ChatBedrockConverse client for the specified model"""
         self._set_model_id()
         
         # Configure credentials for boto3 session (if needed)
@@ -39,6 +41,8 @@ class AWSLLM(LLM):
         if self.aws_access_key_id and self.aws_secret_access_key:
             credentials["aws_access_key_id"] = self.aws_access_key_id
             credentials["aws_secret_access_key"] = self.aws_secret_access_key
+        if self.aws_session_token:
+            credentials["aws_session_token"] = self.aws_session_token
         if self.profile_name:
             credentials["profile_name"] = self.profile_name
         
@@ -54,6 +58,7 @@ class AWSLLM(LLM):
         session = boto3.Session(
             aws_access_key_id=credentials.get("aws_access_key_id"),
             aws_secret_access_key=credentials.get("aws_secret_access_key"),
+            aws_session_token=credentials.get("aws_session_token"),
             profile_name=credentials.get("profile_name"),
             region_name=self.region_name,
         )
@@ -61,15 +66,25 @@ class AWSLLM(LLM):
 
         # Create ChatBedrock client with custom boto3 client and tunable generation params
         max_tokens = int(os.getenv("BEDROCK_MAX_TOKENS", "15000"))
+        
+        # Adjust max_tokens for models with lower limits
+        # Nova Pro limit is 5k-10k depending on region/version (error said 10000)
+        if self.llm_type in [LLMType.AMAZON_NOVA_PRO, LLMType.AMAZON_NOVA_2_LITE]:
+            max_tokens = min(max_tokens, 5000)  # Safe limit
+            
         temperature = float(os.getenv("BEDROCK_TEMPERATURE", "0.7"))
-        return ChatBedrock(
+        
+        # Use ChatBedrockConverse for all chat models (it's the new standard and supports all modern models)
+        # Note: Embedding models like Titan Embed are not supported here, they should use BedrockEmbeddings
+        if self.llm_type == LLMType.AMAZON_TITAN_EMBED_TEXT_V2:
+             raise ValueError("AWSLLM is for Chat models only. Use BedrockEmbeddings for Titan Embeddings.")
+
+        return ChatBedrockConverse(
             model_id=self.model_id,
             client=bedrock_client,
             provider=provider,
-            model_kwargs={
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-            }
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
     
     def _get_provider(self):
@@ -82,15 +97,24 @@ class AWSLLM(LLM):
             LLMType.CLAUDE_3_5_SONNET_V2.value,
             LLMType.CLAUDE_SONNET_4.value,
             LLMType.CLAUDE_3_7_SONNET.value,
-            LLMType.CLAUDE_OPUS_4_5.value
+            LLMType.CLAUDE_OPUS_4_5.value,
+            LLMType.CLAUDE_HAIKU_4_5.value,
+            LLMType.CLAUDE_SONNET_4_5.value
         ]:
             return "anthropic"
         elif self.llm_type.value in [
             LLMType.LLAMA3_70.value,
             LLMType.LLAMA3_1_70.value,
-            LLMType.LLAMA3_1_405.value
+            LLMType.LLAMA3_1_405.value,
+            LLMType.GPT_OSS_120B.value  # Assuming standard/meta-like interface for OSS model
         ]:
             return "meta"
+        elif self.llm_type.value in [
+            LLMType.AMAZON_NOVA_2_LITE.value,
+            LLMType.AMAZON_NOVA_PRO.value,
+            LLMType.AMAZON_TITAN_EMBED_TEXT_V2.value
+        ]:
+            return "amazon"
         else:
             raise ValueError(f"Unknown provider for model: {self.llm_type}")
     
@@ -123,5 +147,20 @@ class AWSLLM(LLM):
                 self.model_id = model_arn
             else:
                 self.model_id = "anthropic.claude-3-7-sonnet-20250219-v1:0"
+        
+        # New models added
+        elif self.llm_type.value == LLMType.AMAZON_NOVA_2_LITE.value:
+            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/0g94pa86q97o"
+        elif self.llm_type.value == LLMType.AMAZON_NOVA_PRO.value:
+            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/uh15i5cakpji"
+        elif self.llm_type.value == LLMType.AMAZON_TITAN_EMBED_TEXT_V2.value:
+            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/hprm0w08u8k8"
+        elif self.llm_type.value == LLMType.CLAUDE_HAIKU_4_5.value:
+            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/78486g7eitdv"
+        elif self.llm_type.value == LLMType.CLAUDE_SONNET_4_5.value:
+            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/j9l4fod1sker"
+        elif self.llm_type.value == LLMType.GPT_OSS_120B.value:
+            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/01q61xjcup73"
+            
         else:
             raise ValueError(f"Invalid model: {self.llm_type}")

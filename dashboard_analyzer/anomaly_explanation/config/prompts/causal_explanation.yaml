@@ -51,6 +51,9 @@ comparative_prompts:
     ▸ Analiza ÚNICAMENTE el segmento especificado
     ▸ NO compares con otros segmentos (Economy vs Business, SH vs LH)
     ▸ Enfócate en las características específicas del segmento que estás analizando
+    ▸ ⚠️ **PROHIBIDO ESPECULAR**: NO hagas afirmaciones sobre cómo eventos afectaron a otros segmentos
+    ▸ Si un evento NO aparece en tus datos, simplemente di "no afectó a ESTE segmento"
+    ▸ NUNCA digas "afectó principalmente a otros segmentos" - NO tienes esos datos
 
     **Disclaimers Estadísticos** ⚠️
     ▸ Sample <20: "resultados sujetos a alta variabilidad estadística"

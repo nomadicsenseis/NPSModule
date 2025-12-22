@@ -303,7 +303,6 @@ hierarchical_diagnostic_helpers:
     ```
     
     **⚠️ IMPORTANTE:** En este paso identifica los NMAs, escenarios y cadenas de propagación. Los datos específicos (SHAP, OTP, NCS, rutas, perfiles) se extraerán en el siguiente paso.
-
   step4b_evidence_extraction: |
     📊 **PASO 4B: EXTRACCIÓN DE EVIDENCIAS DEL CONTEXTO INICIAL**
     
@@ -515,19 +514,33 @@ hierarchical_diagnostic_helpers:
     **DETALLE POR CABINA (HTML):**
     Añade `<br><br><b><u>DETALLE POR CABINA</u></b><br>` **SOLAMENTE SI** hay reflexiones de cabina-radio en el paso 4C.
     
-    Para cada cabina en las reflexiones del paso 4C, genera un párrafo narrativo:
+    Para cada cabina, construye el párrafo siguiendo estrictamente estas reglas de fuente y narrativa:
+    
     - **Título:** `<b><u>[CABINA]: [Titular descriptivo]</u></b><br>`
-    - **Contenido SH:** 
-      * NPS de la cabina con variación
-      * Desglose IB/YW con sus valores exactos y causas
-      * Dinámica de agregación (quién domina o cómo se compensan)
-      * Rutas críticas (del paso 4C)
-      * Perfiles reactivos (del paso 4C)
-    - **Contenido LH:** 
-      * NPS de la cabina con variación
-      * Causa principal
-      * Rutas críticas (del paso 4C)
-      * Perfiles reactivos (del paso 4C)
+    
+    - **PARA LH (Largo Radio):**
+      *   **Fuente:** Usa exclusivamente el análisis del propio nodo cabina (Economy LH, etc.).
+      *   **Narrativa:** Resume la causa principal, su impacto en el NPS (valor y variación) y menciona las rutas/perfiles afectados.
+    
+    - **PARA SH (Corto Radio) - REGLAS SEGÚN ESCENARIO:**
+      
+      *   **Si es SINERGIA o TRANSFERENCIA:**
+          *   **Fuente:** Usa la explicación causal del **nodo cabina (padre)**.
+          *   **Narrativa:** Explica esa causa común, pero **DEBES mencionar** el NPS y variación individual de las compañías anómalas (IB/YW) para dimensionar su impacto.
+          *   *Ejemplo:* "El problema de puntualidad (causa padre) lastró la cabina (NPS X), con IB cayendo Y pts y YW Z pts..."
+      
+      *   **Si es CANCELACIÓN:**
+          *   **Fuente:** Usa las explicaciones de **AMBAS compañías (hijos)**. Ignora la causa del padre si es genérica.
+          *   **Narrativa:** Contrasta las dos realidades. "El resultado estable de la cabina oculta que IB cayó por [causa IB] mientras YW subió por [causa YW]..."
+      
+      *   **Si es DOMINANCIA:**
+          *   **Fuente:** Usa la explicación del **nodo cabina (padre)** para el impacto global, y matiza con los datos de los **hijos**.
+          *   **Narrativa:** Explica cómo el hijo dominante impuso su resultado al padre. "La caída de la cabina a X pts es un reflejo directo del desplome de IB (NPS Y) por [causa], que anuló la estabilidad de YW (NPS Z)."
+    
+    **⚠️ REGLA DE FLUIDEZ Y COMPLETITUD:** 
+    - **OBLIGATORIO:** Debes incluir SIEMPRE las rutas críticas y perfiles reactivos identificados en el paso 4C. No omitas datos por "hacerlo más corto".
+    - **ESTILO:** Evita listas mecánicas al final (ej: "Rutas: A, B"). INTEGRALAS en la narración: "...especialmente visible en conexiones como MAD-BOG o MAD-MEX."
+    - Para los perfiles, úsalos para explicar **quién** reaccionó: "Los viajeros [perfil A] y [perfil B] fueron los más sensibles al cambio, mostrando..."
     
     **⚠️ REGLA DE REDUNDANCIA:** 
     Si el análisis se centra en una única cabina (nodo raíz = Economy/Business), **OMITE la sección 'DETALLE POR CABINA'**.
@@ -542,3 +555,4 @@ hierarchical_diagnostic_helpers:
     - "SHAP = X" → "X ppts según Explanatory Drivers"
     - "ncs_tool" → "incidentes operativos"
     - "operative_data_tool" → "métricas operativas"
+

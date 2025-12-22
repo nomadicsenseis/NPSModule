@@ -395,7 +395,8 @@ async def process_single_period(
             print(f"      📊 Period {period}: Processing {total_nodes} nodes...")
             
             # Semaphore for node-level concurrency within this period
-            node_sem = asyncio.Semaphore(5)
+            # Reduced to 3 to prevent PBI API saturation/timeouts on heavy nodes like Global
+            node_sem = asyncio.Semaphore(3)
             
             async def process_node_anomaly(i, node_path):
                 async with node_sem:
@@ -461,7 +462,7 @@ async def process_single_period(
                                 comparison_context=comparison_context_local,
                                 baseline_periods=analysis_data.get('baseline_periods', 7)
                             ),
-                            timeout=1200.0
+                            timeout=3000.0  # Increased to 50 min for heavy nodes like Global
                         )
                         
                         investigation_log = []
@@ -469,11 +470,16 @@ async def process_single_period(
                             investigation_log = node_interpreter.get_last_causal_log()
                         
                         return node_path, explanation, investigation_log, True
+                    except asyncio.TimeoutError:
+                        print(f"❌ DEBUG: TimeoutError in process_node_anomaly for {node_path} (limit 3000s)")
+                        return node_path, "Analysis failed: Operation timed out (3000s)", [], False
                     except Exception as e:
-                        print(f"❌ DEBUG: Exception in process_node_anomaly for {node_path}: {type(e).__name__} - {e}")
+                        error_type = type(e).__name__
+                        error_msg = str(e) if str(e) else f"(no message, type={error_type})"
+                        print(f"❌ DEBUG: Exception in process_node_anomaly for {node_path}: {error_type} - {error_msg}")
                         import traceback
                         traceback.print_exc()
-                        return node_path, f"Analysis failed: {e}", [], False
+                        return node_path, f"Analysis failed: {error_msg}", [], False
 
             # Process nodes in parallel
             tasks = [process_node_anomaly(i, node) for i, node in enumerate(nodes_with_anomalies, 1)]
