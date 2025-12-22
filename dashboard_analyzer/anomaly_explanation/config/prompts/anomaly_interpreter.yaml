@@ -360,10 +360,76 @@ hierarchical_diagnostic_helpers:
     - Incluye SIEMPRE el segmento al que pertenece cada dato
     - Si un NMA tiene datos en múltiples fuentes (explanatory_drivers + ncs), incluye AMBAS
 
+  step4c_cabin_radio_reflection: |
+    📋 **PASO 4C: REFLEXIÓN POR CABINA-RADIO**
+    
+    **Objetivo:** Generar reflexiones estructuradas para cada cabina-radio del segmento analizado.
+    Estas reflexiones serán usadas directamente en la síntesis ejecutiva final.
+    
+    **⚠️ TABLA DE REFERENCIA (VALORES EXACTOS - NO MODIFICAR):**
+    {CABIN_RADIO_VALUES_TABLE}
+    
+    ---
+    
+    **CABINAS A ANALIZAR:** {CABIN_RADIOS_LIST}
+    
+    ---
+    
+    **INSTRUCCIONES POR TIPO DE CABINA:**
+    
+    **🔹 PARA CABINAS SH (Economy SH, Business SH):**
+    Aplica análisis de agregación IB/YW (como en paso 1):
+    
+    1. Identifica el escenario `(IB, YW | CABINA)`:
+       - **SINERGIA** `(-,- | -)` o `(+,+ | +)`: Ambas compañías en la misma dirección
+       - **CANCELACIÓN** `(+,- | N)` o `(-,+ | N)`: Efectos opuestos que se anulan
+       - **DOMINANCIA** `(+,- | +)` o `(-,+ | -)`: Una compañía impone su signo
+       - **DILUCIÓN** `(+,N | N)` o `(-,N | N)`: Una anomalía se diluye
+       - **TRANSFERENCIA** `(-,N | -)` o `(+,N | +)`: Una compañía arrastra a la cabina
+    
+    2. Formato de salida SH:
+    ```
+    === [CABINA] SH ===
+    • NPS Cabina: [valor de tabla] ([variación de tabla])
+    • Estado: [POSITIVE ANOMALY / NEGATIVE ANOMALY / Normal]
+    • Escenario: [TIPO] (IB [estado], YW [estado] | Cabina [estado])
+    • IB: NPS [valor] ([diff]) - [causa principal 1 línea del CAUSAL EXPLANATION]
+    • YW: NPS [valor] ([diff]) - [causa principal 1 línea del CAUSAL EXPLANATION]
+    • Narrativa de agregación: [Quién domina o cómo se compensan, según el escenario]
+    ```
+    
+    ---
+    
+    **🔹 PARA CABINAS LH (Economy LH, Business LH, Premium LH):**
+    Resumen directo del CAUSAL EXPLANATION (no hay nivel compañía):
+    
+    ```
+    === [CABINA] LH ===
+    • NPS: [valor de tabla] ([variación de tabla])
+    • Estado: [POSITIVE ANOMALY / NEGATIVE ANOMALY / Normal]
+    • Causa principal: [Resumen de 1-2 líneas del CAUSAL EXPLANATION]
+    • Evidencia clave: [Driver SHAP principal + métrica operativa más relevante]
+    • Rutas críticas: [Top 2-3 rutas del análisis]
+    ```
+    
+    ---
+    
+    **⚠️ REGLAS CRÍTICAS:**
+    - USA EXACTAMENTE los valores de la tabla de referencia (NPS y variación)
+    - Para el estado, usa la etiqueta del tree_data: "POSITIVE ANOMALY", "NEGATIVE ANOMALY", o "Normal"
+    - Las causas deben venir del CAUSAL EXPLANATION de cada nodo en el tree_data
+    - NO inventes datos que no estén en el contexto
+    - Si una cabina no tiene CAUSAL EXPLANATION, indica "Sin análisis causal disponible"
+
   step5_executive_synthesis: |
     🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**
     
-    **Enfoque requerido:** Genera un informe ejecutivo NARRATIVO orientado a causas. Usa las evidencias extraídas en el paso anterior (4B).
+    **Enfoque requerido:** Genera un informe ejecutivo NARRATIVO usando:
+    1. Las evidencias extraídas en el paso 4B (para el párrafo introductorio y causas globales)
+    2. Las reflexiones por cabina-radio del paso 4C (para el detalle por cabina)
+
+    **⚠️ DATOS DE REFERENCIA DEL SEGMENTO:**
+    {SEGMENT_REFERENCE}
 
     **⚠️ FORMATO TEAMS (CRÍTICO):**
     - El output FINAL debe ser **HTML** (NO Markdown).
@@ -373,12 +439,12 @@ hierarchical_diagnostic_helpers:
 
     **⚠️ REGLAS DE LENGUAJE EJECUTIVO:**
     - 🚫 **PROHIBICIÓN ESTRICTA:** NUNCA escribas "Young Wings". Usa SIEMPRE **YW**.
-    - NUNCA uses términos técnicos internos: "nodo", "árbol", "NMA", "burbujeo".
+    - NUNCA uses términos técnicos internos: "nodo", "árbol", "NMA", "burbujeo", "escenario".
     - USA "LH" y "SH" (NO "Largo Radio" ni "Corto Radio").
     - **NO ENUMERES las causas**. Nárralas de forma fluida.
     
     **🔢 FORMATO NUMÉRICO (CRÍTICO):**
-    - Redondea TODOS los valores numéricos (NPS, SHAP, OTP, porcentajes) a **1 decimal** máximo.
+    - USA los valores EXACTOS de la tabla de referencia y las reflexiones del paso 4C.
     - **OBLIGATORIO:** Siempre que menciones una variación de NPS, debes incluir primero el valor absoluto actual. 
       *   **Formato:** "NPS de X (Y pts)" o "NPS de X con una variación de Y pts".
       *   Ejemplos: `NPS de 27.9 (+0.6 pts)`; `NPS de 8.7 (–3.7 pts)`.
@@ -390,34 +456,36 @@ hierarchical_diagnostic_helpers:
     `<b>SÍNTESIS EJECUTIVA</b><br>`
     
     **PÁRRAFO INTRODUCTORIO (2-3 líneas):**
-    Debe resumir el resultado GLOBAL mencionando el NPS absoluto y su variación.
-    Ejemplo: "La red global registró un **NPS de 27.9 (+0.6 pts)** con respecto a la semana anterior..."
+    Debe resumir el resultado del SEGMENTO RAÍZ mencionando el NPS absoluto y su variación (de la tabla de referencia).
+    Ejemplo: "La red global registró un <b>NPS de 27.9 (+0.6 pts)</b> con respecto a la semana anterior..."
     
     **DESARROLLO NARRATIVO DE LAS CAUSAS (2-4 párrafos):**
+    Usa las evidencias del paso 4B para explicar las causas principales del segmento raíz.
     Texto corrido. Separa párrafos con `<br><br>`.
     
     **✍️ NARRATIVA DE INCIDENTES (NCS):** 
     No uses listas densas entre paréntesis. Integra los datos en la frase de forma fluida y natural.
     - **⚠️ ESPECIFICIDAD:** NUNCA digas simplemente "otras incidencias" o "limitaciones" si el dato original especifica el motivo (ej: equipaje, puertas, huelgas). DEBES mencionar el motivo concreto.
-    - **Bien:** "La operatividad se vio lastrada por un aumento de **15 cancelaciones** y **9 incidencias de equipaje**, provocadas principalmente por..."
     
     **✍️ DETALLE DE VERBATIMS:**
-    No generalices el feedback. Cita los problemas concretos (ej: asientos que no reclinan, falta de comida, trato descortés) y menciona al menos 1 o 2 rutas donde el feedback fue más intenso.
+    No generalices el feedback. Cita los problemas concretos y menciona al menos 1 o 2 rutas donde el feedback fue más intenso.
 
     **DETALLE POR CABINA (HTML):**
-    Añade `<br><br><b><u>DETALLE POR CABINA</u></b><br>` y luego pega `{CABIN_SECTIONS}` (también en HTML) **SOLAMENTE SI** hay más de una cabina analizada.
-    *   Usa este formato para los títulos de cabina dentro de `{CABIN_SECTIONS}`: `<b><u>ECONOMY SH: [Titular]</u></b><br>`
+    Añade `<br><br><b><u>DETALLE POR CABINA</u></b><br>` **SOLAMENTE SI** hay reflexiones de cabina-radio en el paso 4C.
+    
+    Para cada cabina en las reflexiones del paso 4C, genera un párrafo narrativo:
+    - **Título:** `<b><u>[CABINA]: [Titular descriptivo]</u></b><br>`
+    - **Contenido SH:** Menciona NPS de la cabina, luego el desglose IB/YW con sus valores exactos, y explica la dinámica (quién domina o cómo se compensan)
+    - **Contenido LH:** Menciona NPS de la cabina, la causa principal y las rutas críticas
     
     **⚠️ REGLA DE REDUNDANCIA:** 
     Si el análisis se centra en una única cabina (nodo raíz = Economy/Business), **OMITE la sección 'DETALLE POR CABINA'**.
 
-    {CABIN_SECTIONS}
-
     **⚠️ IMPORTANTE - CONTENIDO:**
-    - **INCLUYE TODOS LOS DATOS:** SHAP, rutas (pos/neg), verbatims, perfiles.
+    - **USA LOS VALORES DE LAS REFLEXIONES 4C:** No busques en el tree_data original, usa los valores ya extraídos.
     - **ATRIBUCIÓN:** Indica siempre a qué segmento pertenece el dato.
     - **TERMINOLOGÍA DE COMPARACIÓN:** Usa la fórmula "con respecto a [TEXTO DEL BASELINE REFERENCE]" (ej: "con respecto a la semana anterior").
-    - **PARA CABINAS SH:** Menciona NPS de IB y YW por separado.
+    - **PARA CABINAS SH:** Menciona NPS de IB y YW por separado usando los valores de la reflexión 4C.
     
     **📊 TRADUCCIÓN DE TERMINOLOGÍA:**
     - "SHAP = X" → "X ppts según Explanatory Drivers"

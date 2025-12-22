@@ -233,13 +233,21 @@ The interpreter uses a sophisticated "bubbling" algorithm to determine how anoma
 │   Identify "Nodo Máximo Afectado" (highest affected node)       │
 │   for each cause based on bubbling rules                        │
 ├─────────────────────────────────────────────────────────────────┤
-│ STEP 4B: EVIDENCE EXTRACTION ⭐ Key Innovation                  │
+│ STEP 4B: EVIDENCE EXTRACTION                                    │
 │   Forces the model to RE-READ the initial context and           │
 │   extract ALL evidence data textually for each NMA              │
 │   (Solves the "data loss in multi-turn" problem)                │
 ├─────────────────────────────────────────────────────────────────┤
+│ STEP 4C: CABIN-RADIO REFLECTION ⭐ Key Innovation               │
+│   Generates structured reflections for each cabin-radio:        │
+│   • SH cabins: IB/YW aggregation analysis (SINERGIA,            │
+│     CANCELACIÓN, DOMINANCIA, DILUCIÓN, TRANSFERENCIA)           │
+│   • LH cabins: Direct summary from causal explanation           │
+│   Pre-extracts exact NPS values to prevent LLM confusion        │
+├─────────────────────────────────────────────────────────────────┤
 │ STEP 5: EXECUTIVE SYNTHESIS                                     │
-│   Generate narrative summary with fresh evidence from 4B        │
+│   Generate narrative using reflections from 4B and 4C           │
+│   (No longer searches raw tree_data - uses pre-extracted values)│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -534,8 +542,22 @@ AI agent prompts are configured via YAML files in `config/prompts/`:
 | 2 | `step2_cabin_level_diagnosis` | Analyze cabin interactions within radios |
 | 3 | `step3_radio_global_diagnosis` | Analyze LH/SH dynamics at Global level |
 | 4 | `step4_nma_identification` | Identify highest affected nodes per cause |
-| 4B | `step4b_evidence_extraction` | **Re-read context & extract all evidence** |
-| 5 | `step5_executive_synthesis` | Generate executive narrative with evidence |
+| 4B | `step4b_evidence_extraction` | Re-read context & extract all evidence |
+| 4C | `step4c_cabin_radio_reflection` | **Generate cabin-radio reflections with exact values** |
+| 5 | `step5_executive_synthesis` | Generate executive narrative using 4B+4C reflections |
+
+**Step 4C Cabin-Radio Reflection Details:**
+
+This step solves the problem of LLM confusing similar segment values (e.g., Business SH vs Business LH) by:
+
+1. **Pre-extracting exact NPS values** from tree_data into a reference table
+2. **Differentiating reflection types by radio:**
+   - **SH cabins (Economy SH, Business SH):** Full IB/YW aggregation analysis
+     - Identifies scenario: SINERGIA, CANCELACIÓN, DOMINANCIA, DILUCIÓN, TRANSFERENCIA
+     - Extracts NPS values for cabin + IB + YW
+   - **LH cabins (Economy LH, Business LH, Premium LH):** Direct summary
+     - Extracts NPS, cause, and key evidence from causal explanation
+3. **Passing structured reflections to Step 5** instead of raw tree_data
 
 ### **🗃️ DAX Query Templates**
 

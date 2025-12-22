@@ -11,7 +11,7 @@ import yaml
 import logging
 import json
 import re
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -484,6 +484,7 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 'step3_radio_global_diagnosis': "RADIO_GLOBAL_DIAGNOSIS",
                 'step4_nma_identification': "NMA_IDENTIFICATION",
                 'step4b_evidence_extraction': "EVIDENCE_EXTRACTION",
+                'step4c_cabin_radio_reflection': "CABIN_RADIO_REFLECTION",
                 'step5_executive_synthesis': "EXECUTIVE_SYNTHESIS"
             }
             
@@ -498,6 +499,16 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 step4_index = step_keys_in_conversation.index('step4_nma_identification')
                 conversation_steps.insert(step4_index + 1, ('step4b_evidence_extraction', "EVIDENCE_EXTRACTION"))
             
+            # Add step4c (cabin-radio reflection) after step4b if segment has cabin-radios
+            cabin_radios = self._get_cabin_radios_for_segment(detected_segment)
+            has_cabin_radios = cabin_radios['sh_cabins'] or cabin_radios['lh_cabins']
+            
+            step_keys_in_conversation = [s[0] for s in conversation_steps]
+            if has_cabin_radios and 'step4b_evidence_extraction' in step_keys_in_conversation and 'step4c_cabin_radio_reflection' not in step_keys_in_conversation:
+                # Find position of step4b and insert step4c after it
+                step4b_index = step_keys_in_conversation.index('step4b_evidence_extraction')
+                conversation_steps.insert(step4b_index + 1, ('step4c_cabin_radio_reflection', "CABIN_RADIO_REFLECTION"))
+            
             # Always add step5 for final synthesis if not already included
             if 'step5_executive_synthesis' not in [s[0] for s in conversation_steps]:
                 conversation_steps.append(('step5_executive_synthesis', "EXECUTIVE_SYNTHESIS"))
@@ -506,16 +517,36 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             
             step_responses = []
             
+            # Pre-extract data for step 4C and 5 placeholders
+            cabin_radio_values_table = ""
+            cabin_radios_list = ""
+            segment_reference = ""
+            
+            if has_cabin_radios:
+                cabin_radio_values_table = self._extract_cabin_radio_values(tree_data, cabin_radios)
+                cabins_list_parts = []
+                if cabin_radios['sh_cabins']:
+                    cabins_list_parts.append(f"**Cabinas SH (con análisis IB/YW):** {', '.join(cabin_radios['sh_cabins'])}")
+                if cabin_radios['lh_cabins']:
+                    cabins_list_parts.append(f"**Cabinas LH (resumen directo):** {', '.join(cabin_radios['lh_cabins'])}")
+                cabin_radios_list = "\n".join(cabins_list_parts)
+            
+            segment_reference = self._extract_segment_reference(tree_data, detected_segment)
+            
             for step_key, step_name in conversation_steps:
                 self.logger.info(f"🔍 Executing diagnostic step: {step_name}")
                 
                 # Get helper prompt for this step
                 helper_prompt = self._get_hierarchical_helper(step_key)
                 
-                # For executive synthesis, replace CABIN_SECTIONS placeholder with dynamic content
+                # For cabin-radio reflection (step 4C), replace placeholders with extracted values
+                if step_key == 'step4c_cabin_radio_reflection':
+                    helper_prompt = helper_prompt.replace('{CABIN_RADIO_VALUES_TABLE}', cabin_radio_values_table)
+                    helper_prompt = helper_prompt.replace('{CABIN_RADIOS_LIST}', cabin_radios_list)
+                
+                # For executive synthesis (step 5), replace placeholders
                 if step_key == 'step5_executive_synthesis':
-                    cabin_sections = self._get_cabin_sections_for_segment(detected_segment)
-                    helper_prompt = helper_prompt.replace('{CABIN_SECTIONS}', cabin_sections)
+                    helper_prompt = helper_prompt.replace('{SEGMENT_REFERENCE}', segment_reference)
                 
                 message_history.create_and_add_message(
                     content=helper_prompt,
@@ -1085,6 +1116,265 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             return 'global'
         else:
             return 'unknown'
+
+    def _get_cabin_radios_for_segment(self, segment: str) -> Dict[str, List[str]]:
+        """
+        Retorna las cabinas-radio que aplican para un segmento dado,
+        clasificadas por tipo de reflexión (SH con análisis IB/YW, LH con resumen directo).
+        
+        Args:
+            segment: El segmento normalizado a analizar
+            
+        Returns:
+            Dict con 'sh_cabins' (requieren análisis IB/YW) y 'lh_cabins' (resumen directo)
+        """
+        # Normalizar el segmento
+        segment = self._normalize_segment_name(segment)
+        
+        cabin_radio_mapping = {
+            'Global': {
+                'sh_cabins': ['Economy SH', 'Business SH'],
+                'lh_cabins': ['Economy LH', 'Business LH', 'Premium LH']
+            },
+            'SH': {
+                'sh_cabins': ['Economy SH', 'Business SH'],
+                'lh_cabins': []
+            },
+            'LH': {
+                'sh_cabins': [],
+                'lh_cabins': ['Economy LH', 'Business LH', 'Premium LH']
+            },
+            # Cabinas individuales no necesitan reflexión por cabina-radio (ya son el nivel más bajo)
+            'Economy SH': {'sh_cabins': [], 'lh_cabins': []},
+            'Business SH': {'sh_cabins': [], 'lh_cabins': []},
+            'Premium SH': {'sh_cabins': [], 'lh_cabins': []},
+            'Economy LH': {'sh_cabins': [], 'lh_cabins': []},
+            'Business LH': {'sh_cabins': [], 'lh_cabins': []},
+            'Premium LH': {'sh_cabins': [], 'lh_cabins': []},
+            'IB': {'sh_cabins': [], 'lh_cabins': []},
+            'YW': {'sh_cabins': [], 'lh_cabins': []},
+        }
+        
+        return cabin_radio_mapping.get(segment, {'sh_cabins': [], 'lh_cabins': []})
+
+    def _normalize_segment_name(self, segment: str) -> str:
+        """
+        Normaliza el nombre del segmento a un formato estándar.
+        
+        Args:
+            segment: El segmento en cualquier formato
+            
+        Returns:
+            El nombre normalizado del segmento
+        """
+        if segment in ['Global', 'Global/']:
+            return 'Global'
+        elif segment in ['Global/SH', 'Short Haul (SH)', 'SH']:
+            return 'SH'
+        elif segment in ['Global/LH', 'Long Haul (LH)', 'LH']:
+            return 'LH'
+        elif segment in ['Global/SH/Economy', 'SH Economy']:
+            return 'Economy SH'
+        elif segment in ['Global/SH/Business', 'SH Business']:
+            return 'Business SH'
+        elif segment in ['Global/SH/Premium', 'SH Premium']:
+            return 'Premium SH'
+        elif segment in ['Global/LH/Economy', 'LH Economy']:
+            return 'Economy LH'
+        elif segment in ['Global/LH/Business', 'LH Business']:
+            return 'Business LH'
+        elif segment in ['Global/LH/Premium', 'LH Premium']:
+            return 'Premium LH'
+        elif 'IB' in segment:
+            return 'IB'
+        elif 'YW' in segment:
+            return 'YW'
+        return segment
+
+    def _extract_cabin_radio_values(self, tree_data: str, cabin_radios: Dict[str, List[str]]) -> str:
+        """
+        Extrae los valores exactos de NPS para las cabinas-radio especificadas del tree_data.
+        
+        Args:
+            tree_data: Los datos del árbol con las explicaciones causales
+            cabin_radios: Dict con 'sh_cabins' y 'lh_cabins'
+            
+        Returns:
+            Tabla markdown con los valores exactos de cada cabina y sus compañías (para SH)
+        """
+        lines = []
+        all_cabins = cabin_radios['sh_cabins'] + cabin_radios['lh_cabins']
+        
+        if not all_cabins:
+            return "No hay cabinas-radio para analizar en este segmento."
+        
+        # Tabla principal de cabinas
+        lines.append("**VALORES DE CABINAS-RADIO:**")
+        lines.append("| Cabina | NPS Actual | Variación | Estado |")
+        lines.append("|--------|------------|-----------|--------|")
+        
+        for cabin in all_cabins:
+            nps, diff, state = self._parse_cabin_values_from_tree(tree_data, cabin)
+            lines.append(f"| {cabin} | {nps} | {diff} | {state} |")
+        
+        # Tabla adicional de compañías para SH
+        if cabin_radios['sh_cabins']:
+            lines.append("")
+            lines.append("**VALORES DE COMPAÑÍAS (para cabinas SH):**")
+            lines.append("| Cabina | Compañía | NPS Actual | Variación | Estado |")
+            lines.append("|--------|----------|------------|-----------|--------|")
+            
+            for cabin in cabin_radios['sh_cabins']:
+                # Extraer IB
+                ib_nps, ib_diff, ib_state = self._parse_company_values_from_tree(tree_data, cabin, 'IB')
+                lines.append(f"| {cabin} | IB | {ib_nps} | {ib_diff} | {ib_state} |")
+                
+                # Extraer YW
+                yw_nps, yw_diff, yw_state = self._parse_company_values_from_tree(tree_data, cabin, 'YW')
+                lines.append(f"| {cabin} | YW | {yw_nps} | {yw_diff} | {yw_state} |")
+        
+        return "\n".join(lines)
+
+    def _parse_cabin_values_from_tree(self, tree_data: str, cabin: str) -> Tuple[str, str, str]:
+        """
+        Parsea los valores de NPS de una cabina específica del tree_data.
+        
+        Args:
+            tree_data: Los datos del árbol
+            cabin: El nombre de la cabina (ej: 'Economy SH', 'Business LH')
+            
+        Returns:
+            Tupla (nps_actual, variacion, estado)
+        """
+        # Mapeo de nombres de cabina a patrones en el tree_data
+        cabin_path_mapping = {
+            'Economy SH': r'(?:Global/SH/Economy|Economy)[:\s]+(?:NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\(([+-]?\d+\.?\d*)\s*pts?\).*?NPS:\s*([\d.]+)',
+            'Business SH': r'(?:Global/SH/Business|Business)[:\s]+(?:NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\(([+-]?\d+\.?\d*)\s*pts?\).*?NPS:\s*([\d.]+)',
+            'Economy LH': r'(?:Global/LH/Economy|Economy)[:\s]+(?:NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\(([+-]?\d+\.?\d*)\s*pts?\).*?NPS:\s*([\d.]+)',
+            'Business LH': r'(?:Global/LH/Business|Business)[:\s]+(?:NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\(([+-]?\d+\.?\d*)\s*pts?\).*?NPS:\s*([\d.]+)',
+            'Premium LH': r'(?:Global/LH/Premium|Premium)[:\s]+(?:NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\(([+-]?\d+\.?\d*)\s*pts?\).*?NPS:\s*([\d.]+)',
+        }
+        
+        # Buscar el patrón específico para la cabina
+        # Primero intentamos encontrar la línea completa de la cabina
+        if 'SH' in cabin:
+            radio_section = 'Short Haul|SH'
+            cabin_type = cabin.replace(' SH', '')
+        else:
+            radio_section = 'Long Haul|LH'
+            cabin_type = cabin.replace(' LH', '')
+        
+        # Buscar la línea de la cabina en el tree_data
+        # Formato típico: "Economy: NEGATIVE ANOMALY (-4.4 pts) (NPS: 31.91... vs baseline: 36.27...)"
+        pattern = rf'{cabin_type}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
+        
+        # Buscar en el contexto del radio correcto
+        lines = tree_data.split('\n')
+        in_correct_radio = False
+        
+        for i, line in enumerate(lines):
+            # Detectar si estamos en el radio correcto
+            if 'SH' in cabin and ('Short Haul' in line or 'SH' in line):
+                in_correct_radio = True
+            elif 'LH' in cabin and ('Long Haul' in line or 'LH' in line):
+                in_correct_radio = True
+            
+            if in_correct_radio:
+                match = re.search(pattern, line, re.IGNORECASE)
+                if match:
+                    nps = float(match.group('nps'))
+                    diff = float(match.group('diff'))
+                    state = match.group('state')
+                    return f"{nps:.1f}", f"{diff:+.1f}", state
+        
+        # Fallback: buscar sin restricción de radio
+        match = re.search(pattern, tree_data, re.IGNORECASE)
+        if match:
+            nps = float(match.group('nps'))
+            diff = float(match.group('diff'))
+            state = match.group('state')
+            return f"{nps:.1f}", f"{diff:+.1f}", state
+        
+        return "N/A", "N/A", "N/A"
+
+    def _parse_company_values_from_tree(self, tree_data: str, cabin: str, company: str) -> Tuple[str, str, str]:
+        """
+        Parsea los valores de NPS de una compañía específica dentro de una cabina del tree_data.
+        
+        Args:
+            tree_data: Los datos del árbol
+            cabin: El nombre de la cabina (ej: 'Economy SH', 'Business SH')
+            company: 'IB' o 'YW'
+            
+        Returns:
+            Tupla (nps_actual, variacion, estado)
+        """
+        # Formato típico: "IB: NEGATIVE ANOMALY (-7.5 pts) (NPS: 27.73... vs baseline: 35.25...)"
+        pattern = rf'{company}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
+        
+        # Buscar en el contexto de la cabina correcta
+        cabin_type = cabin.replace(' SH', '').replace(' LH', '')
+        lines = tree_data.split('\n')
+        in_correct_cabin = False
+        
+        for i, line in enumerate(lines):
+            # Detectar si estamos en la cabina correcta
+            if cabin_type in line and ('ANOMALY' in line or 'Normal' in line):
+                in_correct_cabin = True
+            # Detectar si salimos de la cabina (otra cabina empieza)
+            elif in_correct_cabin and re.search(r'(Economy|Business|Premium)[:\s]+(NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)', line) and cabin_type not in line:
+                in_correct_cabin = False
+            
+            if in_correct_cabin:
+                match = re.search(pattern, line, re.IGNORECASE)
+                if match:
+                    nps = float(match.group('nps'))
+                    diff = float(match.group('diff'))
+                    state = match.group('state')
+                    return f"{nps:.1f}", f"{diff:+.1f}", state
+        
+        # Fallback: buscar en todo el documento
+        match = re.search(pattern, tree_data, re.IGNORECASE)
+        if match:
+            nps = float(match.group('nps'))
+            diff = float(match.group('diff'))
+            state = match.group('state')
+            return f"{nps:.1f}", f"{diff:+.1f}", state
+        
+        return "N/A", "N/A", "N/A"
+
+    def _extract_segment_reference(self, tree_data: str, segment: str) -> str:
+        """
+        Extrae los valores de referencia del segmento raíz del tree_data.
+        
+        Args:
+            tree_data: Los datos del árbol
+            segment: El segmento raíz normalizado
+            
+        Returns:
+            String con los valores de referencia del segmento
+        """
+        segment_norm = self._normalize_segment_name(segment)
+        
+        # Buscar el patrón del segmento raíz
+        # Formato: "Global: NEGATIVE ANOMALY (-3.6 pts) (NPS: 24.99... vs baseline: 28.61...)"
+        if segment_norm == 'Global':
+            pattern = r'Global[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
+        elif segment_norm in ['SH', 'LH']:
+            pattern = rf'(?:Short Haul|Long Haul|{segment_norm})[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
+        else:
+            # Para cabinas específicas
+            cabin_type = segment_norm.replace(' SH', '').replace(' LH', '')
+            pattern = rf'{cabin_type}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?\)\s*\(NPS:\s*(?P<nps>[\d.]+)'
+        
+        match = re.search(pattern, tree_data, re.IGNORECASE)
+        if match:
+            nps = float(match.group('nps'))
+            diff = float(match.group('diff'))
+            state = match.group('state')
+            return f"• Segmento: {segment_norm}\n• NPS: {nps:.1f} ({diff:+.1f} pts)\n• Estado: {state}"
+        
+        return f"• Segmento: {segment_norm}\n• NPS: N/A\n• Estado: N/A"
 
     def _get_cabin_sections_for_segment(self, segment: str) -> str:
         """
