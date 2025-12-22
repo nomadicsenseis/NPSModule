@@ -410,8 +410,8 @@ hierarchical_diagnostic_helpers:
     • NPS Cabina: [valor de tabla] ([variación de tabla])
     • Estado: [POSITIVE ANOMALY / NEGATIVE ANOMALY / Normal]
     • Escenario: [TIPO] (IB [estado], YW [estado] | Cabina [estado])
-    • IB: NPS [valor] ([diff]) - [causa principal 1 línea del CAUSAL EXPLANATION]
-    • YW: NPS [valor] ([diff]) - [causa principal 1 línea del CAUSAL EXPLANATION]
+    • IB: NPS [valor] ([diff]) - [explicación del CAUSAL EXPLANATION]
+    • YW: NPS [valor] ([diff]) - [explicación del del CAUSAL EXPLANATION]
     • Narrativa de agregación: [Quién domina o cómo se compensan, según el escenario]
     • Rutas críticas: [Según escenario - ver regla abajo]
     • Perfiles reactivos: [Según escenario - ver regla abajo]
@@ -534,7 +534,7 @@ hierarchical_diagnostic_helpers:
           *   **Narrativa:** Contrasta las dos realidades. "El resultado estable de la cabina oculta que IB cayó por [causa IB] mientras YW subió por [causa YW]..."
       
       *   **Si es DOMINANCIA:**
-          *   **Fuente:** Usa la explicación del **nodo cabina (padre)** para el impacto global, y matiza con los datos de los **hijos**.
+          *   **Fuente:** Usa la explicación del **nodo cabina (padre)** para el impacto global, y matiza con las explicaciones de los **hijos**.
           *   **Narrativa:** Explica cómo el hijo dominante impuso su resultado al padre. "La caída de la cabina a X pts es un reflejo directo del desplome de IB (NPS Y) por [causa], que anuló la estabilidad de YW (NPS Z)."
     
     **⚠️ REGLA DE FLUIDEZ Y COMPLETITUD:** 
