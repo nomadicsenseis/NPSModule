@@ -884,8 +884,18 @@ class CausalExplanationAgent:
             self.logger.error(f"❌ Error in single period operative data tool: {type(e).__name__}: {str(e)}")
             return f"ERROR in operative data tool: {type(e).__name__}: {str(e)}"
     
-    async def _collect_operative_data_with_query_tracking(self, node_path: str, target_date: datetime, comparison_days: int = 7, use_flexible: bool = True, comparison_start_date: datetime = None, comparison_end_date: datetime = None) -> pd.DataFrame:
-        """Wrapper to collect operative data while tracking DAX queries"""
+    async def _collect_operative_data_with_query_tracking(self, node_path: str, target_date: datetime, comparison_days: int = 7, use_flexible: bool = True, comparison_start_date: datetime = None, comparison_end_date: datetime = None, current_start_date: datetime = None) -> pd.DataFrame:
+        """Wrapper to collect operative data while tracking DAX queries
+        
+        Args:
+            node_path: Node path for analysis
+            target_date: End date for the current period (analysis end date)
+            comparison_days: Number of days for data collection (used only if current_start_date not provided)
+            use_flexible: Whether to use flexible aggregation query
+            comparison_start_date: Start date of the comparison period
+            comparison_end_date: End date of the comparison period
+            current_start_date: Start date of the current period (if not provided, calculated from comparison_days)
+        """
         try:
             # Get filters for this node
             cabins, companies, hauls = self.pbi_collector._get_node_filters(node_path)
@@ -897,8 +907,14 @@ class CausalExplanationAgent:
                 comp_end = comparison_end_date or (self.comparison_end_date if hasattr(self, 'comparison_end_date') else None)
                 
                 if comp_start and comp_end:
-                    # Use simplified vs Sel. Period query that calculates differences directly in DAX
-                    start_dt = target_date - timedelta(days=comparison_days - 1)  # Calculate current period start
+                    # Use the provided current_start_date if available, otherwise calculate from comparison_days
+                    if current_start_date:
+                        start_dt = current_start_date
+                        self.logger.info(f"🎯 Using provided current_start_date: {start_dt.strftime('%Y-%m-%d')}")
+                    else:
+                        start_dt = target_date - timedelta(days=comparison_days - 1)
+                        self.logger.warning(f"⚠️ current_start_date not provided, calculating from comparison_days: {start_dt.strftime('%Y-%m-%d')}")
+                    
                     self.logger.info(f"🎯 USING vs Sel. Period operative query!")
                     query = self.pbi_collector._get_operative_vs_sel_period_query(
                         cabins, companies, hauls,
@@ -2468,11 +2484,12 @@ class CausalExplanationAgent:
                 extended_days = comparison_days
             
             # Collect operational data using wrapper to track DAX queries
-            # Pass the calculated comparison dates if we have them
+            # Pass the calculated comparison dates AND the current period start date
             operational_data = await self._collect_operative_data_with_query_tracking(
                 node_path, target_dt, extended_days, 
                 comparison_start_date=comparison_start_date_for_analyzer,
-                comparison_end_date=comparison_end_date_for_analyzer
+                comparison_end_date=comparison_end_date_for_analyzer,
+                current_start_date=start_dt  # Pass the actual start date of the current period
             )
             
             if operational_data.empty:
