@@ -29,13 +29,10 @@ SWITCH(true(),
     SELECTEDVALUE(Cabin_Master[Cabin_Show])="Premium EC",lf_premium_ec)*100
 
     MEASURE 'Measure'[Misconex_CATIA] =
-if (DISTINCTCOUNT(Haul_Master[Haul_Aggr])>1 && DISTINCTCOUNT(Cabin_Master[Cabin_Show])>1
-,divide(sum(customer_connections[flag_pax_misc]),sum(customer_connections[flag_pax_conex]))*100, "")
+        DIVIDE(SUM(customer_connections[flag_pax_misc]), SUM(customer_connections[flag_pax_conex])) * 100
  
     MEASURE 'Measure'[Mishandling_CATIA] =
-var _misha=divide(sum(f_mishandling[bags]),sum(f_checkin[num_pax_flown]))*1000
-return
-if (DISTINCTCOUNT(Haul_Master[Haul_Aggr])>1 && DISTINCTCOUNT(Cabin_Master[Cabin_Show])>1,_misha,"")
+        DIVIDE(SUM(f_mishandling[bags]), SUM(f_checkin[num_pax_flown])) * 1000
 
 	VAR __DS0Core =
         CALCULATETABLE(SUMMARIZE(
