@@ -98,15 +98,24 @@ step2_integrate_final:
     **TU TAREA:**
     
     1. **COPIA** la síntesis ejecutiva semanal PALABRA POR PALABRA (no cambies nada) salvo por el redondeo a un decimal.
-    2. **AÑADE** al final de cada sección de cabina el párrafo de contexto diario correspondiente
+    2. **AÑADE** el párrafo de contexto diario correspondiente:
+       - **GLOBAL**: Añade el párrafo de GLOBAL justo DESPUÉS del párrafo introductorio de la síntesis ejecutiva (antes de "DETALLE POR CABINA")
+       - **Cabinas**: Añade cada párrafo al final de su sección correspondiente
     3. **MANTÉN** el formato (negritas, saltos de línea, emojis)
     
     **ESTRUCTURA ESPERADA:**
     ```
-    **ECONOMY LH: Deterioro por Cancelaciones**
+    <b>SÍNTESIS EJECUTIVA</b>
+    [Párrafo introductorio semanal - NPS global, tendencias generales]
+    
+    [PÁRRAFO DE CONTEXTO DIARIO DE **GLOBAL** - "A nivel diario, ..."]
+    
+    <b><u>DETALLE POR CABINA</u></b>
+    
+    <b><u>ECONOMY SH: Deterioro por Cancelaciones</u></b>
     [PÁRRAFO SEMANAL INTACTO - palabra por palabra]
     
-    [PÁRRAFO DE CONTEXTO DIARIO - del input anterior]
+    [PÁRRAFO DE CONTEXTO DIARIO - "A nivel diario, ..."]
     ```
 
     **REGLAS ESTRICTAS:**
@@ -114,9 +123,11 @@ step2_integrate_final:
     ❌ NO cambies cifras, ppts, rutas o perfiles salvo por el redondeo a un decimal
     ❌ NO resumas ni condenses
     ❌ NO añadas información que no esté en los inputs
+    ❌ NO omitas el párrafo de GLOBAL - es OBLIGATORIO incluirlo después del párrafo introductorio
     
     ✅ Copia el semanal exactamente
-    ✅ Añade cada párrafo diario al final de su sección correspondiente (GLOBAL, ECONOMY SH, BUSINESS SH, ECONOMY LH, BUSINESS LH, PREMIUM LH)
+    ✅ Añade el contexto diario de GLOBAL después del párrafo introductorio
+    ✅ Añade cada párrafo diario de cabina al final de su sección
     ✅ Mantén formato (negritas, saltos de línea)
     ✅ Preserva la terminología de comparación del interpreter
 
@@ -232,8 +243,11 @@ step4_generate_adaptive_card:
     - **DATOS:** Extrae el NPS, la variación, el resumen semanal y el contexto diario para GLOBAL y las 5 cabinas.
     - **YW:** Si aparece "Young Wings", sustitúyelo por **YW**.
     - **SIN DATOS:** Si una cabina no tiene información en el informe, pon "N/A" en los valores y "Sin datos relevantes para este periodo" en el detalle.
+    - **FECHAS:** Usa EXACTAMENTE el período de fechas proporcionado. NO inventes ni cambies el año.
 
   input_template: |
+    **PERÍODO DE ANÁLISIS:** {date_range}
+
     **INFORME FINAL PARA MAPEAR:**
     {full_report}
 
@@ -249,7 +263,7 @@ step4_generate_adaptive_card:
           "type": "Container",
           "items": [
             {{ "type": "TextBlock", "text": "Reporte de NPS y Variaciones", "weight": "Bolder", "size": "Large", "color": "Accent" }},
-            {{ "type": "TextBlock", "text": "Período: [Fechas del informe] (vs semana anterior)", "isSubtle": true, "spacing": "None" }}
+            {{ "type": "TextBlock", "text": "Período: {date_range} (vs semana anterior)", "isSubtle": true, "spacing": "None" }}
           ]
         }},
         {{

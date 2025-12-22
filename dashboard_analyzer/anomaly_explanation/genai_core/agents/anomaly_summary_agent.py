@@ -362,7 +362,8 @@ class AnomalySummaryAgent:
                 self.logger.info(f"✅ Generated comprehensive summary: weekly + {len(daily_single_analyses)} daily analyses")
                 
                 # STEP 2: Generate Adaptive Card
-                adaptive_card_json = await self._generate_adaptive_card(comprehensive_response)
+                date_range = self._build_date_range_string(daily_single_analyses)
+                adaptive_card_json = await self._generate_adaptive_card(comprehensive_response, date_range)
                 
                 # Combine synthesis and adaptive card
                 final_output = f"{comprehensive_response}\n\n---ADAPTIVE_CARD_JSON---\n\n{adaptive_card_json}"
@@ -578,9 +579,11 @@ class AnomalySummaryAgent:
             # =========================================================
             # STEP 4: Generate Adaptive Card
             # =========================================================
-            adaptive_card_json = await self._generate_adaptive_card(polished_report)
+            # Build date range from daily analyses for accurate display
+            date_range = self._build_date_range_string(daily_single_analyses)
+            adaptive_card_json = await self._generate_adaptive_card(polished_report, date_range)
             
-            self.logger.info(f"✅ Step 4 complete: Adaptive Card generated")
+            self.logger.info(f"✅ Step 4 complete: Adaptive Card generated (date_range: {date_range})")
 
             # =========================================================
             # Combine synthesis and adaptive card
@@ -741,6 +744,71 @@ class AnomalySummaryAgent:
         self.logger.info(f"   ✅ Extracted executive synthesis: {len(synthesis)} chars (from {len(weekly_analysis)} total)")
         
         return synthesis
+    
+    def _build_date_range_string(self, daily_single_analyses: List[Dict[str, Any]]) -> str:
+        """
+        Build a human-readable date range string from daily analyses.
+        
+        Args:
+            daily_single_analyses: List of daily analysis dicts with 'date' key
+            
+        Returns:
+            String like "9 Dic - 15 Dic 2025"
+        """
+        try:
+            if not daily_single_analyses:
+                return datetime.now().strftime("%d %b %Y")
+            
+            # Extract dates from daily analyses
+            dates = []
+            for analysis in daily_single_analyses:
+                date_str = analysis.get('date', '')
+                if date_str:
+                    # Try to parse the date (format: YYYY-MM-DD or similar)
+                    try:
+                        if isinstance(date_str, str):
+                            # Handle common formats
+                            for fmt in ['%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y']:
+                                try:
+                                    dt = datetime.strptime(date_str, fmt)
+                                    dates.append(dt)
+                                    break
+                                except ValueError:
+                                    continue
+                    except Exception:
+                        pass
+            
+            if not dates:
+                return datetime.now().strftime("%d %b %Y")
+            
+            # Sort and get min/max
+            dates.sort()
+            start_date = dates[0]
+            end_date = dates[-1]
+            
+            # Spanish month abbreviations
+            months_es = {
+                1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
+                7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'
+            }
+            
+            start_month = months_es.get(start_date.month, start_date.strftime('%b'))
+            end_month = months_es.get(end_date.month, end_date.strftime('%b'))
+            
+            if start_date.year == end_date.year:
+                if start_date.month == end_date.month:
+                    # Same month: "9 - 15 Dic 2025"
+                    return f"{start_date.day} - {end_date.day} {end_month} {end_date.year}"
+                else:
+                    # Different months: "30 Nov - 6 Dic 2025"
+                    return f"{start_date.day} {start_month} - {end_date.day} {end_month} {end_date.year}"
+            else:
+                # Different years: "28 Dic 2024 - 3 Ene 2025"
+                return f"{start_date.day} {start_month} {start_date.year} - {end_date.day} {end_month} {end_date.year}"
+                
+        except Exception as e:
+            self.logger.warning(f"Could not build date range: {e}")
+            return datetime.now().strftime("%d %b %Y")
     
     def _parse_weekly_sections(self, weekly_analysis: str) -> Dict[str, str]:
         """
@@ -1110,15 +1178,25 @@ PERÍODO {period} ({date_range}):
             self.logger.error(f"❌ Failed to export summary conversation: {e}")
             return ""
 
-    async def _generate_adaptive_card(self, report_text: str) -> str:
-        """Helper to generate Adaptive Card JSON from a report text"""
+    async def _generate_adaptive_card(self, report_text: str, date_range: str = None) -> str:
+        """Helper to generate Adaptive Card JSON from a report text
+        
+        Args:
+            report_text: The full report text to convert to Adaptive Card
+            date_range: Date range string (e.g., "9 Dic - 15 Dic 2025")
+        """
         try:
             self.logger.info("📋 Generating Adaptive Card JSON...")
+            
+            # Build date range if not provided
+            if not date_range:
+                date_range = datetime.now().strftime("%d %b %Y")
             
             step4_config = self.config.get('step4_generate_adaptive_card', {})
             step4_system = step4_config.get('system_prompt', '')
             step4_input = step4_config.get('input_template', '').format(
-                full_report=report_text
+                full_report=report_text,
+                date_range=date_range
             )
             
             message_history = MessageHistory()
