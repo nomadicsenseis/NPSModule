@@ -244,6 +244,8 @@ step4_generate_adaptive_card:
     - **YW:** Si aparece "Young Wings", sustitúyelo por **YW**.
     - **SIN DATOS:** Si una cabina no tiene información en el informe, pon "N/A" en los valores y "Sin datos relevantes para este periodo" en el detalle.
     - **FECHAS:** Usa EXACTAMENTE el período de fechas proporcionado. NO inventes ni cambies el año.
+    - **HTML EN TEXTO:** Dentro de los campos de texto ("text"), utiliza etiquetas HTML (<b>, <u>, <br>) para dar formato al contenido (especialmente métricas y rutas), igual que en la síntesis. 
+    - **COMILLAS Y ESCAPE:** 🚫 **PROHIBIDO** el uso de comillas dobles (") dentro de los valores de texto para evitar problemas de escape en el JSON. Usa comillas simples (') si es necesario. Asegúrate de que el JSON resultante sea un objeto válido y limpio, sin comillas escapadas innecesariamente.
 
   input_template: |
     **PERÍODO DE ANÁLISIS:** {date_range}
@@ -299,9 +301,9 @@ step4_generate_adaptive_card:
             "type": "AdaptiveCard",
             "body": [
               {{ "type": "TextBlock", "text": "Análisis Semanal: GLOBAL", "weight": "Bolder", "color": "Accent" }},
-              {{ "type": "TextBlock", "text": "[Párrafo Síntesis Global]", "wrap": true }},
+              {{ "type": "TextBlock", "text": "[Párrafo Síntesis Global - USAR HTML <b>, <u>, <br>]", "wrap": true }},
               {{ "type": "TextBlock", "text": "Contexto Diario:", "weight": "Bolder", "spacing": "Medium" }},
-              {{ "type": "TextBlock", "text": "[Párrafo Diario Global]", "wrap": true }}
+              {{ "type": "TextBlock", "text": "[Párrafo Diario Global - USAR HTML <b>, <u>, <br>]", "wrap": true }}
             ],
             "version": "1.5"
           }}
