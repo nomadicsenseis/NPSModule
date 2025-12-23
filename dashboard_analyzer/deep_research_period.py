@@ -251,7 +251,7 @@ async def generate_explanations(analysis_data: dict, causal_filter: str = "vs L7
                         anomaly_state=state,
                         causal_filter=causal_filter
                     ),
-                    timeout=600.0  # 10 minute timeout for comprehensive analysis
+                    timeout=3000.0  # 50 minute timeout for comprehensive analysis
                 )
                 
                 # Display the explanation in a structured way
@@ -530,7 +530,7 @@ async def process_single_period(
                 
                 ai_interpretation = await asyncio.wait_for(
                     ai_agent.interpret_anomaly_tree(ai_input, date_param, segment),
-                    timeout=600.0
+                    timeout=3000.0  # Increased to 50 min for complex interpretations
                 )
                 print(f"      🤖 Period {period}: AI interpretation completed")
                 
@@ -2127,7 +2127,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
                 
                 ai_interpretation = await asyncio.wait_for(
                     ai_agent.interpret_anomaly_tree(ai_input, date_param, segment),
-                    timeout=600.0
+                    timeout=3000.0  # Increased to 50 min for complex interpretations
                 )
                 
                 print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
@@ -2337,7 +2337,7 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
                             start_date=start_date,
                             end_date=end_date
                         ),
-                        timeout=600.0
+                        timeout=3000.0  # Increased timeout for complex synthesis
                     )
                     
                     explanations[node_path] = explanation
@@ -2380,7 +2380,7 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
                 ai_interpretation = await asyncio.wait_for(
                     ai_agent.interpret_anomaly_tree(ai_input, 
                                                    start_date.strftime('%Y-%m-%d') if date_range else None, segment),
-                    timeout=600.0
+                    timeout=3000.0  # Increased timeout for complex synthesis
                 )
                 
                 print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")

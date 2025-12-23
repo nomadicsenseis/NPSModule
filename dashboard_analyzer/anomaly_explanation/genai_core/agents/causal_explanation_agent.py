@@ -36,7 +36,7 @@ from dashboard_analyzer.anomaly_explanation.genai_core.llms.aws_llm import AWSLL
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../..'))
 from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
-from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, load_aws_credentials_from_temp_file, get_agent_conversations_folder
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, get_agent_conversations_folder
 from dashboard_analyzer.anomaly_explanation.genai_core.message_history import MessageHistory
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.agent import Agent
 
@@ -544,16 +544,16 @@ class CausalExplanationAgent:
         return None
     
     def _init_ncs_collector(self):
-        """Initialize NCS collector with local environment"""
+        """Initialize NCS collector using agent's environment setting"""
         try:
-            temp_creds_file = str(Path.cwd() / "temp_aws_credentials.env")
-            collector = NCSDataCollector(temp_env_file=temp_creds_file, environment="prod")
-            self.logger.info("✅ NCS collector initialized with production environment")
+            # Use self.environment to ensure consistency - credentials handled by unified resolver
+            collector = NCSDataCollector(environment=self.environment)
+            self.logger.info(f"✅ NCS collector initialized with {self.environment} environment")
             return collector
         except Exception as e:
             self.logger.error(f"Error initializing NCS collector: {e}")
-            self.logger.warning("Using fallback NCS collector without temp credentials")
-            return NCSDataCollector(environment="prod")
+            self.logger.warning(f"Using fallback NCS collector (mode: {self.environment})")
+            return NCSDataCollector(environment=self.environment)
     
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
@@ -583,9 +583,11 @@ class CausalExplanationAgent:
         )
     
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
-        """Create AWS Bedrock LLM instance."""
-        # Load credentials from temp_aws_credentials.env (uses sbx_* credentials)
-        creds = load_aws_credentials_from_temp_file()
+        """Create AWS Bedrock LLM instance using unified credential strategy."""
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.aws_session import get_aws_credentials
+        
+        # Get credentials based on current environment (local vs prod)
+        creds = get_aws_credentials(environment=self.environment)
         
         return AWSLLM(
             llm_type=llm_type,
@@ -1197,8 +1199,7 @@ class CausalExplanationAgent:
             
             # Import and create fresh NCS collector (same as comparative mode)
             from ....data_collection.ncs_collector import NCSDataCollector
-            temp_creds_file = str(Path.cwd() / "temp_aws_credentials.env")
-            ncs_collector = NCSDataCollector(temp_env_file=temp_creds_file)
+            ncs_collector = NCSDataCollector(environment=self.environment)
             
             # Get NCS data for the specific period only
             ncs_data = ncs_collector.collect_ncs_data_for_date_range(
@@ -3456,9 +3457,8 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
             # Import NCS collector
             from ....data_collection.ncs_collector import NCSDataCollector
             
-            # Initialize NCS collector with temp credentials
-            temp_creds_file = str(Path.cwd() / "temp_aws_credentials.env")
-            ncs_collector = NCSDataCollector(temp_env_file=temp_creds_file)
+            # Initialize NCS collector with correct environment
+            ncs_collector = NCSDataCollector(environment=self.environment)
             
             # Calculate comparison period dates if temporal comparison is enabled
             comparison_data = None

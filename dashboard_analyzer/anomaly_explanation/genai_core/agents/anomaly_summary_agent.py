@@ -20,7 +20,7 @@ import importlib.resources
 from ..agents.agent import Agent
 from ..llms.openai_llm import OpenAiLLM
 from ..llms.aws_llm import AWSLLM
-from ..utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, load_aws_credentials_from_temp_file, get_agent_conversations_folder
+from ..utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, get_agent_conversations_folder
 from ..message_history import MessageHistory
 
 # Import S3 uploader
@@ -179,9 +179,11 @@ class AnomalySummaryAgent:
         )
     
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
-        """Create AWS Bedrock LLM instance."""
-        # Load credentials from temp_aws_credentials.env (uses sbx_* credentials)
-        creds = load_aws_credentials_from_temp_file()
+        """Create AWS Bedrock LLM instance using unified credential strategy."""
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.aws_session import get_aws_credentials
+        
+        # Get credentials based on current environment (local vs prod)
+        creds = get_aws_credentials(environment=self.environment)
         
         return AWSLLM(
             llm_type=llm_type,

@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Global model configuration - change this to switch all agents at once
-DEFAULT_LLM_TYPE = "O4_MINI"  # Options: O4_MINI, CLAUDE_SONNET_4, O3, CLAUDE_SONNET_4_5, etc.
+DEFAULT_LLM_TYPE = "CLAUDE_SONNET_4_5"  # Options: O4_MINI, CLAUDE_SONNET_4, O3, CLAUDE_SONNET_4_5, etc.
 
 
 def load_aws_credentials_from_temp_file(temp_env_file: str = None) -> dict:

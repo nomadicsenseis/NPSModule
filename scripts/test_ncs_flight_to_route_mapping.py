@@ -55,7 +55,7 @@ async def _run(start: str, end: str, sample: int) -> int:
     end_dt = datetime.strptime(end, "%Y-%m-%d")
 
     print(f"Loading NCS from {start} to {end} ...")
-    ncs = NCSDataCollector(temp_env_file="/app/temp_aws_credentials.env").collect_ncs_data_for_date_range(start_dt, end_dt)
+    ncs = NCSDataCollector(environment="local").collect_ncs_data_for_date_range(start_dt, end_dt)
     print(f"NCS rows: {len(ncs)} | columns: {list(ncs.columns)}")
     if ncs.empty:
         return 0
