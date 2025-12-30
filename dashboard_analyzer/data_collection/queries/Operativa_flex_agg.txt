@@ -29,16 +29,30 @@ SWITCH(true(),
     SELECTEDVALUE(Cabin_Master[Cabin_Show])="Premium EC",lf_premium_ec)*100
 
     MEASURE 'Measure'[Misconex_CATIA] =
-        DIVIDE(SUM(customer_connections[flag_pax_misc]), SUM(customer_connections[flag_pax_conex])) * 100
+        CALCULATE(
+            DIVIDE(SUM(customer_connections[flag_pax_misc]), SUM(customer_connections[flag_pax_conex])) * 100,
+            REMOVEFILTERS(Cabin_Master),
+            REMOVEFILTERS(Haul_Master)
+        )
  
     MEASURE 'Measure'[Mishandling_CATIA] =
-        DIVIDE(SUM(f_mishandling[bags]), SUM(f_checkin[num_pax_flown])) * 1000
+        CALCULATE(
+            DIVIDE(SUM(f_mishandling[bags]), SUM(f_checkin[num_pax_flown])) * 1000,
+            REMOVEFILTERS(Cabin_Master),
+            REMOVEFILTERS(Haul_Master)
+        )
+
+    MEASURE 'Measure'[OTP15_Measure] = 
+        CALCULATE(
+            'Measure'[OTP15],
+            REMOVEFILTERS(Cabin_Master)
+        )
 
 	VAR __DS0Core =
         CALCULATETABLE(SUMMARIZE(
             _table,[Period_Group],
             "Load_Factor", 'Measure'[Load_Factor_CATIA],
-            "OTP15", 'Measure'[OTP15],
+            "OTP15", 'Measure'[OTP15_Measure],
             "Misconex", 'Measure'[Misconex_CATIA],
             "Mishandling", 'Measure'[Mishandling_CATIA],
             "Min_Date", MIN('Date_Master'[Date]),

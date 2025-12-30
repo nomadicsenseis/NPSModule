@@ -18,9 +18,11 @@ comparative_prompts:
     2.  **Enfoque en la variación**: El análisis debe centrarse en explicar por qué el NPS ha cambiado entre los dos períodos.
     3.  **Consistencia de formato**: Sigue las instrucciones de formato y estructura que se indiquen en cada paso.
     4.  **Lenguaje ejecutivo**: Utiliza un tono profesional y orientado a la acción.
-    5.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, no el porcentaje.
-    6.  **Precisión**: No calcules valores que no se te soliciten explícitamente.
+    5.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %. Recuerda que el NPS no es un porcentaje.
+    6.  **Unidad del NPS (CRÍTICO)**: Los valores de Explanatory Drivers (SHAP) están en **puntos de NPS** (escala -100 a 100), NUNCA en puntos porcentuales (%) ni en porcentajes. Usa siempre "X ppts de NPS".
+    7.  **Precisión**: No calcules valores que no se te soliciten explícitamente.
     7.  **Atribución de datos**: SIEMPRE que cites un dato (NPS, Explanatory Drivers, OTP, rutas, perfiles, etc.), indica EXPLÍCITAMENTE a qué segmento pertenece. Ejemplo: "OTP –4.0 pts (Economy LH)" en lugar de solo "OTP –4.0 pts".
+    8.  **Prohibición de "baseline" genérico**: Está terminantemente PROHIBIDO usar la palabra "baseline" a secas para referirse a la comparación. Debes especificar SIEMPRE a qué te refieres (ej: "con respecto a la semana anterior", "con respecto a la media de los últimos 7 períodos", etc.), usando la descripción proporcionada en los datos de entrada.
 
   input_templates:
     hierarchical_context_setup: |
@@ -72,8 +74,10 @@ single_prompts:
     3.  **Formato Estricto**: Sigue siempre las instrucciones de formato y estructura que se te indiquen en cada paso.
     4.  **Lenguaje Ejecutivo**: Utiliza un tono profesional y orientado a la acción.
     5.  **Valores no especificados**: Evita calcular valores que no se soliciten explícitamente.
-    6.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación en lugar del porcentaje.
-    7.  **Atribución de datos**: SIEMPRE que cites un dato (NPS, Explanatory Drivers, OTP, rutas, perfiles, etc.), indica EXPLÍCITAMENTE a qué segmento pertenece. Ejemplo: "OTP –4.0 pts (Economy LH)" en lugar de solo "OTP –4.0 pts".  
+    6.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación en lugar del porcentaje. Recuerda que el NPS no es un porcentaje.
+    7.  **Unidad del NPS (CRÍTICO)**: Los valores de Explanatory Drivers (SHAP) están en **puntos de NPS** (escala -100 a 100), NUNCA en puntos porcentuales (%) ni en porcentajes. Usa siempre "X ppts de NPS".
+    8.  **Atribución de datos**: SIEMPRE que cites un dato (NPS, Explanatory Drivers, OTP, rutas, perfiles, etc.), indica EXPLÍCITAMENTE a qué segmento pertenece. Ejemplo: "OTP –4.0 pts (Economy LH)" en lugar de solo "OTP –4.0 pts".
+    8.  **Prohibición de "baseline" genérico**: Está terminantemente PROHIBIDO usar la palabra "baseline" a secas para referirse a la comparación. Debes especificar SIEMPRE a qué te refieres (ej: "con respecto a la media de los últimos 7 días", "con respecto a la media de los últimos 7 períodos", etc.), usando la descripción proporcionada en los datos de entrada.
     
   input_templates:
     hierarchical_context_setup: |
@@ -467,9 +471,11 @@ hierarchical_diagnostic_helpers:
 
     **⚠️ REGLAS DE LENGUAJE EJECUTIVO:**
     - 🚫 **PROHIBICIÓN ESTRICTA:** NUNCA escribas "Young Wings". Usa SIEMPRE **YW**.
+    - 🚫 **TERMINOLOGÍA PROHIBIDA:** NUNCA uses los términos "anomalía positiva" o "anomalía negativa". Usa en su lugar "**subida de NPS**", "**bajada de NPS**", "**mejora**" o "**deterioro**".
     - NUNCA uses términos técnicos internos: "nodo", "árbol", "NMA", "burbujeo", "escenario".
     - USA "LH" y "SH" (NO "Largo Radio" ni "Corto Radio").
     - **NO ENUMERES las causas**. Nárralas de forma fluida.
+    - 🗣️ **TONO MODERADO:** Evita lenguaje catastrofista o alarmista. NO uses palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió". USA alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
     
     **🔢 FORMATO NUMÉRICO (CRÍTICO):**
     - USA los valores EXACTOS de la tabla de referencia y las reflexiones del paso 4C.
@@ -548,7 +554,7 @@ hierarchical_diagnostic_helpers:
     **⚠️ IMPORTANTE - CONTENIDO:**
     - **USA LOS VALORES DE LAS REFLEXIONES 4C:** No busques en el tree_data original, usa los valores ya extraídos.
     - **ATRIBUCIÓN:** Indica siempre a qué segmento pertenece el dato.
-    - **TERMINOLOGÍA DE COMPARACIÓN:** Usa la fórmula "con respecto a [TEXTO DEL BASELINE REFERENCE]" (ej: "con respecto a la semana anterior").
+    - **TERMINOLOGÍA DE COMPARACIÓN:** Usa la fórmula "con respecto a [TEXTO DEL PERÍODO DE REFERENCIA]" (ej: "con respecto a la semana anterior"). NUNCA uses el término "baseline" a secas.
     - **PARA CABINAS SH:** Menciona NPS de IB y YW por separado usando los valores de la reflexión 4C.
     
     **📊 TRADUCCIÓN DE TERMINOLOGÍA:**

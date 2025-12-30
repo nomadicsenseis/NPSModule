@@ -10,16 +10,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_LLM_TYPE = "CLAUDE_SONNET_4_5"  # Options: O4_MINI, CLAUDE_SONNET_4, O3, CLAUDE_SONNET_4_5, etc.
 
 
-def load_aws_credentials_from_temp_file(temp_env_file: str = None) -> dict:
+def load_aws_credentials_from_temp_file(temp_env_file: str = None, use_sandbox: bool = True) -> dict:
     """
     Load AWS credentials from temp_aws_credentials.env file.
-    Uses sbx_* (sandbox) credentials which have access to the Bedrock inference profiles.
-    
-    Same pattern as NCSDataCollector and S3ReportUploader - expects file in cwd.
     
     Args:
         temp_env_file: Optional explicit path to credentials file. 
                        If not provided, uses Path.cwd() / 'temp_aws_credentials.env'
+        use_sandbox: If True, uses sbx_* keys (Bedrock). If False, uses standard keys (S3/NCS).
     
     Returns:
         dict with keys: aws_access_key_id, aws_secret_access_key, aws_session_token, region_name
@@ -49,7 +47,8 @@ def load_aws_credentials_from_temp_file(temp_env_file: str = None) -> dict:
         return creds
     
     # Read and parse the credentials file
-    logger.info(f"✅ Loading Bedrock credentials from: {creds_path}")
+    mode_str = "Bedrock (sbx_*)" if use_sandbox else "Standard (NCS/S3)"
+    logger.info(f"✅ Loading {mode_str} credentials from: {creds_path}")
     with open(creds_path, 'r') as f:
         for line in f:
             line = line.strip()
@@ -60,13 +59,22 @@ def load_aws_credentials_from_temp_file(temp_env_file: str = None) -> dict:
             key = key.strip()
             value = value.strip()
             
-            # Use sbx_* credentials (sandbox) - these have access to inference profiles
-            if key == 'sbx_aws_access_key_id':
-                creds['aws_access_key_id'] = value
-            elif key == 'sbx_aws_secret_access_key':
-                creds['aws_secret_access_key'] = value
-            elif key == 'sbx_aws_session_token':
-                creds['aws_session_token'] = value
+            if use_sandbox:
+                # Use sbx_* credentials (sandbox) - these have access to inference profiles
+                if key == 'sbx_aws_access_key_id':
+                    creds['aws_access_key_id'] = value
+                elif key == 'sbx_aws_secret_access_key':
+                    creds['aws_secret_access_key'] = value
+                elif key == 'sbx_aws_session_token':
+                    creds['aws_session_token'] = value
+            else:
+                # Use standard credentials (no prefix)
+                if key == 'aws_access_key_id':
+                    creds['aws_access_key_id'] = value
+                elif key == 'aws_secret_access_key':
+                    creds['aws_secret_access_key'] = value
+                elif key == 'aws_session_token':
+                    creds['aws_session_token'] = value
     
     return creds
 
@@ -114,6 +122,7 @@ class LLMType(Enum):
     CLAUDE_HAIKU_4_5 = 'CLAUDE_HAIKU_4_5'
     CLAUDE_SONNET_4_5 = 'CLAUDE_SONNET_4_5'
     GPT_OSS_120B = 'GPT_OSS_120B'
+    GPT_5_2 = 'GPT_5_2'
 
 def get_default_llm_type() -> LLMType:
     """Get the default LLM type from the global configuration"""

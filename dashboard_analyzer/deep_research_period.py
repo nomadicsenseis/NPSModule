@@ -337,6 +337,7 @@ async def process_single_period(
         print("="*60)
         
         # Create isolated interpreter for this period
+        analysis_date = analysis_data.get('analysis_date')
         interpreter = FlexibleAnomalyInterpreter(
             data_folder, 
             pbi_collector=pbi_collector, 
@@ -344,7 +345,8 @@ async def process_single_period(
             detection_mode=detector.detection_mode, 
             comparison_start_date=comparison_start_date, 
             comparison_end_date=comparison_end_date, 
-            environment=environment
+            environment=environment,
+            analysis_date=analysis_date
         )
         
         # Get anomalies for this period
@@ -584,7 +586,8 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     
     # Initialize interpreter for explanations with agent mode
     pbi_collector = PBIDataCollector(environment=environment)
-    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date, environment=environment)
+    analysis_date = analysis_data.get('analysis_date')
+    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date, environment=environment, analysis_date=analysis_date)
     print(f"🔧 Explanation mode: AGENT")
     
     # Initialize AI agent for interpretation

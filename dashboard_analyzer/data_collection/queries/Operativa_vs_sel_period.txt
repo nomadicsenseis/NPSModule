@@ -53,14 +53,16 @@ DEFINE
         CALCULATE(
             'Measure'[OTP15],
             __CurrentPeriodFilter,
-            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+            __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+            -- Cabin filter (DS0FilterTable) removed for radio-level aggregation
         )
 
     MEASURE 'Measure'[OTP_Comparison] =
         CALCULATE(
             'Measure'[OTP15],
             __ComparisonPeriodFilter,
-            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+            __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+            -- Cabin filter (DS0FilterTable) removed for radio-level aggregation
         )
 
     MEASURE 'Measure'[OTP_Diff] = [OTP_Current] - [OTP_Comparison]
@@ -71,14 +73,16 @@ DEFINE
         CALCULATE(
             DIVIDE(SUM(f_mishandling[bags]), SUM(f_checkin[num_pax_flown])) * 1000,
             __CurrentPeriodFilter,
-            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+            __DS0FilterTable2, __DS0FilterTable4
+            -- Cabin and Haul filters removed for global-level aggregation
         )
 
     MEASURE 'Measure'[Mishandling_Comparison] =
         CALCULATE(
             DIVIDE(SUM(f_mishandling[bags]), SUM(f_checkin[num_pax_flown])) * 1000,
             __ComparisonPeriodFilter,
-            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+            __DS0FilterTable2, __DS0FilterTable4
+            -- Cabin and Haul filters removed for global-level aggregation
         )
 
     MEASURE 'Measure'[Mishandling_Diff] = [Mishandling_Current] - [Mishandling_Comparison]
@@ -89,14 +93,16 @@ DEFINE
         CALCULATE(
             DIVIDE(SUM(customer_connections[flag_pax_misc]), SUM(customer_connections[flag_pax_conex])) * 100,
             __CurrentPeriodFilter,
-            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+            __DS0FilterTable2, __DS0FilterTable4
+            -- Cabin and Haul filters removed for global-level aggregation
         )
 
     MEASURE 'Measure'[Misconex_Comparison] =
         CALCULATE(
             DIVIDE(SUM(customer_connections[flag_pax_misc]), SUM(customer_connections[flag_pax_conex])) * 100,
             __ComparisonPeriodFilter,
-            __DS0FilterTable, __DS0FilterTable2, __DS0FilterTable3, __DS0FilterTable4
+            __DS0FilterTable2, __DS0FilterTable4
+            -- Cabin and Haul filters removed for global-level aggregation
         )
 
     MEASURE 'Measure'[Misconex_Diff] = [Misconex_Current] - [Misconex_Comparison]

@@ -330,30 +330,43 @@ Confirma que has recibido la información y estás listo para el análisis paso 
 
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
-        if llm_type in [LLMType.GPT4o, LLMType.O3, LLMType.O3_MINI, LLMType.O4_MINI]:
+        if llm_type in [LLMType.GPT4o, LLMType.O3, LLMType.O3_MINI, LLMType.O4_MINI, LLMType.GPT_5_2]:
             return self._create_openai_llm(llm_type)
         else:
             return self._create_aws_llm(llm_type)
 
     def _create_openai_llm(self, llm_type: LLMType) -> OpenAiLLM:
-        """Create OpenAI/Azure OpenAI LLM instance."""
-        # Get credentials from environment variables
-        api_key = os.getenv("AZURE_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        api_base = os.getenv("AZURE_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_API_BASE")
-        api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
-        
-        if not all([api_key, api_base, deployment_name]):
-            raise ValueError("Missing required OpenAI/Azure OpenAI environment variables")
-        
-        return OpenAiLLM(
-            llm_type=llm_type,
-            api_key=api_key or "",
-            api_base=api_base or "",
-            api_version=api_version,
-            api_dep_gpt=deployment_name or "",
-            temperature=1.0  # Default temperature for O4-MINI compatibility
+        """Create OpenAI/Azure OpenAI LLM instance using unified credential strategy."""
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.openai_session import (
+            get_openai_credentials, is_azure_openai_configured, is_openai_platform_configured
         )
+        
+        # Get credentials based on current environment (local vs prod)
+        creds = get_openai_credentials(environment=self.environment)
+        
+        is_azure = is_azure_openai_configured(creds)
+        is_platform = is_openai_platform_configured(creds)
+        
+        if not is_azure and not is_platform:
+            raise ValueError("No OpenAI or Azure OpenAI credentials found in environment variables")
+        
+        # Priority: Azure (to maintain legacy) if configured, otherwise OpenAI Platform
+        if is_azure:
+            return OpenAiLLM(
+                llm_type=llm_type,
+                api_key=creds['azure_api_key'] or "",
+                api_base=creds['azure_endpoint'] or "",
+                api_version=creds['azure_api_version'] or "2024-12-01-preview",
+                api_dep_gpt=creds['azure_deployment'] or "",
+                temperature=1.0  # Default temperature for O4-MINI compatibility
+            )
+        else:
+            return OpenAiLLM(
+                llm_type=llm_type,
+                api_key=creds['openai_api_key'] or "",
+                project_id=creds['openai_project_id'],
+                temperature=1.0
+            )
 
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
         """Create AWS Bedrock LLM instance using unified credential strategy."""

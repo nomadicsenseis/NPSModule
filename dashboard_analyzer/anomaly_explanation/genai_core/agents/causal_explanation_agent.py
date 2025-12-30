@@ -298,7 +298,8 @@ class CausalExplanationAgent:
         comparison_start_date: datetime = None,
         comparison_end_date: datetime = None,
         study_mode: str = "comparative",
-        environment: str = "prod"
+        environment: str = "prod",
+        reference_date: Optional[datetime] = None
     ):
         # Use default LLM type if none provided
         if llm_type is None:
@@ -308,6 +309,8 @@ class CausalExplanationAgent:
         self.logger = logger or self._setup_logger()
         self.silent_mode = silent_mode
         self.environment = environment
+        self.reference_date = reference_date  # Anchor date for fixed baseline in single mode
+        
         # Transform detection_mode if needed (vslast -> vslast_dynamic when causal_filter is "vs Sel. Period")
         if detection_mode == "vslast" and causal_filter == "vs Sel. Period":
             self.detection_mode = "vslast_dynamic"
@@ -557,30 +560,43 @@ class CausalExplanationAgent:
     
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
-        if llm_type in [LLMType.GPT4o, LLMType.O3, LLMType.O3_MINI, LLMType.O4_MINI]:
+        if llm_type in [LLMType.GPT4o, LLMType.O3, LLMType.O3_MINI, LLMType.O4_MINI, LLMType.GPT_5_2]:
             return self._create_openai_llm(llm_type)
         else:
             return self._create_aws_llm(llm_type)
     
     def _create_openai_llm(self, llm_type: LLMType) -> OpenAiLLM:
-        """Create OpenAI/Azure OpenAI LLM instance."""
-        # Get credentials from environment variables
-        api_key = os.getenv("AZURE_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        api_base = os.getenv("AZURE_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_API_BASE")
-        api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
-        
-        if not all([api_key, api_base, deployment_name]):
-            raise ValueError("Missing required OpenAI/Azure OpenAI environment variables")
-        
-        return OpenAiLLM(
-            llm_type=llm_type,
-            api_key=api_key or "",
-            api_base=api_base or "",
-            api_version=api_version,
-            api_dep_gpt=deployment_name or "",
-            temperature=1.0  # Default temperature for O4-MINI compatibility
+        """Create OpenAI/Azure OpenAI LLM instance using unified credential strategy."""
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.openai_session import (
+            get_openai_credentials, is_azure_openai_configured, is_openai_platform_configured
         )
+        
+        # Get credentials based on current environment (local vs prod)
+        creds = get_openai_credentials(environment=self.environment)
+        
+        is_azure = is_azure_openai_configured(creds)
+        is_platform = is_openai_platform_configured(creds)
+        
+        if not is_azure and not is_platform:
+            raise ValueError("No OpenAI or Azure OpenAI credentials found in environment variables")
+        
+        # Priority: Azure (to maintain legacy) if configured, otherwise OpenAI Platform
+        if is_azure:
+            return OpenAiLLM(
+                llm_type=llm_type,
+                api_key=creds['azure_api_key'] or "",
+                api_base=creds['azure_endpoint'] or "",
+                api_version=creds['azure_api_version'] or "2024-12-01-preview",
+                api_dep_gpt=creds['azure_deployment'] or "",
+                temperature=1.0  # Default temperature for O4-MINI compatibility
+            )
+        else:
+            return OpenAiLLM(
+                llm_type=llm_type,
+                api_key=creds['openai_api_key'] or "",
+                project_id=creds['openai_project_id'],
+                temperature=1.0
+            )
     
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
         """Create AWS Bedrock LLM instance using unified credential strategy."""
@@ -804,8 +820,10 @@ class CausalExplanationAgent:
                 start_date_str = start_date.strftime('%Y-%m-%d')
 
             if tool_name == "operative_data_tool":
-                # FIX: Define a fixed baseline period (e.g., 14 days prior to the analysis end date)
-                baseline_start_dt = end_dt - timedelta(days=14)
+                # Use reference_date as the anchor for the fixed baseline if provided,
+                # otherwise fall back to the end date of the specific period being analyzed
+                anchor_dt = self.reference_date if self.reference_date else end_dt
+                baseline_start_dt = anchor_dt - timedelta(days=aggregation_days * baseline_periods)
                 
                 return await self._operative_data_tool_single_period(
                     node_path=node_path,
@@ -869,19 +887,21 @@ class CausalExplanationAgent:
                 baseline_start_dt = baseline_start_date
 
             # Get operative data for the entire range (baseline + target day)
+            # Use aggregation_days from parameters to respect the analysis flow
             operative_data = await self._collect_operative_data_with_query_tracking(
                 node_path=node_path,
                 target_date=end_dt,
-                comparison_days=14,
+                comparison_days=aggregation_days, # Use the aggregation from flow
+                comparison_start_date=baseline_start_dt, # Start from the beginning of the baseline
                 use_flexible=True
             )
             
             if operative_data.empty:
                 return f"No operative data found for {node_path} in range {baseline_start_date} to {end_date}"
             
-            # Pass the full dataset and the specific target date for correlation analysis
+            # Pass the aggregation_days to the analyzer
             return await self._operative_data_tool_correlation_analysis(node_path, operative_data, end_date, comparison_context, baseline_periods, anomaly_detection_mode, aggregation_days)
-            
+        
         except Exception as e:
             self.logger.error(f"❌ Error in single period operative data tool: {type(e).__name__}: {str(e)}")
             return f"ERROR in operative data tool: {type(e).__name__}: {str(e)}"
@@ -1150,7 +1170,8 @@ class CausalExplanationAgent:
             result_parts.append("")
             
             if 'metrics' in analysis_result:
-                result_parts.append("**VALORES ABSOLUTOS Y CORRELACIÓN CON NPS:**")
+                reference_desc = comparison_context if comparison_context else "período de referencia"
+                result_parts.append(f"**VALORES ABSOLUTOS Y CORRELACIÓN (Referencia: {reference_desc}):**")
                 
                 for metric_name, metric_data in analysis_result['metrics'].items():
                     current_value = metric_data.get('current_value', 'N/A')
@@ -1163,9 +1184,9 @@ class CausalExplanationAgent:
                     
                     # Format the metric line
                     if isinstance(current_value, (int, float)) and isinstance(baseline_value, (int, float)):
-                        result_parts.append(f"   • **{metric_name}**: {current_value:.1f} vs {baseline_value:.1f} ({direction_symbol}{delta:+.1f})")
+                        result_parts.append(f"   • **{metric_name}**: {current_value:.1f} (actual) vs {baseline_value:.1f} ({reference_desc}) ({direction_symbol}{delta:+.1f})")
                     else:
-                        result_parts.append(f"   • **{metric_name}**: {current_value} vs {baseline_value} ({direction_symbol})")
+                        result_parts.append(f"   • **{metric_name}**: {current_value} (actual) vs {baseline_value} ({reference_desc}) ({direction_symbol})")
                     
                     # Log correlation debug info
                     self.logger.info(f"🔍 DEBUG CORRELATION: metric='{metric_name}', direction='{direction}', delta={delta}")
@@ -2539,24 +2560,15 @@ class CausalExplanationAgent:
             operative_parts = []
             
             # Add comparison mode info
-            comparison_info = f"📊 **OPERATIVE ANALYSIS** (Comparison: {comparison_mode.upper()})"
-            if comparison_context:
-                # Use the provided comparison context directly
-                comparison_info += f" {comparison_context}"
-            elif comparison_mode in ["vslast", "vslast_dynamic"]:
-                comparison_date = analysis.get("comparison_date", "unknown")
-                comparison_info += f" vs {comparison_date}"
-            elif comparison_mode == "mean":
-                comparison_days_used = analysis.get("comparison_days", comparison_days)
-                comparison_info += f" vs {comparison_days_used}-day average"
-            
+            comparison_info = f"📊 **OPERATIVE ANALYSIS** (Referencia: {comparison_context if comparison_context else 'período anterior'})"
             operative_parts.append(comparison_info)
             operative_parts.append("")
             
-            # Show all metrics with changes vs previous period
+            # Show all metrics with changes vs reference
             metrics = analysis.get("metrics", {})
             if metrics:
-                operative_parts.append(f"📊 **Métricas Operativas vs Período Anterior**:")
+                reference_desc = comparison_context if comparison_context else "período anterior"
+                operative_parts.append(f"📊 **Métricas Operativas vs {reference_desc}**:")
                 
                 for metric, data in metrics.items():
                     # Skip metrics with no real data (all zeros or identical values)
@@ -2588,12 +2600,12 @@ class CausalExplanationAgent:
                                 correlation_status = "✅ Explica NPS↑" if delta < 0 else "❌ Contradice NPS↑"
                         
                         metric_display = metric.replace('_', ' ').replace('adjusted', '').title()
-                        operative_parts.append(f"   • **{metric_display}**: {current_val} vs {previous_val} ({direction}{abs(delta):.1f}) {correlation_status}")
+                        operative_parts.append(f"   • **{metric_display}**: {current_val} vs {previous_val} ({reference_desc}) ({direction}{abs(delta):.1f}) {correlation_status}")
                     else:
                         baseline_value = data.get('week_average', data.get('previous_value', 'N/A'))
                         day_val = data.get('day_value', data.get('current_value', 'N/A'))
                         metric_display = metric.replace('_', ' ').title()
-                        operative_parts.append(f"   • **{metric_display}**: {day_val} vs {baseline_value} (referencia)")
+                        operative_parts.append(f"   • **{metric_display}**: {day_val} (actual) vs {baseline_value} ({reference_desc})")
             
             # Add correlation summary
             operative_parts.append("")
@@ -5480,9 +5492,9 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
         # Add baseline information at the beginning
         if hasattr(self, 'baseline_description') and hasattr(self, 'causal_filter'):
             self.logger.info(f"🔍 DEBUG DATA_SUMMARY: Adding baseline info - causal_filter: {self.causal_filter}, baseline_description: {self.baseline_description}")
-            summary_parts.append(f"📊 **INFORMACIÓN DE BASELINE:**")
+            summary_parts.append(f"📊 **INFORMACIÓN DE COMPARACIÓN:**")
             summary_parts.append(f"   • Filtro de comparación: {self.causal_filter}")
-            summary_parts.append(f"   • Descripción del baseline: {self.baseline_description}")
+            summary_parts.append(f"   • Descripción de la comparativa: {self.baseline_description}")
             summary_parts.append("")  # Empty line for separation
         else:
             self.logger.warning(f"🔍 DEBUG DATA_SUMMARY: Baseline info NOT added - hasattr baseline_description: {hasattr(self, 'baseline_description')}, hasattr causal_filter: {hasattr(self, 'causal_filter')}")

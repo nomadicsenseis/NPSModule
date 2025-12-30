@@ -39,8 +39,8 @@ class S3ReportUploader:
         # Environment configuration
         self.environment = environment
         
-        # Initialize AWS session using unified resolver
-        self.session = get_aws_session(environment=self.environment)
+        # Initialize AWS session using unified resolver - Reports use standard keys (not sandbox)
+        self.session = get_aws_session(environment=self.environment, use_sandbox=False)
         self.s3_client = self.session.client('s3')
     
     def _setup_aws_credentials(self):

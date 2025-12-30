@@ -51,11 +51,26 @@ async def generate_consolidated_summary(agent, consolidated_data: List[Dict], da
         
         # Call generate_comprehensive_summary_stratified (3-step approach)
         try:
+            # Prepare metadata and date ranges for the summary agent
+            execution_metadata = data.get('metadata', {})
+            weekly_params = data.get('weekly_params', {})
+            daily_params = data.get('daily_params', {})
+            
+            # Extract analysis date from metadata or default to None
+            analysis_date_str = execution_metadata.get('analysis_date')
+            date_ranges = {
+                'analysis_date': analysis_date_str
+            } if analysis_date_str else None
+
             comprehensive_summary = await asyncio.wait_for(
                 agent.generate_comprehensive_summary_stratified(
                     weekly_comparative_analysis=weekly_comparative_analysis,
                     daily_single_analyses=daily_single_analyses,
-                    date_flight_local=date_flight_local
+                    date_flight_local=date_flight_local,
+                    execution_metadata=execution_metadata,
+                    weekly_analysis_params=weekly_params,
+                    daily_analysis_params=daily_params,
+                    date_ranges=date_ranges
                 ),
                 timeout=900.0  # Increased timeout for 3-step process
             )

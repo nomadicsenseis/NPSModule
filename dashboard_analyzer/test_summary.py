@@ -50,8 +50,9 @@ def get_analysis_date(interpreter_data: dict) -> str:
 async def run_test():
     """Run the summary agent test."""
     
-    # Path to interpreter JSONs
-    interpreter_dir = Path(__file__).parent / get_agent_conversations_folder() / 'anomaly_interpreter'
+    # Path to interpreter JSONs - Point to the root project folder
+    project_root = Path(__file__).parent.parent
+    interpreter_dir = project_root / get_agent_conversations_folder() / 'anomaly_interpreter'
     
     print("=" * 80)
     print("🧪 SUMMARY AGENT TEST")

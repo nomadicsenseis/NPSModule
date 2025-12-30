@@ -141,7 +141,7 @@ class AnomalySummaryAgent:
         
         # OpenAI/Azure OpenAI models
         if llm_type in [LLMType.GPT3_5, LLMType.GPT4, LLMType.GPT4o, LLMType.GPT4o_MINI, 
-                       LLMType.O1_MINI, LLMType.O3_MINI, LLMType.O3, LLMType.O4_MINI]:
+                       LLMType.O1_MINI, LLMType.O3_MINI, LLMType.O3, LLMType.O4_MINI, LLMType.GPT_5_2]:
             return self._create_openai_llm(llm_type)
         
         # AWS Bedrock models
@@ -159,24 +159,37 @@ class AnomalySummaryAgent:
             raise ValueError(f"Unsupported LLM type: {llm_type}")
     
     def _create_openai_llm(self, llm_type: LLMType) -> OpenAiLLM:
-        """Create OpenAI/Azure OpenAI LLM instance."""
-        # Get credentials from environment variables
-        api_key = os.getenv("AZURE_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        api_base = os.getenv("AZURE_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_API_BASE")
-        api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
-        
-        if not all([api_key, api_base, deployment_name]):
-            raise ValueError("Missing required OpenAI/Azure OpenAI environment variables")
-        
-        return OpenAiLLM(
-            llm_type=llm_type,
-            api_key=api_key,
-            api_base=api_base,
-            api_version=api_version,
-            api_dep_gpt=deployment_name,
-            temperature=1.0  # Default temperature for O4-MINI compatibility
+        """Create OpenAI/Azure OpenAI LLM instance using unified credential strategy."""
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.openai_session import (
+            get_openai_credentials, is_azure_openai_configured, is_openai_platform_configured
         )
+        
+        # Get credentials based on current environment (local vs prod)
+        creds = get_openai_credentials(environment=self.environment)
+        
+        is_azure = is_azure_openai_configured(creds)
+        is_platform = is_openai_platform_configured(creds)
+        
+        if not is_azure and not is_platform:
+            raise ValueError("No OpenAI or Azure OpenAI credentials found in environment variables")
+        
+        # Priority: Azure (to maintain legacy) if configured, otherwise OpenAI Platform
+        if is_azure:
+            return OpenAiLLM(
+                llm_type=llm_type,
+                api_key=creds['azure_api_key'] or "",
+                api_base=creds['azure_endpoint'] or "",
+                api_version=creds['azure_api_version'] or "2024-12-01-preview",
+                api_dep_gpt=creds['azure_deployment'] or "",
+                temperature=1.0  # Default temperature for O4-MINI compatibility
+            )
+        else:
+            return OpenAiLLM(
+                llm_type=llm_type,
+                api_key=creds['openai_api_key'] or "",
+                project_id=creds['openai_project_id'],
+                temperature=1.0
+            )
     
     def _create_aws_llm(self, llm_type: LLMType) -> AWSLLM:
         """Create AWS Bedrock LLM instance using unified credential strategy."""
@@ -295,9 +308,12 @@ class AnomalySummaryAgent:
                 analysis = daily_analysis.get('analysis', '')
                 anomalies = daily_analysis.get('anomalies', [])
                 
+                # Extract only executive synthesis from daily analysis to save tokens
+                synthesis = self._extract_executive_synthesis_from_daily(analysis)
+                
                 # Log length and only skip if truly empty
-                text = (analysis or '').strip()
-                self.logger.info(f"📝 Daily analysis length for {date}: {len(text)} chars")
+                text = (synthesis or '').strip()
+                self.logger.info(f"📝 Daily synthesis length for {date}: {len(text)} chars (from {len(analysis)} total)")
                 if not text:
                     self.logger.info(f"📅 Skipping {date}: No meaningful analysis (empty)")
                     filtered_days += 1
@@ -364,7 +380,7 @@ class AnomalySummaryAgent:
                 self.logger.info(f"✅ Generated comprehensive summary: weekly + {len(daily_single_analyses)} daily analyses")
                 
                 # STEP 2: Generate Adaptive Card
-                date_range = self._build_date_range_string(daily_single_analyses)
+                date_range = self._build_date_range_string(daily_single_analyses, date_ranges)
                 adaptive_card_json = await self._generate_adaptive_card(comprehensive_response, date_range)
                 
                 # Combine synthesis and adaptive card
@@ -444,8 +460,13 @@ class AnomalySummaryAgent:
             for daily_analysis in daily_single_analyses:
                 date = daily_analysis.get('date', 'Unknown')
                 analysis = daily_analysis.get('analysis', '')
-                text = (analysis or '').strip()
+                
+                # Extract only executive synthesis from daily analysis to save tokens
+                synthesis = self._extract_executive_synthesis_from_daily(analysis)
+                
+                text = (synthesis or '').strip()
                 if text:
+                    self.logger.info(f"📝 Daily synthesis length for {date}: {len(text)} chars (from {len(analysis)} total)")
                     daily_analyses_formatted.append(f"📅 {date}:\n{text}")
             
             daily_analyses_combined = "\n\n---\n\n".join(daily_analyses_formatted)
@@ -478,6 +499,10 @@ class AnomalySummaryAgent:
             for section_name, section_content in sections.items():
                 self.logger.info(f"   📌 Analyzing: {section_name}")
                 
+                # Rate limit protection: small pause between calls
+                if daily_context_paragraphs:
+                    await asyncio.sleep(2.0)
+                
                 # Get daily analyses for this section (SIEMPRE devuelve contenido con fechas)
                 daily_for_section = self._filter_daily_for_section(
                     daily_analyses_combined, 
@@ -505,6 +530,9 @@ class AnomalySummaryAgent:
                 self.logger.info(f"   ✅ Generated context for {section_name}: {len(paragraph)} chars")
             
             self.logger.info(f"✅ Step 1 complete: Generated {len(daily_context_paragraphs)} context paragraphs")
+            
+            # Rate limit protection
+            await asyncio.sleep(2.0)
             
             # =========================================================
             # STEP 2: Integrate into final report
@@ -547,6 +575,9 @@ class AnomalySummaryAgent:
             
             self.logger.info(f"✅ Step 2 complete: Full report generated ({len(polished_report)} chars)")
             
+            # Rate limit protection
+            await asyncio.sleep(2.0)
+            
             # =========================================================
             # STEP 3: Extract only executive synthesis
             # =========================================================
@@ -578,11 +609,14 @@ class AnomalySummaryAgent:
             
             self.logger.info(f"✅ Step 3 complete: Executive synthesis extracted ({len(executive_synthesis)} chars)")
             
+            # Rate limit protection
+            await asyncio.sleep(2.0)
+            
             # =========================================================
             # STEP 4: Generate Adaptive Card
             # =========================================================
             # Build date range from daily analyses for accurate display
-            date_range = self._build_date_range_string(daily_single_analyses)
+            date_range = self._build_date_range_string(daily_single_analyses, date_ranges)
             adaptive_card_json = await self._generate_adaptive_card(polished_report, date_range)
             
             self.logger.info(f"✅ Step 4 complete: Adaptive Card generated (date_range: {date_range})")
@@ -747,19 +781,95 @@ class AnomalySummaryAgent:
         
         return synthesis
     
-    def _build_date_range_string(self, daily_single_analyses: List[Dict[str, Any]]) -> str:
+    def _extract_executive_synthesis_from_daily(self, daily_analysis: str) -> str:
         """
-        Build a human-readable date range string from daily analyses.
+        Extract only the executive summary from a daily analysis report.
+        Similar to _extract_executive_synthesis_from_weekly but tailored for daily reports.
+        """
+        if not daily_analysis:
+            return ""
+            
+        import re
+        
+        # Look for synthesis headers common in daily reports
+        synthesis_patterns = [
+            r'##\s*📋\s*SÍNTESIS EJECUTIVA FINAL',
+            r'##\s*📋\s*SÍNTESIS EJECUTIVA',
+            r'\*\*SÍNTESIS EJECUTIVA\*\*',
+            r'SÍNTESIS EJECUTIVA FINAL',
+            r'SÍNTESIS EJECUTIVA',
+            r'RESUMEN EJECUTIVO',
+            r'##\s*Resumen',
+        ]
+        
+        # End patterns to exclude technical sections
+        end_patterns = [
+            r'##\s*📊\s*DIAGNÓSTICO',
+            r'##\s*📊\s*DETALLE',
+            r'##\s*📊\s*COMPANY',
+            r'##\s*🎯\s*IDENTIFICACIÓN',
+            r'---\s*\n\s*✅\s*\*\*ANÁLISIS COMPLETADO\*\*',
+            r'✅\s*\*\*ANÁLISIS COMPLETADO\*\*',
+        ]
+        
+        start_pos = None
+        for pattern in synthesis_patterns:
+            match = re.search(pattern, daily_analysis, re.IGNORECASE)
+            if match:
+                start_pos = match.start()
+                break
+        
+        if start_pos is None:
+            # If no explicit header, daily reports often have the summary at the beginning
+            # but we'll try to find any technical header to cut off
+            end_pos = len(daily_analysis)
+            for pattern in end_patterns:
+                match = re.search(pattern, daily_analysis, re.IGNORECASE)
+                if match:
+                    end_pos = min(end_pos, match.start())
+            
+            # If the resulting text is significantly shorter than original, it's likely a good cut
+            if end_pos < len(daily_analysis) * 0.7:
+                return daily_analysis[:end_pos].strip()
+            return daily_analysis
+            
+        # Find the end (exclude technical sections)
+        end_pos = len(daily_analysis)
+        for pattern in end_patterns:
+            match = re.search(pattern, daily_analysis[start_pos:], re.IGNORECASE)
+            if match:
+                end_pos = start_pos + match.start()
+                break
+        
+        return daily_analysis[start_pos:end_pos].strip()
+    
+    def _build_date_range_string(self, daily_single_analyses: List[Dict[str, Any]], date_ranges: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Build a human-readable date range string from daily analyses or provided date ranges.
         
         Args:
             daily_single_analyses: List of daily analysis dicts with 'date' key
+            date_ranges: Optional dict with 'analysis_date', 'comparison_start_date', etc.
             
         Returns:
             String like "9 Dic - 15 Dic 2025"
         """
         try:
+            # 1. Try to build from date_ranges if provided (highest priority)
+            if date_ranges and date_ranges.get('analysis_date'):
+                analysis_date_str = date_ranges.get('analysis_date')
+                try:
+                    # Assume format is YYYY-MM-DD
+                    dt = datetime.strptime(analysis_date_str, '%Y-%m-%d')
+                    # If it's a weekly report, we might want to show the week ending on this date
+                    # but for now let's just return this date formatted nicely
+                    return dt.strftime("%d %b %Y")
+                except Exception:
+                    return analysis_date_str
+
+            # 2. Try to build from daily_single_analyses
             if not daily_single_analyses:
-                return datetime.now().strftime("%d %b %Y")
+                return "Período de análisis"
             
             # Extract dates from daily analyses
             dates = []
@@ -770,7 +880,7 @@ class AnomalySummaryAgent:
                     try:
                         if isinstance(date_str, str):
                             # Handle common formats
-                            for fmt in ['%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y']:
+                            for fmt in ['%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%Y%m%d']:
                                 try:
                                     dt = datetime.strptime(date_str, fmt)
                                     dates.append(dt)
@@ -781,7 +891,7 @@ class AnomalySummaryAgent:
                         pass
             
             if not dates:
-                return datetime.now().strftime("%d %b %Y")
+                return "Período de análisis"
             
             # Sort and get min/max
             dates.sort()
@@ -799,6 +909,9 @@ class AnomalySummaryAgent:
             
             if start_date.year == end_date.year:
                 if start_date.month == end_date.month:
+                    if start_date.day == end_date.day:
+                        # Single day: "15 Dic 2025"
+                        return f"{start_date.day} {end_month} {end_date.year}"
                     # Same month: "9 - 15 Dic 2025"
                     return f"{start_date.day} - {end_date.day} {end_month} {end_date.year}"
                 else:
@@ -810,7 +923,7 @@ class AnomalySummaryAgent:
                 
         except Exception as e:
             self.logger.warning(f"Could not build date range: {e}")
-            return datetime.now().strftime("%d %b %Y")
+            return "Período de análisis"
     
     def _parse_weekly_sections(self, weekly_analysis: str) -> Dict[str, str]:
         """
@@ -824,14 +937,18 @@ class AnomalySummaryAgent:
         sections = {}
         
         # Define section patterns to look for
-        # Patterns match both "**ECONOMY SH:" and "ECONOMY SH:" formats, and HTML variants
+        # IMPORTANTE: Los patrones deben coincidir SOLO con headers de sección, no con menciones inline
+        # Los headers de sección tienen formato: <b><u>CABINA: Título descriptivo</u></b>
+        # Las menciones inline tienen formato: **CABINA (+X.X pts)** o **CABINA** dentro de texto
+        # La diferencia clave es que el header tiene DOS PUNTOS seguido de LETRA (no número/paréntesis)
         section_patterns = [
             ('GLOBAL', r'(?:📈|📋)?\s*(?:\*\*|<b>)?SÍNTESIS EJECUTIVA|Durante la semana'),
-            ('ECONOMY SH', r'(?:(?:\*\*|<b>|<u>)\s*)*ECONOMY SH[:\s]'),
-            ('BUSINESS SH', r'(?:(?:\*\*|<b>|<u>)\s*)*BUSINESS SH[:\s]'),
-            ('ECONOMY LH', r'(?:(?:\*\*|<b>|<u>)\s*)*ECONOMY LH[:\s]'),
-            ('BUSINESS LH', r'(?:(?:\*\*|<b>|<u>)\s*)*BUSINESS LH[:\s]'),
-            ('PREMIUM LH', r'(?:(?:\*\*|<b>|<u>)\s*)*PREMIUM LH[:\s]'),
+            # Headers de cabina: deben tener : seguido de espacio y letra mayúscula (inicio de título)
+            ('ECONOMY SH', r'(?:<b>)?(?:<u>)?\s*ECONOMY SH:\s*[A-ZÁÉÍÓÚÑ]'),
+            ('BUSINESS SH', r'(?:<b>)?(?:<u>)?\s*BUSINESS SH:\s*[A-ZÁÉÍÓÚÑ]'),
+            ('ECONOMY LH', r'(?:<b>)?(?:<u>)?\s*ECONOMY LH:\s*[A-ZÁÉÍÓÚÑ]'),
+            ('BUSINESS LH', r'(?:<b>)?(?:<u>)?\s*BUSINESS LH:\s*[A-ZÁÉÍÓÚÑ]'),
+            ('PREMIUM LH', r'(?:<b>)?(?:<u>)?\s*PREMIUM LH:\s*[A-ZÁÉÍÓÚÑ]'),
         ]
         
         # Find all section headers and their positions
@@ -1094,12 +1211,13 @@ PERÍODO {period} ({date_range}):
                     "export_timestamp": datetime.now().isoformat(),
                     "dateflight_local": dateflight_local,
                     "llm_type": self.llm_type.value,
-                    "num_steps": 3,
+                    "num_steps": 4,
                     "summary_success": True
                 },
                 "step1_section_connections": all_conversations.get('step1_section_connections', {}),
                 "step2_full_report": all_conversations.get('step2_full_report', {}),
-                "step3_executive_synthesis": all_conversations.get('step3_executive_synthesis', {})
+                "step3_executive_synthesis": all_conversations.get('step3_executive_synthesis', {}),
+                "step4_adaptive_card": all_conversations.get('step4_adaptive_card', {})
             }
             
             # Save locally

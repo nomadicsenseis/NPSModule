@@ -183,15 +183,15 @@ class OperationalDataAnalyzer:
                         standard_name = "Load_Factor"
                     
                     metrics[standard_name] = {
-                        'current': round(current_val, 2),
-                        'comparison': round(comparison_val, 2),
-                        'difference': round(difference, 2),
+                        'current': round(current_val, 1),
+                        'comparison': round(comparison_val, 1),
+                        'difference': round(difference, 1),
                         'change_pct': round(change_pct, 1),
                         # Keys expected by causal agent
-                        'current_value': round(current_val, 2),
-                        'previous_value': round(comparison_val, 2),
-                        'day_value': round(current_val, 2),
-                        'delta': round(difference, 2),
+                        'current_value': round(current_val, 1),
+                        'previous_value': round(comparison_val, 1),
+                        'day_value': round(current_val, 1),
+                        'delta': round(difference, 1),
                         'direction': direction,
                         'is_significant': is_significant
                     }
@@ -489,15 +489,15 @@ class OperationalDataAnalyzer:
                         is_significant = abs(change_pct) > 5  # Cambio > 5% es significativo
                         
                         metrics[col] = {
-                            'current': round(current_val, 2),
-                            'previous': round(previous_val, 2),
-                            'difference': round(difference, 2),
+                            'current': round(current_val, 1),
+                            'previous': round(previous_val, 1),
+                            'difference': round(difference, 1),
                             'change_pct': change_pct,
                             # Claves que espera el causal agent
-                            'current_value': round(current_val, 2),
-                            'previous_value': round(previous_val, 2),
-                            'day_value': round(current_val, 2),
-                            'delta': round(difference, 2),
+                            'current_value': round(current_val, 1),
+                            'previous_value': round(previous_val, 1),
+                            'day_value': round(current_val, 1),
+                            'delta': round(difference, 1),
                             'direction': direction,
                             'is_significant': is_significant
                         }
@@ -611,15 +611,15 @@ class OperationalDataAnalyzer:
                         is_significant = abs(change_pct) > 5  # Cambio > 5% es significativo
                         
                         metrics[col] = {
-                            'current': round(current_val, 2),
-                            'comparison': round(comparison_val, 2),
-                            'difference': round(difference, 2),
+                            'current': round(current_val, 1),
+                            'comparison': round(comparison_val, 1),
+                            'difference': round(difference, 1),
                             'change_pct': change_pct,
                             # Claves que espera el causal agent
-                            'current_value': round(current_val, 2),
-                            'previous_value': round(comparison_val, 2),  # Usar comparison_val como "previous"
-                            'day_value': round(current_val, 2),
-                            'delta': round(difference, 2),
+                            'current_value': round(current_val, 1),
+                            'previous_value': round(comparison_val, 1),  # Usar comparison_val como "previous"
+                            'day_value': round(current_val, 1),
+                            'delta': round(difference, 1),
                             'direction': direction,
                             'is_significant': is_significant
                         }
@@ -742,17 +742,17 @@ class OperationalDataAnalyzer:
                         is_significant = abs(change_pct) > 5  # Cambio > 5% es significativo
                         
                         metrics[col] = {
-                            'current': round(current_val, 2),
-                            'baseline': round(mean_val, 2),  # Mostrar como "baseline" en lugar de "historical_mean"
-                            'historical_mean': round(mean_val, 2),
-                            'difference': round(difference, 2),
+                            'current': round(current_val, 1),
+                            'baseline': round(mean_val, 1),  # Mostrar como "baseline" en lugar de "historical_mean"
+                            'historical_mean': round(mean_val, 1),
+                            'difference': round(difference, 1),
                             'change_pct': change_pct,
                             'historical_periods': len(historical_vals),
                             # Claves que espera el causal agent
-                            'current_value': round(current_val, 2),
-                            'day_value': round(current_val, 2),
-                            'week_average': round(mean_val, 2),
-                            'delta': round(difference, 2),
+                            'current_value': round(current_val, 1),
+                            'day_value': round(current_val, 1),
+                            'week_average': round(mean_val, 1),
+                            'delta': round(difference, 1),
                             'direction': direction,
                             'is_significant': is_significant
                         }
@@ -800,9 +800,9 @@ class OperationalDataAnalyzer:
                     if pd.notna(current_val):
                         difference = current_val - target_val
                         metrics[col] = {
-                            'current': round(current_val, 2),
+                            'current': round(current_val, 1),
                             'target': target_val,
-                            'difference': round(difference, 2),
+                            'difference': round(difference, 1),
                             'performance': 'above_target' if difference > 0 else 'below_target' if difference < 0 else 'on_target'
                         }
 
