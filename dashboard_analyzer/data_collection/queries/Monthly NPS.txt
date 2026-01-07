@@ -22,6 +22,7 @@ DEFINE
             __DS0FilterTable2,
             __DS0FilterTable3,
             __DS0FilterTable4,
+			"NPS_2026", 'Measure'[NPS 2026],
 			"NPS_2025", 'Measure'[NPS 2025],
 			"NPS_2024", 'Measure'[NPS 2024],
 			"NPS_2019", 'Measure'[NPS 2019],

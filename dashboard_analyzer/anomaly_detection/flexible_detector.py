@@ -175,9 +175,11 @@ class FlexibleAnomalyDetector:
         
         for node_path, df in all_data.items():
             if 'Period_Group' in df.columns:
-                # Only include periods that have valid NPS data (2024 or 2025)
+                # Only include periods that have valid NPS data (2024, 2025 or 2026)
                 valid_periods = df[
-                    (df['NPS_2025'].notna()) | (df['NPS_2024'].notna())
+                    (df.get('NPS_2026', pd.Series([np.nan]*len(df))).notna()) | 
+                    (df['NPS_2025'].notna()) | 
+                    (df['NPS_2024'].notna())
                 ]['Period_Group'].unique()
                 all_periods.update(valid_periods)
         
@@ -221,12 +223,23 @@ class FlexibleAnomalyDetector:
                 anomalies[node_path] = "S"  # Insufficient sample
                 continue
             
-            # Strategy: Try NPS_2025 first, fallback to NPS_2024
+            # Strategy: Try NPS_2026 first, then NPS_2025, fallback to NPS_2024
             target_nps = None
             baseline_avg = None
             
+            # Try NPS_2026 for target
+            if 'NPS_2026' in df.columns and not pd.isna(target_data['NPS_2026'].iloc[0]):
+                target_nps = target_data['NPS_2026'].iloc[0]
+                
+                # Calculate baseline as mean of specified number of periods using NPS_2026
+                baseline_data = df[df['Period_Group'].isin(baseline_periods)]
+                baseline_nps_values = baseline_data['NPS_2026'].dropna()
+                
+                if len(baseline_nps_values) >= 3:
+                    baseline_avg = baseline_nps_values.mean()
+            
             # Try NPS_2025 for target
-            if 'NPS_2025' in df.columns and not pd.isna(target_data['NPS_2025'].iloc[0]):
+            if target_nps is None and 'NPS_2025' in df.columns and not pd.isna(target_data['NPS_2025'].iloc[0]):
                 target_nps = target_data['NPS_2025'].iloc[0]
                 
                 # Calculate baseline as mean of specified number of periods using NPS_2025
@@ -321,12 +334,23 @@ class FlexibleAnomalyDetector:
                 anomalies[node_path] = "?"
                 continue
             
-            # Strategy: Try NPS_2025 first, fallback to NPS_2024
+            # Strategy: Try NPS_2026 first, then NPS_2025, fallback to NPS_2024
             target_nps = None
             previous_nps = None
             
+            # Try NPS_2026 for both target and previous
+            if 'NPS_2026' in df.columns and not pd.isna(target_data['NPS_2026'].iloc[0]):
+                target_nps = target_data['NPS_2026'].iloc[0]
+                
+                if not pd.isna(previous_data['NPS_2026'].iloc[0]):
+                    previous_nps = previous_data['NPS_2026'].iloc[0]
+                else:
+                    # Fallback: use NPS_2025 for previous period if NPS_2026 not available
+                    if 'NPS_2025' in df.columns and not pd.isna(previous_data['NPS_2025'].iloc[0]):
+                        previous_nps = previous_data['NPS_2025'].iloc[0]
+            
             # Try NPS_2025 for both target and previous
-            if 'NPS_2025' in df.columns and not pd.isna(target_data['NPS_2025'].iloc[0]):
+            if target_nps is None and 'NPS_2025' in df.columns and not pd.isna(target_data['NPS_2025'].iloc[0]):
                 target_nps = target_data['NPS_2025'].iloc[0]
                 
                 if not pd.isna(previous_data['NPS_2025'].iloc[0]):
@@ -442,12 +466,23 @@ class FlexibleAnomalyDetector:
                 anomalies[node_path] = "?"
                 continue
             
-            # Strategy: Try NPS_2025 first, fallback to NPS_2024
+            # Strategy: Try NPS_2026 first, then NPS_2025, fallback to NPS_2024
             target_nps = None
             baseline_nps = None
             
+            # Try NPS_2026 for both target and baseline
+            if 'NPS_2026' in df.columns and not pd.isna(target_data['NPS_2026'].iloc[0]):
+                target_nps = target_data['NPS_2026'].iloc[0]
+                
+                if not pd.isna(baseline_data['NPS_2026'].iloc[0]):
+                    baseline_nps = baseline_data['NPS_2026'].iloc[0]
+                else:
+                    # Fallback: use NPS_2025 for baseline period if NPS_2026 not available
+                    if 'NPS_2025' in df.columns and not pd.isna(baseline_data['NPS_2025'].iloc[0]):
+                        baseline_nps = baseline_data['NPS_2025'].iloc[0]
+            
             # Try NPS_2025 for both target and baseline
-            if 'NPS_2025' in df.columns and not pd.isna(target_data['NPS_2025'].iloc[0]):
+            if target_nps is None and 'NPS_2025' in df.columns and not pd.isna(target_data['NPS_2025'].iloc[0]):
                 target_nps = target_data['NPS_2025'].iloc[0]
                 
                 if not pd.isna(baseline_data['NPS_2025'].iloc[0]):
@@ -541,10 +576,12 @@ class FlexibleAnomalyDetector:
                 anomalies[node_path] = "S"  # Insufficient sample
                 continue
             
-            # Get actual NPS (prefer 2025, fallback to 2024)
+            # Get actual NPS (prefer 2026, then 2025, fallback to 2024)
             actual_nps = None
             
-            if 'NPS_2025' in target_data.columns and not pd.isna(target_data['NPS_2025'].iloc[0]):
+            if 'NPS_2026' in target_data.columns and not pd.isna(target_data['NPS_2026'].iloc[0]):
+                actual_nps = target_data['NPS_2026'].iloc[0]
+            elif 'NPS_2025' in target_data.columns and not pd.isna(target_data['NPS_2025'].iloc[0]):
                 actual_nps = target_data['NPS_2025'].iloc[0]
             elif 'NPS_2024' in target_data.columns and not pd.isna(target_data['NPS_2024'].iloc[0]):
                 actual_nps = target_data['NPS_2024'].iloc[0]
@@ -736,7 +773,7 @@ class FlexibleAnomalyDetector:
             # For now, use a simple target-based logic
             # In practice, you would fetch the actual target from your target system
             target_nps = 50.0  # Placeholder target
-            current_nps = target_data.get('NPS_2025', pd.Series([0])).iloc[0]
+            current_nps = target_data.get('NPS_2026', target_data.get('NPS_2025', pd.Series([0]))).iloc[0]
             
             if pd.isna(current_nps):
                 anomalies[node_path] = "?"
@@ -798,7 +835,7 @@ class FlexibleAnomalyDetector:
             baseline_nps = self._get_baseline_nps_vs_sel_period(node_path, start_dt, end_dt)
             
             # Get current NPS
-            current_nps = target_data.get('NPS_2025', pd.Series([0])).iloc[0]
+            current_nps = target_data.get('NPS_2026', target_data.get('NPS_2025', pd.Series([0]))).iloc[0]
             
             if pd.isna(current_nps):
                 anomalies[node_path] = "?"
@@ -847,10 +884,15 @@ class FlexibleAnomalyDetector:
             print(f"⚠️ No historical data available for {node_path}, using fallback baseline")
             return 35.0  # Conservative baseline
         
-        # Use NPS data from available years, prioritizing 2025 > 2024 > 2019
+        # Use NPS data from available years, prioritizing 2026 > 2025 > 2024 > 2019
         baseline_values = []
         
-        if 'NPS_2025' in historical_data.columns:
+        if 'NPS_2026' in historical_data.columns:
+            nps_2026 = historical_data['NPS_2026'].dropna()
+            if not nps_2026.empty:
+                baseline_values.extend(nps_2026.tolist())
+        
+        if 'NPS_2025' in historical_data.columns and len(baseline_values) < 3:
             nps_2025 = historical_data['NPS_2025'].dropna()
             if not nps_2025.empty:
                 baseline_values.extend(nps_2025.tolist())
