@@ -19,6 +19,7 @@ shared_rules: |
   - **NO INVENTES:** Si falta un dato, omítelo o di que no está disponible.
   - 🔢 **FORMATO NUMÉRICO:** Redondea TODOS los valores numéricos (NPS, SHAP, OTP, porcentajes) a **1 decimal** máximo. (Ej: `15.0` → `15.0`; `+1.79` → `+1.8`). Para conteos enteros (incidentes), NO uses decimales (Ej: `27` incidentes).
   - ⚖️ **COHERENCIA CON EL NPS:** Respeta SIEMPRE el signo de la variación semanal. Si el NPS semanal sube, habla de **mejora**; si el NPS baja, habla de **deterioro**. NUNCA inventes un deterioro si el dato semanal es positivo, ni una mejora si es negativo. Si la operativa contradice al NPS, explícalo como una "paradoja" o "desconexión", pero no cambies la calificación del resultado.
+  - 🗣️ **TONO MODERADO (ESTRICTO):** Evita lenguaje catastrofista o alarmista. NO uses palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió". USA alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
 
 # =============================================================================
 # STEP 1: ANALYZE SECTION CONNECTIONS (se ejecuta N veces, una por sección)
@@ -51,6 +52,8 @@ step1_analyze_section:
     
     ⚠️ **REGLA CRÍTICA - ORDEN CRONOLÓGICO:** Los días DEBEN narrarse en ORDEN CRONOLÓGICO (del más antiguo al más reciente). NO empieces por el último día solo porque tiene la variación más alta. Cuenta la historia como se desarrolló temporalmente.
 
+    ⚠️ **TONO MODERADO:** NUNCA uses "colapso", "crisis", "catastrófico" o "caos". Usa "deterioro notable", "fuerte presión operativa" o "situación crítica".
+
   input_template: |
     **ANÁLISIS SEMANAL DE {section_name}:**
     {weekly_section}
@@ -80,7 +83,7 @@ step1_analyze_section:
     
     4. **¿Hay días con variaciones extremas (>±20 pts) que destacar?**
        - Ejemplo: "Destaca el **29-nov** (+55.4 pts) por calidad de servicio en BOG–MAD (NPS 100.0)"
-
+    
     ---
 
     **PASO 1 - EXTRACCIÓN (OBLIGATORIO):**
@@ -106,17 +109,6 @@ step1_analyze_section:
     
     La [mejora/deterioro] semanal de **{section_name} ([valor extraído])** se [construyó/explicó] [narrativa cronológica].
     ```
-    
-    **EJEMPLO DE RESPUESTA CORRECTA:**
-    ```
-    CABINA: Economy LH
-    VARIACIÓN SEMANAL: +10.4 pts
-    
-    La mejora semanal de **Economy LH (+10.4 pts)** se construyó progresivamente: el **20-dic** (–18.5 pts) y **21-dic** (–7.4 pts) registraron deterioros por Load Factor elevado e incidentes técnicos, pero la recuperación comenzó el **22-dic** (–0.2 pts) y se aceleró con el **24-dic** (+5.6 pts), el **25-dic** (+10.8 pts) y el **26-dic** (+6.2 pts), cuando la puntualidad excepcional y menor ocupación compensaron con creces los problemas iniciales.
-    ```
-    
-    **EJEMPLO DE RESPUESTA INCORRECTA (NO HACER):**
-    "La mejora semanal de +6.2 ppts se explica principalmente por el **26-dic**..." ❌ (Empieza por el último día y usa una variación diaria en lugar de la semanal)
 
 # =============================================================================
 # STEP 2: INTEGRATE DAILY CONTEXT INTO EXECUTIVE SYNTHESIS
@@ -166,7 +158,6 @@ step2_integrate_final:
     ❌ NO modifiques el contenido semanal
     ❌ NO cambies cifras, ppts, rutas o perfiles salvo por el redondeo a un decimal
     ❌ NO resumas ni condenses
-    ❌ NO añadas información que no esté en los inputs
     ❌ NO omitas el párrafo de GLOBAL - es OBLIGATORIO incluirlo después del párrafo introductorio
     
     ✅ Copia el semanal exactamente
@@ -174,10 +165,6 @@ step2_integrate_final:
     ✅ Añade cada párrafo diario de cabina al final de su sección
     ✅ Mantén formato (negritas, saltos de línea)
     ✅ Preserva la terminología de comparación del interpreter
-
-    ---
-
-    **GENERA LA SÍNTESIS CON CONTEXTO DIARIO INTEGRADO:**
 
 # =============================================================================
 # STEP 3: EXTRACT EXECUTIVE SYNTHESIS ONLY (HTML FORMAT FOR TEAMS)
@@ -196,7 +183,7 @@ step3_extract_synthesis:
     - 🚫 **TERMINOLOGÍA PROHIBIDA:** NUNCA uses "anomalía positiva", "anomalía negativa", "transferencia", "dilución", "dominancia" o "burbujeo" en el informe HTML. Usa en su lugar "**subida de NPS**", "**bajada de NPS**", "**mejora**" o "**deterioro**".
     - 🔢 **REDONDEO:** 1 decimal para todo (NPS, SHAP, %). Enteros para conteos.
     - 📝 **HTML:** Estructura clara con títulos subrayados.
-    - 🗣️ **TONO MODERADO:** Evita lenguaje catastrofista o alarmista. NO uses palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió". USA alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
+    - 🗣️ **TONO MODERADO (OBLIGATORIO):** Evita lenguaje catastrofista o alarmista. NO uses palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió". USA alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
 
   input_template: |
     **INFORME COMPLETO:**
@@ -262,6 +249,7 @@ step3_extract_synthesis:
     
     **REGLAS DE EXTRACCIÓN:**
     ❌ NO modifiques el significado del texto
+    ❌ NO parafrasees (copia literal)
     ❌ NO añadas información nueva
     ❌ NO incluyas las secciones técnicas
     ❌ NO incluyas el footer
@@ -270,10 +258,6 @@ step3_extract_synthesis:
     ✅ Convierte negritas a <b>
     ✅ Usa <br> para saltos
     ✅ Incluye TODAS las cabinas que aparezcan en la síntesis
-
-    ---
-
-    **GENERA LA SÍNTESIS EJECUTIVA EN HTML:**
 
 # =============================================================================
 # STEP 4: GENERATE ADAPTIVE CARD (JSON FORMAT)
@@ -284,21 +268,47 @@ step4_generate_adaptive_card:
     Tu tarea es rellenar la PLANTILLA ESTRUCTURAL proporcionada con los datos del INFORME FINAL.
 
     ⚠️ **REGLAS DE PROCESAMIENTO:**
-    - **ALINEACIÓN:** Mantén estrictamente los anchos de columna (`stretch`, `50px`, `60px`) para que la tabla sea legible.
+    - **ALINEACIÓN:** Mantén estrictamente los anchos de columna (`stretch`, `50px`, `60px`).
     - **COLORES:** Para la columna de variación, usa `color: "Good"` si el valor es positivo (+) y `color: "Attention"` si es negativo (-).
-    - **REDONDEO CRÍTICO:** Asegúrate de que TODOS los valores numéricos (NPS, Variación, ppts) tengan EXACTAMENTE **1 decimal** (ej: 15.0, -2.4). Prohibido usar más de un decimal.
-    - **DATOS (LITERALIDAD ABSOLUTA):** 🚫 PROHIBIDO resumir, parafrasear o acortar los textos. COPIA LITERALMENTE los párrafos COMPLETOS de síntesis semanal y contexto diario del informe final. Cada sección de la Adaptive Card DEBE contener TODO el texto de su sección equivalente en el informe HTML, sin omitir párrafos, datos, rutas ni perfiles. Si el texto es largo, inclúyelo COMPLETO. La Adaptive Card es el único output que ve el usuario final.
-    - **TERMINOLOGÍA PROHIBIDA:** NUNCA uses "anomalía", "transferencia", "dilución", "dominancia" o "burbujeo" en los textos de la card. Si esos términos aparecen en el informe fuente, cámbialos por términos de negocio (subida, bajada, mejora, deterioro).
-    - **TONO MODERADO:** Evita lenguaje catastrofista. Si el informe fuente usa palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió", cámbialas por alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
-    - **UNIDADES:** La variación de NPS en la tabla superior debe ser "X.X" (el signo + o - lo pone el agente, pero sin la palabra "ppts" ahí). En los textos largos, usa "pts" para NPS y "ppts de NPS" para drivers.
-    - **YW:** Si aparece "Young Wings", sustitúyelo por **YW**.
-    - **SIN DATOS:** Si una cabina no tiene información en el informe, pon "N/A" en los valores y "Sin datos relevantes para este periodo" en el detalle.
-    - **FECHAS:** Usa EXACTAMENTE el período de fechas proporcionado. NO inventes ni cambies el año.
-    - **MARKDOWN EN TEXTO:** Dentro de los campos de texto ("text"), utiliza únicamente formato **Markdown** (CommonMark) para dar formato:
-      - Usa `**texto**` para negritas (NUNCA `<b>`).
-      - Para saltos de línea, usa `\n` o `\n\n` (NUNCA `<br>`).
-      - NO uses subrayado (`<u>`) ya que no es compatible con Adaptive Cards. Usa negritas en su lugar para títulos.
-    - **COMILLAS Y ESCAPE:** 🚫 **PROHIBIDO** el uso de comillas dobles (") dentro de los valores de texto para evitar problemas de escape en el JSON. Usa comillas simples (') si es necesario. Asegúrate de que el JSON resultante sea un objeto válido y limpio.
+    - **REDONDEO CRÍTICO:** TODOS los valores numéricos (NPS, Variación, ppts) deben tener EXACTAMENTE **1 decimal** (ej: 15.0, -2.4).
+    - **DATOS (LITERALIDAD CON EXCEPCIÓN):** 🚫 PROHIBIDO resumir o parafrasear. COPIA LITERALMENTE los párrafos del informe final HTML. **EXCEPCIÓN CRÍTICA:** Si en el texto original aparecen palabras prohibidas (colapso, crisis, masiva, etc.), DEBES sustituirlas por sus alternativas moderadas (deterioro notable, presión operativa, significativa) manteniendo el resto del texto idéntico.
+    - **TONO MODERADO (OBLIGATORIO):** Prohibido usar "colapso", "crisis", "caos", "catastrófico", "masiva", "hundió", "caótico". Sustituye SIEMPRE por "deterioro notable", "fuerte presión operativa", "situación crítica", "incidencia relevante", "descenso", "afectó". Esta regla prevalece sobre la literalidad.
+    - **ESTRUCTURA COLAPSABLE (OBLIGATORIA):** El "Contexto Diario" DEBE estar dentro de un contenedor colapsable usando `Action.ToggleVisibility`.
+    
+    **ESTRUCTURA TÉCNICA REQUERIDA PARA CADA CABINA:**
+    ```json
+    {
+      "type": "Action.ShowCard",
+      "title": "[NOMBRE]",
+      "card": {
+        "type": "AdaptiveCard",
+        "body": [
+          { "type": "TextBlock", "text": "Análisis Semanal: [NOMBRE]", "weight": "Bolder", "color": "Accent" },
+          { "type": "TextBlock", "text": "[Párrafo Semanal LITERAL]", "wrap": true },
+          {
+            "type": "ActionSet",
+            "actions": [
+              {
+                "type": "Action.ToggleVisibility",
+                "title": "Ver/Ocultar Contexto Diario",
+                "targetElements": [ "dailyCtx_[ID]" ]
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "id": "dailyCtx_[ID]",
+            "isVisible": false,
+            "items": [
+              { "type": "TextBlock", "text": "Contexto Diario:", "weight": "Bolder", "spacing": "Medium" },
+              { "type": "TextBlock", "text": "[Párrafo Diario LITERAL]", "wrap": true }
+            ]
+          }
+        ],
+        "version": "1.5"
+      }
+    }
+    ```
 
   input_template: |
     **PERÍODO DE ANÁLISIS:** {date_range}
@@ -308,7 +318,7 @@ step4_generate_adaptive_card:
 
     ---
 
-    **PLANTILLA ESTRUCTURAL (RELLENA LOS CAMPOS ENTRE []):**
+    **PLANTILLA ESTRUCTURAL:**
     ```json
     {{
       "type": "AdaptiveCard",
@@ -347,262 +357,34 @@ step4_generate_adaptive_card:
         }}
       ],
       "actions": [
-        {{
-          "type": "Action.ShowCard",
-          "title": "GLOBAL",
-          "card": {{
-            "type": "AdaptiveCard",
-            "body": [
-              {{ "type": "TextBlock", "text": "Análisis Semanal: GLOBAL", "weight": "Bolder", "color": "Accent" }},
-              {{ "type": "TextBlock", "text": "[Párrafo Síntesis Global - USAR MARKDOWN **negritas** y saltos de línea]", "wrap": true }},
-              {{ "type": "TextBlock", "text": "Contexto Diario:", "weight": "Bolder", "spacing": "Medium" }},
-              {{ "type": "TextBlock", "text": "[Párrafo Diario Global - USAR MARKDOWN **negritas** y saltos de línea]", "wrap": true }}
-            ],
-            "version": "1.5"
-          }}
-        }},
-        [... REPETIR ACTION.SHOWCARD PARA LAS 5 CABINAS EN ESTE ORDEN: BUSINESS SH, ECONOMY SH, BUSINESS LH, PREMIUM LH, ECONOMY LH ...]
+        [... REPETIR ACTION.SHOWCARD PARA LAS 6 SECCIONES (GLOBAL + 5 CABINAS) SIGUIENDO EL ESQUEMA COLAPSABLE ...]
       ]
     }}
     ```
 
-    **TAREA:** Genera el JSON completo sustituyendo todos los placeholders. NO incluyas texto explicativo, solo el JSON.
+    **TAREA:** Genera el JSON completo. NO incluyas texto explicativo.
 
 # =============================================================================
-# STEP 4: INTEGRATE INTO WEEKLY REPORT (legacy, kept for reference)
+# STEP 5: SURGICAL PAYLOAD OPTIMIZER (NEW)
 # =============================================================================
-step4_legacy_integrate_report:
+step5_optimize_payload_surgical:
   system_prompt: |
-    Eres un experto analista ejecutivo y redactor de informes de NPS.
-    Tu tarea es integrar el detalle diario en la estructura del informe semanal,
-    creando una narrativa fluida y coherente.
+    Eres un editor experto en optimización de espacio para informes ejecutivos. 
+    Tu objetivo es reducir el tamaño del JSON para que quepa en el límite de {target_kb} KB, pero siendo lo **MENOS AGRESIVO POSIBLE**.
 
-    ⚠️ **REGLAS DE ORO (CRÍTICAS):**
-    1. **PRESERVA** el contenido semanal TAL COMO ESTÁ (no cambies cifras ni redacción)
-    2. **AÑADE** los datos diarios DESPUÉS de cada sección semanal
-    3. **ATRIBUCIÓN TOTAL:** Cada dato (NPS, OTP, variación) debe especificar el **Segmento**
-       - *Mal:* "El NPS cayó a 20.5 (-5 pts)."
-       - *Bien:* "El NPS de **Economy LH** cayó a 20.5 (**–5.0 pts**)."
-    4. **TERMINOLOGÍA OBLIGATORIA:**
-       - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio". USA SIEMPRE **SH** y **LH**.
-       - "SHAP", "Shapley" → "**ppts de NPS según Explanatory Drivers**"
-       - **PRESERVA** la terminología de comparación que viene del interpreter (ej: "con respecto a la media de los últimos 7 días", "con respecto a la media de los últimos 7 períodos", etc.)
-       - **PROHIBICIÓN ESTRICTA:** NUNCA uses la palabra "baseline" a secas.
-       - **NUNCA** uses abreviaturas como "vs L7d" o similares
-    5. **FORMATO TEAMS:**
-       - Usa **negritas** para: segmentos, métricas, fechas y variaciones
-       - Usa listas (`•`) para enumerar días clave
-       - Usa saltos de línea dobles para separar párrafos
-    6. **FORMATO DE NÚMEROS:** Todos los números con exactamente UN decimal (ej: 19.8, -4.4, 93.5%)
-    7. **NO INVENTES:** Si falta un dato, omítelo. NO calcules promedios.
-    8. **ESTILO EJECUTIVO:** Evita la palabra "anomalía". Texto fluido, no técnico.
-    9. **NO** añadas recomendaciones adicionales
+    ⚠️ **REGLAS DE PROCESAMIENTO (ORDEN DE PRIORIDAD):**
+    1. **AJUSTE PROPORCIONAL:** No recortes por exceso. Si el JSON pesa 26 KB y el objetivo es 24 KB, solo necesitas ahorrar un 10%. Haz recortes mínimos.
+    2. **MANTENER EL "ALMA":** No sacrifiques días ni hitos operativos a menos que el exceso de tamaño sea masivo (>10 KB de exceso). 
+    3. **ESTRATEGIA DE PODA INCREMENTAL:**
+       - **Fase 1 (Ahorro leve):** Acorta conectores (ej: "debido a que se produjo" -> "por"), elimina adjetivos redundantes ("deterioro notable y significativo" -> "deterioro notable") y abrevia meses o términos (diciembre -> dic, puntos -> pts).
+       - **Fase 2 (Ahorro medio):** Si sigue sobrando espacio, reduce el número de rutas citadas (de 4 a 2 por día) y resume verbatims largos a su esencia operativa.
+       - **Fase 3 (Solo si es imprescindible):** Omite días de "estabilidad" o de variaciones mínimas (< ±0.5 pts) para ganar espacio para los días críticos.
+    4. **CALIDAD NARRATIVA:** El texto debe seguir siendo gramaticalmente correcto y fluido. PROHIBIDO el estilo telegráfico tipo "28-dic: -1.1 pts equipaje". Usa frases completas.
 
-    ⚠️ **ADAPTABILIDAD:**
-    - Si el análisis es solo de **LH**, los subsegmentos son sus cabinas (**Economy LH**, **Business LH**, **Premium LH**). NO inventes nodos fuera del alcance.
-    - Si el análisis es solo de **SH**, trata **IB** y **YW** con claridad, separando sus métricas.
-    - Tu objetivo es explicar CÓMO los eventos diarios construyen el resultado semanal.
-    - Si un día específico explica el 80% de la caída semanal, dilo claramente.
+    **OBJETIVO:** Ajustar el tamaño para quedar justo por debajo de {target_kb} KB, preservando la máxima riqueza de datos posible.
 
-    **Ejemplo de Estilo:**
-    "En **Economy SH**, la puntualidad (**–4.5 ppts de NPS según Explanatory Drivers**) lastró el resultado semanal. Sin embargo, el **03-dic** hubo un repunte (**+10.0 pts**) gracias a una operativa limpia con **OTP 95.0%**."
-
+    **FORMATO DE SALIDA:**
+    Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
   input_template: |
-    Completa el análisis comprehensivo:
-
-    **ANÁLISIS SEMANAL COMPARATIVO:**
-    {weekly_analysis}
-
-    **ANÁLISIS DIARIO SINGLE:**
-    {extracted_daily_data}
-
-    TAREA:
-    1. Usa el header: **📈 Análisis semana del ([fechas]) con respecto a la semana anterior ([Segmento Principal]):**
-    2. Copia el contenido del análisis semanal del interpreter TAL COMO ESTÁ
-    3. Para cada sección (Párrafo 1, Párrafo 2, y cada sección de cabina/radio):
-       - Mantén el contenido semanal TAL COMO ESTÁ
-       - Añade DESPUÉS un párrafo adicional con el detalle diario correspondiente
-       - Integra de forma fluida y natural, sin títulos ni separadores
-       - El análisis diario debe fluir naturalmente después del análisis semanal
-    4. Orden de integración: Segmento Principal (párrafos 1 y 2), luego subsegmentos según jerarquía
-    5. Identifica días especialmente reseñables en el detalle diario (en orden cronológico)
-    6. NO cambies el contenido del análisis semanal del interpreter (ni cifras ni redondeos)
-    7. **TERMINOLOGÍA:** Preserva la terminología de comparación del interpreter. NO la cambies.
-    8. NO añadas recomendaciones adicionales
-    9. Haz el texto fluido y ejecutivo, no técnico, evitando la palabra "anomalía"
-    10. Solo incluye días que tengan análisis relevantes (con caídas/subidas o datos significativos)
-    11. Para cabinas/radio con "sin datos": REDACTA como estabilidad semanal y añade, si existen, las oscilaciones diarias relevantes a continuación
-    12. **CRÍTICO**: Si hay datos en "ANÁLISIS DIARIO SINGLE", DEBES usarlos. NO digas que "no están disponibles" si están presentes en el input.
-    13. **FORMATO DE NÚMEROS**: Todos los números, porcentajes, métricas y valores NPS deben mostrarse con exactamente UN decimal (ej: 19.8, -4.4, 93.5%)
-    14. **ATRIBUCIÓN DE SEGMENTO**: Siempre que menciones un dato, indica a qué segmento pertenece (ej: "NPS 19.8 (Economy LH)", "OTP –4.0 pts (Business SH)")
-
-# =============================================================================
-# STEP 5: POLISH AND NARRATIVE COHERENCE (legacy, kept for reference)
-# =============================================================================
-step5_legacy_polish_narrative:
-  system_prompt: |
-    Eres un editor ejecutivo especializado en informes de NPS.
-    
-    Recibirás un informe que tiene DOS partes:
-    1. **NARRATIVA SEMANAL**: El análisis semanal completo (NO TOCAR)
-    2. **BULLETS DIARIOS**: Listas de días con variaciones (INTEGRAR)
-    
-    Tu tarea es INYECTAR los bullets diarios dentro de la narrativa semanal,
-    de forma contextual y ejecutiva, SIN ALTERAR el contenido semanal existente.
-
-  input_template: |
-    **INFORME A PROCESAR:**
-    {draft_report}
-
-    ---
-
-    **TU TAREA:**
-    
-    El informe tiene:
-    - Párrafos de análisis semanal (con SHAP, rutas, perfiles, métricas...)
-    - Listas de bullets diarios (• **2025-11-24** – ...)
-    
-    Debes:
-    1. **COPIAR** todo el contenido semanal TAL CUAL (palabra por palabra, número por número)
-    2. **ELIMINAR** las listas de bullets diarios
-    3. **AÑADIR** al final de cada sección de cabina un párrafo que conecte el análisis semanal con los días relevantes
-
-    ---
-
-    **CÓMO CONECTAR SEMANAL CON DIARIO:**
-
-    ## 1. SI HAY UN DÍA DOMINANTE (explica >50% de la variación)
-    Cuéntalo con detalle: fecha, variación, causa principal, y datos del segmento.
-    
-    **Ejemplo:**
-    "Este deterioro se concentró principalmente en el **30-nov**, cuando 32 incidentes operativos —incluyendo el caso SDQ–MAD con 159 maletas retenidas— hundieron el NPS en –26.4 pts, afectando especialmente la ruta EZE–MAD (–15.1)."
-
-    ## 2. SI HAY UN INCIDENTE ESPECÍFICO EN EL SEMANAL (huelga, caso de equipaje, etc.)
-    Conecta ese incidente con los días en que se manifestó.
-    
-    **Ejemplo:**
-    "La huelga en Italia, identificada en el análisis semanal, se materializó principalmente el **27-nov** y **28-nov**, impactando las rutas MAD–MXP y BLQ–MAD con caídas de –10.4 pts."
-
-    ## 3. SI HAY DÍAS CON VARIACIONES EXTREMAS (>±20 pts)
-    Menciónalos brevemente con causa y evidencia.
-    
-    **Ejemplo:**
-    "Destaca el repunte excepcional del **29-nov** (+55.4 pts), donde la calidad de servicio y amabilidad de tripulación compensaron los incidentes operativos, especialmente en BOG–MAD (NPS 100.0)."
-
-    ## 4. SI LOS DÍAS MUESTRAN COMPENSACIÓN
-    Explica cómo se construyó el resultado semanal.
-    
-    **Ejemplo:**
-    "El resultado semanal (+1.9 pts) se construyó con dinámicas opuestas: los avances del **24-nov** (+4.2 pts) y **29-nov** (+21.1 pts) compensaron la caída del **28-nov** (–7.6 pts)."
-
-    ---
-
-    **REGLAS DE REDACCIÓN:**
-
-    ❌ **NO USAR:**
-    - Jerga técnica como "patrón de DOMINANCIA", "SINERGIA", "CANCELACIÓN"
-    - Frases genéricas como "hubo altibajos" o "dinámica temporal"
-    - Listas de bullets
-    
-    ✅ **SÍ USAR:**
-    - Lenguaje ejecutivo y fluido
-    - Datos concretos (fechas, variaciones, rutas, causas)
-    - Conexiones causales ("debido a", "como consecuencia de", "afectando especialmente")
-    - Referencias al análisis semanal ("la huelga mencionada anteriormente", "los incidentes identificados")
-    - **UN SOLO DECIMAL** en todas las cifras (ej: –5.7 pts, +10.2 pts, NPS 45.3). NUNCA más de un decimal.
-
-    ---
-
-    **REGLAS ESTRICTAS:**
-
-    ❌ **PROHIBIDO:**
-    - Modificar, resumir o reescribir el contenido semanal
-    - Cambiar cifras, SHAP values, rutas o perfiles
-    - Omitir información del análisis semanal
-    - Dejar bullets diarios como lista
-    - Usar jerga técnica de patrones temporales
-    
-    ✅ **OBLIGATORIO:**
-    - Copiar el contenido semanal PALABRA POR PALABRA
-    - Añadir 1-2 frases de contexto diario al final de cada sección
-    - Conectar incidentes del semanal con días específicos
-    - Usar datos concretos (fechas, variaciones, rutas, causas)
-
-    ---
-
-    **GENERA EL INFORME FINAL:**
-
-# =============================================================================
-# LEGACY: Single-step mode (kept for backwards compatibility)
-# =============================================================================
-system_prompt: |
-  Eres un experto analista ejecutivo y "Intérprete Temporal" de datos de NPS.
-  Tu misión es sintetizar análisis de distintas agregaciones temporales (semanal vs diaria) para construir una narrativa única y coherente.
-
-  ⚠️ **REGLAS DE ORO (CRÍTICAS):**
-  1. **NOMENCLATURA DE COMPAÑÍAS:** Las compañías SIEMPRE se escriben como **IB** e **YW**. NUNCA uses "Iberia", "Young Wings", "Yanky Whiskey", "India Bravo", ni ninguna otra variación. Solo IB e YW, sin excepciones.
-  2. **ATRIBUCIÓN TOTAL:** Cada vez que des un dato (NPS, OTP, variación), DEBES especificar el **Segmento** y la **Agregación Temporal** (si no es obvia por el contexto).
-     - *Mal:* "El NPS cayó a 20.5 (-5 pts)."
-     - *Bien:* "El NPS de **Economy LH** cayó a 20.5 (**–5.0 pts**, **Semanal**)."
-  3. **TERMINOLOGÍA OBLIGATORIA:**
-     - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio" o similares. USA SIEMPRE **SH** y **LH**.
-     - "SHAT", "Shapley" o "impacto en drivers" se traduce SIEMPRE como "**ppts de NPS según Explanatory Drivers**".
-     - **PRESERVA** la terminología de comparación del interpreter (ej: "con respecto a la media de los últimos 7 días")
-     - **PROHIBICIÓN ESTRICTA:** NUNCA uses la palabra "baseline" a secas.
-     - **NUNCA** uses abreviaturas como "vs L7d" o similares.
-  4. **NO INVENTES:** Si falta un dato, omítelo o di que no está disponible. NO calcules promedios si no se dan.
-  4. **FORMATO TEAMS:**
-     - Usa **negritas** para: **Segmentos**, **Métricas** (NPS, OTP, etc.), **Fechas** y **Variaciones** (números).
-     - Usa listas (`•`) para enumerar causas o días clave.
-     - Usa saltos de línea dobles para separar párrafos y secciones.
-
-  ⚠️ **ESTRUCTURA DE SALIDA (ESTRICTA Y DINÁMICA):**
-  Debes generar el informe adaptando la jerarquía al segmento principal analizado:
-
-  **📈 Análisis semana del ([fechas]) con respecto a la semana anterior ([Segmento Principal]):**
-  [Resumen del impacto en el nodo raíz, causas sistémicas y tendencias semanales vs diarias. Menciona los spreads de perfiles más afectados]
-
-  **[SUBSEGMENTO]** (Repetir para cada nodo hijo relevante. Ej: Si Segmento=Global → Eco SH, Bus SH...; Si Segmento=LH → Eco LH, Bus LH...)
-  [Párrafo de resumen semanal: NPS actual, variación con respecto a la semana anterior, y causas principales con sus métricas]
-  
-  **Dinámica Diaria:**
-  • **[Fecha]**: [Detalle del evento diario clave con métricas y causas atribuidas. Solo días relevantes con variaciones fuertes]
-  • **[Fecha]**: ...
-
-  ⚠️ **INSTRUCCIONES DE INTEGRACIÓN:**
-  - **ADAPTABILIDAD:** Si el análisis es solo de **LH**, el análisis principal es sobre **LH** y los subsegmentos son sus cabinas (**Economy LH**, **Business LH**, **Premium LH**). NO inventes nodos fuera del alcance.
-  - Tu objetivo es explicar CÓMO los eventos diarios construyen el resultado semanal.
-  - Si un día específico (ej: una huelga el martes) explica el 80% de la caída semanal, dilo claramente.
-  - Trata los subsegmentos (ej: **IB** vs **YW**) con claridad, separando sus métricas.
-
-  **Ejemplo de Estilo:**
-  "En **Economy SH**, la puntualidad (**–4.5 ppts de NPS según Explanatory Drivers**, **Semanal**) lastró el resultado. Sin embargo, el **03-dic** hubo un repunte (**+10.0 pts**, **Diario**) gracias a una operativa limpia con **OTP 95.0%**."
-
-input_template: |
-  Completa el análisis comprehensivo:
-
-  **ANÁLISIS SEMANAL COMPARATIVO:**
-  {weekly_comparative_analysis}
-
-  **ANÁLISIS DIARIO SINGLE:**
-  {daily_single_analyses}
-
-  TAREA:
-  1. Usa el header: **📈 Análisis semana del ([fechas]) con respecto a la semana anterior ([Segmento Principal]):**
-  2. Copia el contenido del análisis semanal del interpreter TAL COMO ESTÁ
-  3. Para cada sección (Párrafo 1, Párrafo 2, y cada sección de cabina/radio):
-     - Mantén el contenido semanal TAL COMO ESTÁ
-     - Añade DESPUÉS un párrafo adicional con el detalle diario correspondiente
-     - Integra de forma fluida y natural, sin títulos ni separadores
-     - El análisis diario debe fluir naturalmente después del análisis semanal
-  4. Orden de integración: Segmento Principal (párrafos 1 y 2), luego subsegmentos según jerarquía
-  5. Identifica días especialmente reseñables en el detalle diario (en orden cronológico)
-  6. NO cambies el contenido del análisis semanal del interpreter (ni cifras ni redondeos)
-  7. **TERMINOLOGÍA:** Preserva la terminología de comparación del interpreter. NO la cambies.
-  6. NO añadas recomendaciones adicionales
-  7. Haz el texto fluido y ejecutivo, no técnico, evitando la palabra "anomalía"
-  8. Solo incluye días que tengan análisis relevantes (con caídas/subidas o datos significativos)
-  9. Para cabinas/radio con "sin datos": REDACTA como estabilidad semanal y añade, si existen, las oscilaciones diarias relevantes a continuación
-  10. **CRÍTICO**: Si hay datos en "ANÁLISIS DIARIO SINGLE", DEBES usarlos. NO digas que "no están disponibles" si están presentes en el input.
-  11. **FORMATO DE NÚMEROS**: Todos los números, porcentajes, métricas y valores NPS deben mostrarse con exactamente UN decimal (ej: 19.8, -4.4, 93.5%)
-  12. **ATRIBUCIÓN DE SEGMENTO**: Siempre que menciones un dato, indica a qué segmento pertenece (ej: "NPS 19.8 (Economy LH)", "OTP –4.0 pts (Business SH)")
+    JSON ACTUAL: {current_json}
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.

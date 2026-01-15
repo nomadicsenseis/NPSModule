@@ -1792,10 +1792,9 @@ async def run_flexible_analysis_silent(data_folder: str, analysis_date: datetime
                 # When date_flight_local is specified, use period 1 as reference for baseline calculation
                 reference_period = 1
         elif date_parameter == 'insert_ci':
-            # For insert_date_ci: calculate actual period numbers relative to today
-            base_period = calculate_actual_period_number(analysis_date)
-            # Analyze specified number of periods starting from the analysis date
-            periods_to_analyze = list(range(base_period, base_period + periods))
+            # For insert_date_ci: simulate running on that date, so analysis_date is the most recent period
+            periods_to_analyze = list(range(1, periods + 1))
+            reference_period = 1
         else:
             # Unknown parameter type, default to specified periods
             periods_to_analyze = list(range(1, periods + 1))
