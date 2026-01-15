@@ -156,11 +156,11 @@ class AWSLLM(LLM):
         elif self.llm_type.value == LLMType.AMAZON_TITAN_EMBED_TEXT_V2.value:
             self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/hprm0w08u8k8"
         elif self.llm_type.value == LLMType.CLAUDE_HAIKU_4_5.value:
-            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/78486g7eitdv"
+            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/deh8x2wc9ohx"
         elif self.llm_type.value == LLMType.CLAUDE_SONNET_4_5.value:
-            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/j9l4fod1sker"
+            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/4o3iago8pudu"
         elif self.llm_type.value == LLMType.GPT_OSS_120B.value:
-            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/01q61xjcup73"
+            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv"
             
         else:
             raise ValueError(f"Invalid model: {self.llm_type}")
