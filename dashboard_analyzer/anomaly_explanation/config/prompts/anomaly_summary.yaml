@@ -369,14 +369,12 @@ step4_generate_adaptive_card:
 # =============================================================================
 step5a_remove_low_impact_days:
   system_prompt: |
-    Eres un editor experto en optimización de espacio para informes ejecutivos.
-    Tu objetivo es reducir el tamaño del JSON para que quepa en el límite de {target_kb} KB, pero siendo lo **MENOS AGRESIVO POSIBLE**.
-
-    ⚠️ **PASO 5.A (ELIMINAR DÍAS MENOS RELEVANTES):**
+    Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
+    Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
     - Elimina primero días con las variaciones más pequeñas en valor absoluto y/o días sin eventos destacables.
     - Mantén los días con variaciones más fuertes y con eventos operativos clave.
     - NO resumas ni cambies el resto del texto.
-    - Mantén JSON válido.
+    - No elimines secciones, solo resume las que corresponda con estas directrices.
 
     **FORMATO DE SALIDA:**
     Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
@@ -386,14 +384,12 @@ step5a_remove_low_impact_days:
 
 step5b_shorten_daily_context:
   system_prompt: |
-    Eres un editor experto en optimización de espacio para informes ejecutivos.
-    Tu objetivo es reducir el tamaño del JSON para que quepa en el límite de {target_kb} KB, pero siendo lo **MENOS AGRESIVO POSIBLE**.
-
-    ⚠️ **PASO 5.B (REDUCIR CONTEXTO DIARIO):**
-    - Recorta conectores y adjetivos redundantes.
+    Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
+    Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
+    - Recorta conectores y adjetivos redundantes en los apartados de contexto diario.
     - Abrevia meses o términos (diciembre -> dic, puntos -> pts).
-    - Mantén la narrativa y las frases completas.
-    - No elimines secciones.
+    - Mantén la narrativa y las frases completas de los apartados semanales.
+    - No elimines secciones, solo resume las que corresponda con estas directrices.
 
     **FORMATO DE SALIDA:**
     Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
@@ -403,14 +399,11 @@ step5b_shorten_daily_context:
 
 step5c_shorten_cabin_haul_weekly:
   system_prompt: |
-    Eres un editor experto en optimización de espacio para informes ejecutivos.
-    Tu objetivo es reducir el tamaño del JSON para que quepa en el límite de {target_kb} KB, pero siendo lo **MENOS AGRESIVO POSIBLE**.
-
-    ⚠️ **PASO 5.C (ACORTAR RESUMEN SEMANAL POR CABINA/RADIO):**
-    - Reduce el texto del informe semanal de cada cabina/radio usando formulaciones más cortas.
-    - Mantén la narrativa y el sentido de cada cabina/radio; no elimines cabinas.
-    - Conserva cifras clave (NPS, variación) y menciones críticas de operativa.
-    - Mantén JSON válido.
+    Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
+    Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
+    - Rescribe el texto del informe semanal de cada cabina/radio usando formulaciones más cortas. Manten el global tal y como esta. 
+    - Conserva cifras clave (NPS, variación) y menciones críticas de operativa, pts de explainatory drivers (puedes abreviarlo como ED), etc.
+    - No elimines secciones, solo resume las que corresponda con estas directrices.
 
     **FORMATO DE SALIDA:**
     Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
@@ -420,14 +413,11 @@ step5c_shorten_cabin_haul_weekly:
 
 step5d_shorten_overall_global:
   system_prompt: |
-    Eres un editor experto en optimización de espacio para informes ejecutivos.
-    Tu objetivo es reducir el tamaño del JSON para que quepa en el límite de {target_kb} KB.
-
-    ⚠️ **PASO 5.D (ÚLTIMO RECURSO):**
-    - Recorta el texto del contexto diario manteniendo narrativa semanal por cabina/radio.
-    - Si aún sobra, reduce el informe general GLOBAL al mínimo imprescindible.
-    - No elimines cabinas completas.
-    - Mantén JSON válido.
+    Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
+    Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
+    - Reescribe el texto del informe general GLOBAL de forma más concisa y clara, pero manteniendo el mensaje.
+    - Conserva cifras clave (NPS, variación) y menciones críticas de operativa, pts de explainatory drivers (puedes abreviarlo como ED) etc.
+    - No elimines secciones, solo resume las que corresponda con estas directrices.
 
     **FORMATO DE SALIDA:**
     Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.

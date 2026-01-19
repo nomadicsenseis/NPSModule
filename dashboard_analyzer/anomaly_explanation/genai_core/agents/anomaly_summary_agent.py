@@ -249,6 +249,7 @@ class AnomalySummaryAgent:
 
         best_json = adaptive_card_json
         best_kb = current_kb
+        last_step_applied = "minify_only"
 
         for step_key in optimization_steps:
             step_config = self.config.get(step_key, {})
@@ -280,9 +281,16 @@ class AnomalySummaryAgent:
             if size_kb < best_kb:
                 best_json = optimized
                 best_kb = size_kb
+                last_step_applied = step_key
 
             if size_kb <= target_kb:
+                self.logger.info(f"✅ Adaptive Card fits after {step_key} ({size_kb:.2f} KB)")
                 break
+
+        if best_kb > target_kb:
+            self.logger.warning(f"⚠️ Adaptive Card still over limit after {last_step_applied}: {best_kb:.2f} KB")
+        else:
+            self.logger.info(f"✅ Adaptive Card final step: {last_step_applied} ({best_kb:.2f} KB)")
 
         return best_json
     
