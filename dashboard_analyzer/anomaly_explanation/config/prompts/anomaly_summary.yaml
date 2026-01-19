@@ -367,21 +367,67 @@ step4_generate_adaptive_card:
 # =============================================================================
 # STEP 5: SURGICAL PAYLOAD OPTIMIZER (NEW)
 # =============================================================================
-step5_optimize_payload_surgical:
+step5a_remove_low_impact_days:
   system_prompt: |
-    Eres un editor experto en optimización de espacio para informes ejecutivos. 
+    Eres un editor experto en optimización de espacio para informes ejecutivos.
     Tu objetivo es reducir el tamaño del JSON para que quepa en el límite de {target_kb} KB, pero siendo lo **MENOS AGRESIVO POSIBLE**.
 
-    ⚠️ **REGLAS DE PROCESAMIENTO (ORDEN DE PRIORIDAD):**
-    1. **AJUSTE PROPORCIONAL:** No recortes por exceso. Si el JSON pesa 26 KB y el objetivo es 24 KB, solo necesitas ahorrar un 10%. Haz recortes mínimos.
-    2. **MANTENER EL "ALMA":** No sacrifiques días ni hitos operativos a menos que el exceso de tamaño sea masivo (>10 KB de exceso). 
-    3. **ESTRATEGIA DE PODA INCREMENTAL:**
-       - **Fase 1 (Ahorro leve):** Acorta conectores (ej: "debido a que se produjo" -> "por"), elimina adjetivos redundantes ("deterioro notable y significativo" -> "deterioro notable") y abrevia meses o términos (diciembre -> dic, puntos -> pts).
-       - **Fase 2 (Ahorro medio):** Si sigue sobrando espacio, reduce el número de rutas citadas (de 4 a 2 por día) y resume verbatims largos a su esencia operativa.
-       - **Fase 3 (Solo si es imprescindible):** Omite días de "estabilidad" o de variaciones mínimas (< ±0.5 pts) para ganar espacio para los días críticos.
-    4. **CALIDAD NARRATIVA:** El texto debe seguir siendo gramaticalmente correcto y fluido. PROHIBIDO el estilo telegráfico tipo "28-dic: -1.1 pts equipaje". Usa frases completas.
+    ⚠️ **PASO 5.A (ELIMINAR DÍAS MENOS RELEVANTES):**
+    - Elimina primero días con las variaciones más pequeñas en valor absoluto y/o días sin eventos destacables.
+    - Mantén los días con variaciones más fuertes y con eventos operativos clave.
+    - NO resumas ni cambies el resto del texto.
+    - Mantén JSON válido.
 
-    **OBJETIVO:** Ajustar el tamaño para quedar justo por debajo de {target_kb} KB, preservando la máxima riqueza de datos posible.
+    **FORMATO DE SALIDA:**
+    Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
+  input_template: |
+    JSON ACTUAL: {current_json}
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
+
+step5b_shorten_daily_context:
+  system_prompt: |
+    Eres un editor experto en optimización de espacio para informes ejecutivos.
+    Tu objetivo es reducir el tamaño del JSON para que quepa en el límite de {target_kb} KB, pero siendo lo **MENOS AGRESIVO POSIBLE**.
+
+    ⚠️ **PASO 5.B (REDUCIR CONTEXTO DIARIO):**
+    - Recorta conectores y adjetivos redundantes.
+    - Abrevia meses o términos (diciembre -> dic, puntos -> pts).
+    - Mantén la narrativa y las frases completas.
+    - No elimines secciones.
+
+    **FORMATO DE SALIDA:**
+    Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
+  input_template: |
+    JSON ACTUAL: {current_json}
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
+
+step5c_shorten_cabin_haul_weekly:
+  system_prompt: |
+    Eres un editor experto en optimización de espacio para informes ejecutivos.
+    Tu objetivo es reducir el tamaño del JSON para que quepa en el límite de {target_kb} KB, pero siendo lo **MENOS AGRESIVO POSIBLE**.
+
+    ⚠️ **PASO 5.C (ACORTAR RESUMEN SEMANAL POR CABINA/RADIO):**
+    - Reduce el texto del informe semanal de cada cabina/radio usando formulaciones más cortas.
+    - Mantén la narrativa y el sentido de cada cabina/radio; no elimines cabinas.
+    - Conserva cifras clave (NPS, variación) y menciones críticas de operativa.
+    - Mantén JSON válido.
+
+    **FORMATO DE SALIDA:**
+    Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
+  input_template: |
+    JSON ACTUAL: {current_json}
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
+
+step5d_shorten_overall_global:
+  system_prompt: |
+    Eres un editor experto en optimización de espacio para informes ejecutivos.
+    Tu objetivo es reducir el tamaño del JSON para que quepa en el límite de {target_kb} KB.
+
+    ⚠️ **PASO 5.D (ÚLTIMO RECURSO):**
+    - Recorta el texto del contexto diario manteniendo narrativa semanal por cabina/radio.
+    - Si aún sobra, reduce el informe general GLOBAL al mínimo imprescindible.
+    - No elimines cabinas completas.
+    - Mantén JSON válido.
 
     **FORMATO DE SALIDA:**
     Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.

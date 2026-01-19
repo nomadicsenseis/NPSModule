@@ -206,6 +206,85 @@ class AnomalySummaryAgent:
             aws_session_token=creds['aws_session_token'],
             profile_name=os.getenv("AWS_PROFILE")
         )
+
+    def _measure_kb(self, payload: str) -> float:
+        """Return UTF-8 payload size in KB."""
+        if payload is None:
+            return 0.0
+        return len(payload.encode('utf-8')) / 1024.0
+
+    def _minify_json(self, json_payload: str) -> str:
+        """Minify JSON string if possible to reduce size."""
+        if not json_payload:
+            return json_payload
+        try:
+            parsed = json.loads(json_payload)
+            return json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
+        except Exception:
+            return json_payload.strip()
+
+    async def _optimize_adaptive_card_payload(
+        self,
+        adaptive_card_json: str,
+        target_kb: int = 24
+    ) -> str:
+        """Iteratively reduce Adaptive Card JSON payload to fit size constraints."""
+        if not adaptive_card_json:
+            return adaptive_card_json
+
+        # Minify first as a cheap win
+        adaptive_card_json = self._minify_json(adaptive_card_json)
+        current_kb = self._measure_kb(adaptive_card_json)
+        self.logger.info(f"📦 Adaptive Card size (minified): {current_kb:.2f} KB")
+
+        if current_kb <= target_kb:
+            return adaptive_card_json
+
+        optimization_steps = [
+            'step5a_remove_low_impact_days',
+            'step5b_shorten_daily_context',
+            'step5c_shorten_cabin_haul_weekly',
+            'step5d_shorten_overall_global'
+        ]
+
+        best_json = adaptive_card_json
+        best_kb = current_kb
+
+        for step_key in optimization_steps:
+            step_config = self.config.get(step_key, {})
+            step_system = step_config.get('system_prompt', '')
+            step_input_template = step_config.get('input_template', '')
+
+            if not step_system or not step_input_template:
+                self.logger.warning(f"⚠️ Missing config for {step_key}, skipping")
+                continue
+
+            message_history = MessageHistory()
+            message_history.create_and_add_message(content=step_system.format(target_kb=target_kb), message_type=MessageType.SYSTEM)
+            message_history.create_and_add_message(
+                content=step_input_template.format(current_json=best_json, target_kb=target_kb),
+                message_type=MessageType.USER
+            )
+
+            response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+            optimized = response.content if hasattr(response, 'content') else str(response)
+
+            # Strip code fences if present
+            if "```" in optimized:
+                optimized = optimized.split("```")[-2].strip() if optimized.count("```") >= 2 else optimized.replace("```", "").strip()
+
+            optimized = self._minify_json(optimized)
+            size_kb = self._measure_kb(optimized)
+            self.logger.info(f"📦 Adaptive Card size after {step_key}: {size_kb:.2f} KB")
+
+            if size_kb < best_kb:
+                best_json = optimized
+                best_kb = size_kb
+
+            if size_kb <= target_kb:
+                break
+
+        return best_json
     
     async def generate_summary_report(self, periods_data: List[Dict[str, Any]]) -> str:
         """
@@ -382,6 +461,7 @@ class AnomalySummaryAgent:
                 # STEP 2: Generate Adaptive Card
                 date_range = self._build_date_range_string(daily_single_analyses, date_ranges)
                 adaptive_card_json = await self._generate_adaptive_card(comprehensive_response, date_range)
+                adaptive_card_json = await self._optimize_adaptive_card_payload(adaptive_card_json, target_kb=24)
                 
                 # Combine synthesis and adaptive card
                 final_output = f"{comprehensive_response}\n\n---ADAPTIVE_CARD_JSON---\n\n{adaptive_card_json}"
@@ -618,6 +698,7 @@ class AnomalySummaryAgent:
             # Build date range from daily analyses for accurate display
             date_range = self._build_date_range_string(daily_single_analyses, date_ranges)
             adaptive_card_json = await self._generate_adaptive_card(polished_report, date_range)
+            adaptive_card_json = await self._optimize_adaptive_card_payload(adaptive_card_json, target_kb=24)
             
             self.logger.info(f"✅ Step 4 complete: Adaptive Card generated (date_range: {date_range})")
 
