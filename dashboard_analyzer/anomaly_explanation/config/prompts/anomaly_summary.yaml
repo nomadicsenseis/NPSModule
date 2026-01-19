@@ -265,60 +265,29 @@ step3_extract_synthesis:
 step4_generate_adaptive_card:
   system_prompt: |
     Eres un experto en JSON y Adaptive Cards para Microsoft Teams.
-    Tu tarea es rellenar la PLANTILLA ESTRUCTURAL proporcionada con los datos del INFORME FINAL.
-
-    ⚠️ **REGLAS DE PROCESAMIENTO:**
-    - **ALINEACIÓN:** Mantén estrictamente los anchos de columna (`stretch`, `50px`, `60px`).
-    - **COLORES:** Para la columna de variación, usa `color: "Good"` si el valor es positivo (+) y `color: "Attention"` si es negativo (-).
-    - **REDONDEO CRÍTICO:** TODOS los valores numéricos (NPS, Variación, ppts) deben tener EXACTAMENTE **1 decimal** (ej: 15.0, -2.4).
-    - **DATOS (LITERALIDAD CON EXCEPCIÓN):** 🚫 PROHIBIDO resumir o parafrasear. COPIA LITERALMENTE los párrafos del informe final HTML. **EXCEPCIÓN CRÍTICA:** Si en el texto original aparecen palabras prohibidas (colapso, crisis, masiva, etc.), DEBES sustituirlas por sus alternativas moderadas (deterioro notable, presión operativa, significativa) manteniendo el resto del texto idéntico.
-    - **TONO MODERADO (OBLIGATORIO):** Prohibido usar "colapso", "crisis", "caos", "catastrófico", "masiva", "hundió", "caótico". Sustituye SIEMPRE por "deterioro notable", "fuerte presión operativa", "situación crítica", "incidencia relevante", "descenso", "afectó". Esta regla prevalece sobre la literalidad.
-    - **ESTRUCTURA COLAPSABLE (OBLIGATORIA):** El "Contexto Diario" DEBE estar dentro de un contenedor colapsable usando `Action.ToggleVisibility`.
+    Te voy a pasar una síntesis ejecutiva (HTML) y una plantilla estructural. Tu tarea es devolver una Adaptive Card en JSON.
     
-    **ESTRUCTURA TÉCNICA REQUERIDA PARA CADA CABINA:**
-    ```json
-    {
-      "type": "Action.ShowCard",
-      "title": "[NOMBRE]",
-      "card": {
-        "type": "AdaptiveCard",
-        "body": [
-          { "type": "TextBlock", "text": "Análisis Semanal: [NOMBRE]", "weight": "Bolder", "color": "Accent" },
-          { "type": "TextBlock", "text": "[Párrafo Semanal LITERAL]", "wrap": true },
-          {
-            "type": "ActionSet",
-            "actions": [
-              {
-                "type": "Action.ToggleVisibility",
-                "title": "Ver/Ocultar Contexto Diario",
-                "targetElements": [ "dailyCtx_[ID]" ]
-              }
-            ]
-          },
-          {
-            "type": "Container",
-            "id": "dailyCtx_[ID]",
-            "isVisible": false,
-            "items": [
-              { "type": "TextBlock", "text": "Contexto Diario:", "weight": "Bolder", "spacing": "Medium" },
-              { "type": "TextBlock", "text": "[Párrafo Diario LITERAL]", "wrap": true }
-            ]
-          }
-        ],
-        "version": "1.5"
-      }
-    }
-    ```
+    **REGLA CRÍTICA:** Debes respetar TODO el texto de la síntesis ejecutiva (sin omitir ni resumir).
+    **SALIDA:** Devuélvelo en una sola línea, minificado, sin texto adicional.
 
   input_template: |
     **PERÍODO DE ANÁLISIS:** {date_range}
 
-    **INFORME FINAL PARA MAPEAR:**
+    **SÍNTESIS EJECUTIVA PARA MAPEAR (TEXTO COMPLETO):**
     {full_report}
 
     ---
 
-    **PLANTILLA ESTRUCTURAL:**
+    **REGLAS DE PROCESAMIENTO:**
+    - **ALINEACIÓN:** Mantén estrictamente los anchos de columna (`stretch`, `50px`, `60px`).
+    - **COLORES:** Para la columna de variación, usa `color: "Good"` si el valor es positivo (+) y `color: "Attention"` si es negativo (-).
+    - **REDONDEO CRÍTICO:** TODOS los valores numéricos (NPS, Variación, ppts) deben tener EXACTAMENTE **1 decimal** (ej: 15.0, -2.4).
+    - **LITERALIDAD:** 🚫 PROHIBIDO resumir o parafrasear. COPIA LITERALMENTE los párrafos del informe HTML.
+    - **EXCEPCIÓN DE TONO:** Si aparecen palabras prohibidas (colapso, crisis, caos, catastrófico, masiva, hundió, caótico), sustitúyelas por alternativas moderadas (deterioro notable, presión operativa, situación crítica, incidencia relevante, descenso, afectó) manteniendo el resto del texto idéntico.
+
+    ---
+
+    **PLANTILLA ESTRUCTURAL COMPLETA:**
     ```json
     {{
       "type": "AdaptiveCard",
@@ -357,12 +326,43 @@ step4_generate_adaptive_card:
         }}
       ],
       "actions": [
-        [... REPETIR ACTION.SHOWCARD PARA LAS 6 SECCIONES (GLOBAL + 5 CABINAS) SIGUIENDO EL ESQUEMA COLAPSABLE ...]
+        {{
+          "type": "Action.ShowCard",
+          "title": "[NOMBRE_SECCION]",
+          "card": {{
+            "type": "AdaptiveCard",
+            "body": [
+              {{ "type": "TextBlock", "text": "Análisis Semanal: [NOMBRE]", "weight": "Bolder", "color": "Accent" }},
+              {{ "type": "TextBlock", "text": "[Párrafo Semanal LITERAL del informe]", "wrap": true }},
+              {{
+                "type": "ActionSet",
+                "actions": [
+                  {{
+                    "type": "Action.ToggleVisibility",
+                    "title": "Ver/Ocultar Contexto Diario",
+                    "targetElements": [ "dailyCtx_[ID]" ]
+                  }}
+                ]
+              }},
+              {{
+                "type": "Container",
+                "id": "dailyCtx_[ID]",
+                "isVisible": false,
+                "items": [
+                  {{ "type": "TextBlock", "text": "Contexto Diario:", "weight": "Bolder", "spacing": "Medium" }},
+                  {{ "type": "TextBlock", "text": "[Párrafo Diario LITERAL del informe]", "wrap": true }}
+                ]
+              }}
+            ],
+            "version": "1.5"
+          }}
+        }},
+        [... REPETIR ACTION.SHOWCARD PARA LAS 6 SECCIONES (GLOBAL + 5 CABINAS EN ORDEN BUSINESS SH, ECONOMY SH, BUSINESS LH, PREMIUM LH, ECONOMY LH) ...]
       ]
     }}
     ```
 
-    **TAREA:** Genera el JSON completo. NO incluyas texto explicativo.
+    **TAREA:** Genera el JSON completo **minificado en una sola línea**, respetando todo el texto de la síntesis. NO incluyas texto explicativo.
 
 # =============================================================================
 # STEP 5: SURGICAL PAYLOAD OPTIMIZER (NEW)
