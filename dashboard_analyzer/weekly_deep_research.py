@@ -72,7 +72,7 @@ async def generate_consolidated_summary(agent, consolidated_data: List[Dict], da
                     daily_analysis_params=daily_params,
                     date_ranges=date_ranges
                 ),
-                timeout=900.0  # Increased timeout for 3-step process
+                timeout=3600.0  # Increased timeout for 3-step process + payload optimization
             )
             return comprehensive_summary
         except Exception as e:
