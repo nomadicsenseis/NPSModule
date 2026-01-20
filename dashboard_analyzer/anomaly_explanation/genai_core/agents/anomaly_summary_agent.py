@@ -235,9 +235,10 @@ class AnomalySummaryAgent:
         # Minify first as a cheap win
         adaptive_card_json = self._minify_json(adaptive_card_json)
         current_kb = self._measure_kb(adaptive_card_json)
-        self.logger.info(f"📦 Adaptive Card size (minified): {current_kb:.2f} KB")
+        self.logger.info(f"📦 Initial Adaptive Card size (minified): {current_kb:.2f} KB")
 
         if current_kb <= target_kb:
+            self.logger.info(f"✅ Adaptive Card already fits ({current_kb:.2f} KB)")
             return adaptive_card_json
 
         optimization_steps = [
@@ -260,6 +261,8 @@ class AnomalySummaryAgent:
                 self.logger.warning(f"⚠️ Missing config for {step_key}, skipping")
                 continue
 
+            self.logger.info(f"🔄 Applying optimization step: {step_key}...")
+            
             message_history = MessageHistory()
             message_history.create_and_add_message(content=step_system.format(target_kb=target_kb), message_type=MessageType.SYSTEM)
             message_history.create_and_add_message(
@@ -276,7 +279,9 @@ class AnomalySummaryAgent:
 
             optimized = self._minify_json(optimized)
             size_kb = self._measure_kb(optimized)
+            
             self.logger.info(f"📦 Adaptive Card size after {step_key}: {size_kb:.2f} KB")
+            self.logger.info(f"📄 Optimized JSON content after {step_key}:\n{optimized}")
 
             if size_kb < best_kb:
                 best_json = optimized
@@ -291,6 +296,7 @@ class AnomalySummaryAgent:
             self.logger.warning(f"⚠️ Adaptive Card still over limit after {last_step_applied}: {best_kb:.2f} KB")
         else:
             self.logger.info(f"✅ Adaptive Card final step: {last_step_applied} ({best_kb:.2f} KB)")
+            self.logger.info(f"🚀 Final optimized Adaptive Card JSON:\n{best_json}")
 
         return best_json
     
