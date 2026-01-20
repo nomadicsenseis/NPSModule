@@ -14,6 +14,23 @@ try:
 except (json.JSONDecodeError, KeyError):
     BEDROCK_MODELS = {}
 
+# Model ARNs by environment (local vs prod)
+# Structure: { LLMType.value: { "local": "arn...", "prod": "arn..." } }
+MODEL_ARNS_BY_ENV = {
+    LLMType.CLAUDE_HAIKU_4_5.value: {
+        "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/78486g7eitdv",
+        "prod": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/deh8x2wc9ohx"
+    },
+    LLMType.CLAUDE_SONNET_4_5.value: {
+        "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/j9l4fod1sker",
+        "prod": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/4o3iago8pudu"
+    },
+    LLMType.GPT_OSS_120B.value: {
+        "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/01q61xjcup73",
+        "prod": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv"
+    },
+}
+
 
 class AWSLLM(LLM):
     """
@@ -21,7 +38,7 @@ class AWSLLM(LLM):
     """
 
     def __init__(self, llm_type: LLMType, region_name, aws_access_key_id=None, aws_secret_access_key=None, 
-                 aws_session_token=None, profile_name=None,
+                 aws_session_token=None, profile_name=None, environment: str = None,
                  token_input_price: float = 11.02 / 1000000, token_output_price: float = 32.68 / 1000000):
         self.region_name = region_name
         self.aws_access_key_id = aws_access_key_id
@@ -29,6 +46,8 @@ class AWSLLM(LLM):
         self.aws_session_token = aws_session_token
         self.profile_name = profile_name
         self.model_id = None
+        # Environment: "local" or "prod" - defaults to ENVIRONMENT env var or "prod"
+        self.environment = environment or os.getenv("ENVIRONMENT", "prod").lower()
 
         super().__init__(llm_type, token_input_price, token_output_price)
 
@@ -87,6 +106,13 @@ class AWSLLM(LLM):
             temperature=temperature,
         )
     
+    def _get_model_arn_by_env(self, llm_type_value: str) -> str:
+        """Get the model ARN based on the environment (local/prod)"""
+        env_arns = MODEL_ARNS_BY_ENV.get(llm_type_value, {})
+        # Normalize environment to "local" or "prod"
+        env_key = "local" if self.environment == "local" else "prod"
+        return env_arns.get(env_key, env_arns.get("prod", ""))
+
     def _get_provider(self):
         """Get the provider name based on the model type"""
         if self.llm_type.value in [
@@ -156,11 +182,11 @@ class AWSLLM(LLM):
         elif self.llm_type.value == LLMType.AMAZON_TITAN_EMBED_TEXT_V2.value:
             self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/hprm0w08u8k8"
         elif self.llm_type.value == LLMType.CLAUDE_HAIKU_4_5.value:
-            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/deh8x2wc9ohx"
+            self.model_id = self._get_model_arn_by_env(LLMType.CLAUDE_HAIKU_4_5.value)
         elif self.llm_type.value == LLMType.CLAUDE_SONNET_4_5.value:
-            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/4o3iago8pudu"
+            self.model_id = self._get_model_arn_by_env(LLMType.CLAUDE_SONNET_4_5.value)
         elif self.llm_type.value == LLMType.GPT_OSS_120B.value:
-            self.model_id = "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv"
+            self.model_id = self._get_model_arn_by_env(LLMType.GPT_OSS_120B.value)
             
         else:
             raise ValueError(f"Invalid model: {self.llm_type}")

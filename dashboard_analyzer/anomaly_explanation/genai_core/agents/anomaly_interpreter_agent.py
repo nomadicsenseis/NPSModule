@@ -381,7 +381,8 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             aws_access_key_id=creds['aws_access_key_id'],
             aws_secret_access_key=creds['aws_secret_access_key'],
             aws_session_token=creds['aws_session_token'],
-            profile_name=os.getenv("AWS_PROFILE")
+            profile_name=os.getenv("AWS_PROFILE"),
+            environment=self.environment
         )
     
     async def interpret_anomaly_tree(self, tree_data: str, date: Optional[str] = None, segment: Optional[str] = None) -> str:
