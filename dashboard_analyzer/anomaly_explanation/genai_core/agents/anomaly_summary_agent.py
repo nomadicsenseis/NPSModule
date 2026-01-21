@@ -215,37 +215,60 @@ class AnomalySummaryAgent:
         return len(payload.encode('utf-8')) / 1024.0
 
     def _clean_json_response(self, text: str) -> str:
-        """Robustly extract JSON from LLM response, handling code blocks and escaped quotes."""
+        """Extract JSON from LLM response - simple and direct."""
         if not text:
             return "{}"
         
         cleaned = text.strip()
         
-        # 1. Handle common LLM prefixes like "json\n" or "Here is the JSON:"
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:].strip()
-            
-        # 2. Extract from markdown code blocks if present
+        # Extract from markdown code blocks if present
         if "```" in cleaned:
-            if "```json" in cleaned:
-                cleaned = cleaned.split("```json")[1].split("```")[0].strip()
-            else:
-                cleaned = cleaned.split("```")[1].split("```")[0].strip()
+            parts = cleaned.split("```")
+            for part in parts[1:]:  # Skip first part (before first ```)
+                content = part.split("```")[0] if "```" in part else part
+                # Remove language identifier if present
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+                if content.startswith("{"):
+                    cleaned = content
+                    break
         
-        # 3. Handle escaped quotes if the user requested them (e.g. \"type\": \"AdaptiveCard\")
-        # but only if it looks like the whole thing is escaped
-        if '\\"' in cleaned and cleaned.count('\\"') > cleaned.count('"'):
-            cleaned = cleaned.replace('\\"', '"')
+        # Find first '{' and last '}'
+        start = cleaned.find('{')
+        end = cleaned.rfind('}')
+        if start != -1 and end != -1 and end > start:
+            cleaned = cleaned[start:end+1]
             
-        # 4. Final attempt to find the first '{' and last '}'
+        return cleaned
+
+    def _repair_json(self, json_str: str) -> str:
+        """Validate JSON, with minimal repair attempts."""
+        if not json_str:
+            return "{}"
+        
+        cleaned = self._clean_json_response(json_str)
+        
+        # Try to parse as-is
         try:
-            start_idx = cleaned.find('{')
-            end_idx = cleaned.rfind('}')
-            if start_idx != -1 and end_idx != -1:
-                cleaned = cleaned[start_idx:end_idx+1]
-        except Exception:
-            pass
-            
+            json.loads(cleaned)
+            self.logger.info(f"✅ Adaptive Card JSON validated ({len(cleaned)} chars)")
+            return cleaned
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"⚠️ JSON validation failed: {e.msg} at pos {e.pos}")
+        
+        # Single repair attempt: handle escaped quotes
+        if '\\"' in cleaned:
+            try:
+                fixed = cleaned.replace('\\"', '"')
+                json.loads(fixed)
+                self.logger.info("✅ Fixed JSON by unescaping quotes")
+                return fixed
+            except:
+                pass
+        
+        # Return as-is (caller will handle invalid JSON)
+        self.logger.error(f"❌ Could not parse JSON. Returning cleaned version.")
         return cleaned
 
     def _minify_json(self, json_payload: str) -> str:
@@ -265,10 +288,19 @@ class AnomalySummaryAgent:
         self,
         adaptive_card_json: str,
         target_kb: int = 24
-    ) -> str:
-        """Iteratively reduce Adaptive Card JSON payload to fit size constraints."""
+    ) -> tuple:
+        """Iteratively reduce Adaptive Card JSON payload to fit size constraints.
+        
+        Returns:
+            Tuple of (final_json, debug_info) where debug_info contains step5 and step6 conversations
+        """
+        debug_info = {
+            'step5_modernize_tone': None,
+            'step6_size_optimization': []
+        }
+        
         if not adaptive_card_json:
-            return adaptive_card_json
+            return adaptive_card_json, debug_info
 
         # Initial cleaning and minification (returns normal quotes)
         best_json = self._minify_json(adaptive_card_json)
@@ -286,36 +318,51 @@ class AnomalySummaryAgent:
             
             # Pass escaped version to the LLM
             escaped_for_llm = best_json.replace('"', '\\"')
+            step5_input = step_input_template.format(current_json=escaped_for_llm)
             
             message_history = MessageHistory()
             message_history.create_and_add_message(content=step_system, message_type=MessageType.SYSTEM)
-            message_history.create_and_add_message(
-                content=step_input_template.format(current_json=escaped_for_llm),
-                message_type=MessageType.USER
-            )
+            message_history.create_and_add_message(content=step5_input, message_type=MessageType.USER)
 
             try:
                 response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
                 modernized = response.content if hasattr(response, 'content') else str(response)
+                
+                # Store debug info (full content for debugging)
+                debug_info['step5_modernize_tone'] = {
+                    'messages': [
+                        {'role': 'system', 'content': step_system},
+                        {'role': 'user', 'content': step5_input},  # Full input
+                        {'role': 'assistant', 'content': modernized}  # Full output
+                    ],
+                    'input_size_kb': current_kb,
+                    'executed': True
+                }
                 
                 # Clean and minify (returns with normal quotes)
                 clean_modernized = self._clean_json_response(modernized)
                 best_json = self._minify_json(clean_modernized)
                 
                 # Verify size after modernization
-                current_kb = self._measure_kb(best_json)
+                new_kb = self._measure_kb(best_json)
+                debug_info['step5_modernize_tone']['output_size_kb'] = new_kb
+                current_kb = new_kb
+                
                 self.logger.info(f"📦 Adaptive Card size after tone modernization: {current_kb:.2f} KB")
                 self.logger.info("✅ Tone modernization applied successfully")
             except Exception as e:
                 self.logger.warning(f"⚠️ Failed to apply tone modernization: {e}")
+                debug_info['step5_modernize_tone'] = {'executed': False, 'error': str(e)}
 
         # --- STEP 6: Surgical Size Optimization (Now Second) ---
         if current_kb <= target_kb:
             self.logger.info(f"✅ Adaptive Card already fits ({current_kb:.2f} KB)")
-            # Final step: ensure it is minified and quotes are escaped for output
-            final_escaped = best_json.replace('"', '\\"')
-            self.logger.info(f"🚀 Final Adaptive Card JSON (escaped):\n{final_escaped}")
-            return final_escaped
+            self.logger.info(f"🚀 Final Adaptive Card JSON:\n{best_json}")
+            debug_info['step6_size_optimization'].append({
+                'step': 'skipped',
+                'reason': f'Already fits: {current_kb:.2f} KB <= {target_kb} KB'
+            })
+            return best_json, debug_info
 
         optimization_steps = [
             'step6a_remove_low_impact_days',
@@ -334,6 +381,9 @@ class AnomalySummaryAgent:
 
             if not step_system or not step_input_template:
                 self.logger.warning(f"⚠️ Missing config for {step_key}, skipping")
+                debug_info['step6_size_optimization'].append({
+                    'step': step_key, 'executed': False, 'reason': 'Missing config'
+                })
                 continue
 
             self.logger.info(f"🔄 Applying optimization step: {step_key}...")
@@ -356,8 +406,24 @@ class AnomalySummaryAgent:
             optimized_min = self._minify_json(optimized_clean)
             size_kb = self._measure_kb(optimized_min)
             
+            # Store debug info (full content for debugging)
+            step6_system = step_system.format(target_kb=target_kb)
+            step6_input = step_input_template.format(current_json=escaped_for_llm, target_kb=target_kb)
+            step_debug = {
+                'step': step_key,
+                'executed': True,
+                'messages': [
+                    {'role': 'system', 'content': step6_system},
+                    {'role': 'user', 'content': step6_input},
+                    {'role': 'assistant', 'content': optimized}
+                ],
+                'input_size_kb': best_kb,
+                'output_size_kb': size_kb,
+                'improved': size_kb < best_kb
+            }
+            debug_info['step6_size_optimization'].append(step_debug)
+            
             self.logger.info(f"📦 Adaptive Card size after {step_key}: {size_kb:.2f} KB")
-            # Log snippet for debugging
             self.logger.info(f"📄 Optimized JSON snippet after {step_key}:\n{optimized_min[:200]}...")
 
             if size_kb < best_kb:
@@ -374,10 +440,8 @@ class AnomalySummaryAgent:
         else:
             self.logger.info(f"✅ Adaptive Card final size optimization step: {last_step_applied} ({best_kb:.2f} KB)")
 
-        # Final step: ensure it is minified and quotes are escaped as requested for the final output
-        final_escaped = best_json.replace('"', '\\"')
-        self.logger.info(f"🚀 Final optimized Adaptive Card JSON (escaped):\n{final_escaped}")
-        return final_escaped
+        self.logger.info(f"🚀 Final optimized Adaptive Card JSON:\n{best_json}")
+        return best_json, debug_info
     
     async def generate_summary_report(self, periods_data: List[Dict[str, Any]]) -> str:
         """
@@ -553,8 +617,12 @@ class AnomalySummaryAgent:
                 
                 # STEP 2: Generate Adaptive Card
                 date_range = self._build_date_range_string(daily_single_analyses, date_ranges)
-                adaptive_card_json = await self._generate_adaptive_card(comprehensive_response, date_range)
-                adaptive_card_json = await self._optimize_adaptive_card_payload(adaptive_card_json, target_kb=24)
+                adaptive_card_json, step4_conversation = await self._generate_adaptive_card(comprehensive_response, date_range)
+                adaptive_card_json, optimization_debug = await self._optimize_adaptive_card_payload(adaptive_card_json, target_kb=24)
+                
+                # Merge optimization debug into step4 conversation
+                step4_conversation['step5_modernize_tone'] = optimization_debug.get('step5_modernize_tone')
+                step4_conversation['step6_size_optimization'] = optimization_debug.get('step6_size_optimization')
                 
                 # Combine synthesis and adaptive card
                 final_output = f"{comprehensive_response}\n\n---ADAPTIVE_CARD_JSON---\n\n{adaptive_card_json}"
@@ -565,6 +633,14 @@ class AnomalySummaryAgent:
                     try:
                         self.logger.info("📤 Uploading comprehensive report to S3...")
                         
+                        # In prod, we upload the adaptive card as a JSON object
+                        s3_final_synthesis = final_output
+                        if self.environment == "prod":
+                            try:
+                                s3_final_synthesis = json.loads(adaptive_card_json)
+                            except Exception:
+                                s3_final_synthesis = adaptive_card_json
+                        
                         s3_key = await self.s3_uploader.upload_comprehensive_report(
                             execution_date=datetime.now(),
                             analysis_date=execution_metadata.get('analysis_date', ''),
@@ -574,8 +650,7 @@ class AnomalySummaryAgent:
                             weekly_analysis_params=weekly_analysis_params,
                             daily_analysis_params=daily_analysis_params,
                             date_ranges=date_ranges,
-                            # adaptive_card_json is already minified and escaped
-                            final_synthesis=adaptive_card_json if self.environment == "prod" else final_output,
+                            final_synthesis=s3_final_synthesis,
                             comparison_start_date=date_ranges.get('comparison_start_date'),
                             comparison_end_date=date_ranges.get('comparison_end_date')
                         )
@@ -603,7 +678,8 @@ class AnomalySummaryAgent:
         execution_metadata: Optional[Dict[str, Any]] = None,
         weekly_analysis_params: Optional[Dict[str, Any]] = None,
         daily_analysis_params: Optional[Dict[str, Any]] = None,
-        date_ranges: Optional[Dict[str, Any]] = None
+        date_ranges: Optional[Dict[str, Any]] = None,
+        segment: str = 'Global'
     ) -> str:
         """
         Generate a comprehensive summary using a 3-step stratified approach.
@@ -621,6 +697,7 @@ class AnomalySummaryAgent:
             weekly_analysis_params: Parameters used for weekly analysis (for S3 upload)
             daily_analysis_params: Parameters used for daily analysis (for S3 upload)
             date_ranges: Date range information (for S3 upload)
+            segment: The root segment for hierarchical analysis (default: 'Global')
         
         Returns:
             Comprehensive summary string
@@ -643,7 +720,7 @@ class AnomalySummaryAgent:
                     self.logger.info(f"📝 Daily synthesis length for {date}: {len(text)} chars (from {len(analysis)} total)")
                     daily_analyses_formatted.append(f"📅 {date}:\n{text}")
             
-            daily_analyses_combined = "\n\n---\n\n".join(daily_analyses_formatted)
+            daily_analyses_combined = "\n\n".join(daily_analyses_formatted)
             num_days = len(daily_analyses_formatted)
             
             self.logger.info(f"🔄 Starting stratified summary: {num_days} days to analyze")
@@ -656,8 +733,9 @@ class AnomalySummaryAgent:
             self.logger.info(f"📊 Extracted executive synthesis: {len(weekly_synthesis_only)} chars (from {len(weekly_comparative_analysis)} total)")
             
             # Parse sections from the SYNTHESIS only (not the full technical report)
-            sections = self._parse_weekly_sections(weekly_synthesis_only)
-            self.logger.info(f"📊 Parsed {len(sections)} sections from executive synthesis")
+            # Use dynamic sections based on the segment hierarchy
+            sections = self._parse_weekly_sections(weekly_synthesis_only, segment)
+            self.logger.info(f"📊 Parsed {len(sections)} sections from executive synthesis for segment '{segment}'")
             
             # =========================================================
             # STEP 1: Analyze connections for each section
@@ -669,6 +747,7 @@ class AnomalySummaryAgent:
             step1_template = step1_config.get('input_template', '')
             
             daily_context_paragraphs = {}
+            step1_conversations = {}  # Store full conversation for each section
             
             for section_name, section_content in sections.items():
                 self.logger.info(f"   📌 Analyzing: {section_name}")
@@ -701,6 +780,19 @@ class AnomalySummaryAgent:
                 paragraph = response.content if hasattr(response, 'content') else str(response)
                 
                 daily_context_paragraphs[section_name] = paragraph.strip()
+                
+                # Store full conversation for debugging
+                step1_conversations[section_name] = {
+                    'messages': [
+                        {'role': 'system', 'content': step1_system},
+                        {'role': 'user', 'content': step1_input},
+                        {'role': 'assistant', 'content': paragraph}
+                    ],
+                    'input_length': len(step1_input),
+                    'output_length': len(paragraph),
+                    'result': paragraph.strip()
+                }
+                
                 self.logger.info(f"   ✅ Generated context for {section_name}: {len(paragraph)} chars")
             
             self.logger.info(f"✅ Step 1 complete: Generated {len(daily_context_paragraphs)} context paragraphs")
@@ -791,8 +883,14 @@ class AnomalySummaryAgent:
             # =========================================================
             # Build date range from daily analyses for accurate display
             date_range = self._build_date_range_string(daily_single_analyses, date_ranges)
-            adaptive_card_json = await self._generate_adaptive_card(polished_report, date_range)
-            adaptive_card_json = await self._optimize_adaptive_card_payload(adaptive_card_json, target_kb=24)
+            adaptive_card_json, step4_conversation = await self._generate_adaptive_card(polished_report, date_range)
+            adaptive_card_json, optimization_debug = await self._optimize_adaptive_card_payload(adaptive_card_json, target_kb=24)
+            
+            # Merge optimization debug into step4 conversation (for debugging)
+            step4_conversation['step5_modernize_tone'] = optimization_debug.get('step5_modernize_tone')
+            step4_conversation['step6_size_optimization'] = optimization_debug.get('step6_size_optimization')
+            step4_conversation['final_result'] = adaptive_card_json  # Final optimized JSON
+            step4_conversation['final_result_length'] = len(adaptive_card_json)
             
             self.logger.info(f"✅ Step 4 complete: Adaptive Card generated (date_range: {date_range})")
 
@@ -826,7 +924,10 @@ class AnomalySummaryAgent:
             
             # Export ALL conversations (all 4 steps) for complete audit trail
             all_conversations = {
-                'step1_section_connections': daily_context_paragraphs,  # Step 1 results by section
+                'step1_section_connections': {
+                    'sections': step1_conversations,  # Full conversations for each section
+                    'results_summary': daily_context_paragraphs  # Quick access to results
+                },
                 'step2_full_report': {
                     'messages': [
                         {
@@ -834,7 +935,8 @@ class AnomalySummaryAgent:
                             'content': msg.content
                         } for msg in message_history_final.get_messages()
                     ],
-                    'result': polished_report
+                    'result': polished_report,
+                    'result_length': len(polished_report)
                 },
                 'step3_executive_synthesis': {
                     'messages': [
@@ -843,11 +945,10 @@ class AnomalySummaryAgent:
                             'content': msg.content
                         } for msg in message_history_step3.get_messages()
                     ],
-                    'result': executive_synthesis
+                    'result': executive_synthesis,
+                    'result_length': len(executive_synthesis)
                 },
-                'step4_adaptive_card': {
-                    'result': adaptive_card_json
-                }
+                'step4_adaptive_card': step4_conversation  # Full conversation including raw response
             }
             conversation_file = await self.export_full_stratified_conversation(
                 all_conversations, date_flight_local
@@ -860,6 +961,14 @@ class AnomalySummaryAgent:
                 try:
                     self.logger.info("📤 Uploading executive synthesis and adaptive card to S3...")
                     
+                    # In prod, we upload the adaptive card as a JSON object
+                    s3_final_synthesis = final_output
+                    if self.environment == "prod":
+                        try:
+                            s3_final_synthesis = json.loads(adaptive_card_json)
+                        except Exception:
+                            s3_final_synthesis = adaptive_card_json
+                            
                     s3_key = await self.s3_uploader.upload_comprehensive_report(
                         execution_date=datetime.now(),
                         analysis_date=execution_metadata.get('analysis_date', ''),
@@ -869,8 +978,7 @@ class AnomalySummaryAgent:
                         weekly_analysis_params=weekly_analysis_params,
                         daily_analysis_params=daily_analysis_params,
                         date_ranges=date_ranges,
-                        # adaptive_card_json is already minified and escaped
-                        final_synthesis=adaptive_card_json if self.environment == "prod" else final_output,
+                        final_synthesis=s3_final_synthesis,
                         comparison_start_date=date_ranges.get('comparison_start_date'),
                         comparison_end_date=date_ranges.get('comparison_end_date')
                     )
@@ -1101,9 +1209,90 @@ class AnomalySummaryAgent:
             self.logger.warning(f"Could not build date range: {e}")
             return "Período de análisis"
     
-    def _parse_weekly_sections(self, weekly_analysis: str) -> Dict[str, str]:
+    def _get_section_patterns_for_segment(self, segment: str = 'Global') -> List[tuple]:
         """
-        Parse the weekly analysis into sections (Global, Economy SH, Business SH, etc.)
+        Devuelve los patrones de sección según el segmento seleccionado.
+        Esto permite parsear dinámicamente TODAS las agregaciones bajo el segmento.
+        
+        Args:
+            segment: El segmento raíz del análisis
+            
+        Returns:
+            Lista de tuplas (nombre_sección, patrón_regex)
+        """
+        # Patrones base para cada tipo de sección
+        # Nota: Los patrones soportan múltiples formatos:
+        #   - "BUSINESS SH IB" (sin separador)
+        #   - "BUSINESS SH - IB" (con guión)
+        #   - "BUSINESS SH/IB" (con barra)
+        all_section_patterns = {
+            'GLOBAL': r'(?:📈|📋)?\s*(?:\*\*|<b>)?SÍNTESIS EJECUTIVA|Durante la semana',
+            'SH': r'(?:<b>)?(?:<u>)?\s*(?:SHORT HAUL|SH):\s*[A-ZÁÉÍÓÚÑ]',
+            'LH': r'(?:<b>)?(?:<u>)?\s*(?:LONG HAUL|LH):\s*[A-ZÁÉÍÓÚÑ]',
+            'ECONOMY SH': r'(?:<b>)?(?:<u>)?\s*ECONOMY SH:\s*[A-ZÁÉÍÓÚÑ]',
+            'BUSINESS SH': r'(?:<b>)?(?:<u>)?\s*BUSINESS SH:\s*[A-ZÁÉÍÓÚÑ]',
+            # Patrones con soporte para guión, barra o espacio entre cabina y compañía
+            'ECONOMY SH IB': r'(?:<b>)?(?:<u>)?\s*(?:ECONOMY SH\s*[-/]?\s*IB|IB \(Economy SH\)):\s*[A-ZÁÉÍÓÚÑ]',
+            'ECONOMY SH YW': r'(?:<b>)?(?:<u>)?\s*(?:ECONOMY SH\s*[-/]?\s*YW|YW \(Economy SH\)):\s*[A-ZÁÉÍÓÚÑ]',
+            'BUSINESS SH IB': r'(?:<b>)?(?:<u>)?\s*(?:BUSINESS SH\s*[-/]?\s*IB|IB \(Business SH\)):\s*[A-ZÁÉÍÓÚÑ]',
+            'BUSINESS SH YW': r'(?:<b>)?(?:<u>)?\s*(?:BUSINESS SH\s*[-/]?\s*YW|YW \(Business SH\)):\s*[A-ZÁÉÍÓÚÑ]',
+            'ECONOMY LH': r'(?:<b>)?(?:<u>)?\s*ECONOMY LH:\s*[A-ZÁÉÍÓÚÑ]',
+            'BUSINESS LH': r'(?:<b>)?(?:<u>)?\s*BUSINESS LH:\s*[A-ZÁÉÍÓÚÑ]',
+            'PREMIUM LH': r'(?:<b>)?(?:<u>)?\s*PREMIUM LH:\s*[A-ZÁÉÍÓÚÑ]',
+            'IB': r'(?:<b>)?(?:<u>)?\s*IB:\s*[A-ZÁÉÍÓÚÑ]',
+            'YW': r'(?:<b>)?(?:<u>)?\s*YW:\s*[A-ZÁÉÍÓÚÑ]',
+        }
+        
+        # Definir qué secciones aplican según el segmento
+        segment_sections = {
+            'Global': ['GLOBAL', 'SH', 'LH', 'BUSINESS SH', 'BUSINESS SH IB', 'BUSINESS SH YW',
+                      'ECONOMY SH', 'ECONOMY SH IB', 'ECONOMY SH YW',
+                      'ECONOMY LH', 'BUSINESS LH', 'PREMIUM LH'],
+            'SH': ['SH', 'BUSINESS SH', 'BUSINESS SH IB', 'BUSINESS SH YW',
+                   'ECONOMY SH', 'ECONOMY SH IB', 'ECONOMY SH YW'],
+            'LH': ['LH', 'ECONOMY LH', 'BUSINESS LH', 'PREMIUM LH'],
+            'Economy SH': ['ECONOMY SH', 'ECONOMY SH IB', 'ECONOMY SH YW'],
+            'Business SH': ['BUSINESS SH', 'BUSINESS SH IB', 'BUSINESS SH YW'],
+            'Economy LH': ['ECONOMY LH'],
+            'Business LH': ['BUSINESS LH'],
+            'Premium LH': ['PREMIUM LH'],
+        }
+        
+        # Normalizar el nombre del segmento
+        segment_normalized = segment
+        if segment in ['Global/SH', 'Short Haul']:
+            segment_normalized = 'SH'
+        elif segment in ['Global/LH', 'Long Haul']:
+            segment_normalized = 'LH'
+        elif segment in ['Global/SH/Economy']:
+            segment_normalized = 'Economy SH'
+        elif segment in ['Global/SH/Business']:
+            segment_normalized = 'Business SH'
+        elif segment in ['Global/LH/Economy']:
+            segment_normalized = 'Economy LH'
+        elif segment in ['Global/LH/Business']:
+            segment_normalized = 'Business LH'
+        elif segment in ['Global/LH/Premium']:
+            segment_normalized = 'Premium LH'
+        
+        # Obtener las secciones aplicables
+        applicable_sections = segment_sections.get(segment_normalized, ['GLOBAL'])
+        
+        # Construir los patrones
+        patterns = []
+        for section in applicable_sections:
+            if section in all_section_patterns:
+                patterns.append((section, all_section_patterns[section]))
+        
+        return patterns
+
+    def _parse_weekly_sections(self, weekly_analysis: str, segment: str = 'Global') -> Dict[str, str]:
+        """
+        Parse the weekly analysis into sections based on the segment hierarchy.
+        
+        Args:
+            weekly_analysis: The weekly analysis text to parse
+            segment: The root segment to determine which sections to parse
         
         Returns:
             Dictionary mapping section names to their content
@@ -1112,20 +1301,8 @@ class AnomalySummaryAgent:
         
         sections = {}
         
-        # Define section patterns to look for
-        # IMPORTANTE: Los patrones deben coincidir SOLO con headers de sección, no con menciones inline
-        # Los headers de sección tienen formato: <b><u>CABINA: Título descriptivo</u></b>
-        # Las menciones inline tienen formato: **CABINA (+X.X pts)** o **CABINA** dentro de texto
-        # La diferencia clave es que el header tiene DOS PUNTOS seguido de LETRA (no número/paréntesis)
-        section_patterns = [
-            ('GLOBAL', r'(?:📈|📋)?\s*(?:\*\*|<b>)?SÍNTESIS EJECUTIVA|Durante la semana'),
-            # Headers de cabina: deben tener : seguido de espacio y letra mayúscula (inicio de título)
-            ('ECONOMY SH', r'(?:<b>)?(?:<u>)?\s*ECONOMY SH:\s*[A-ZÁÉÍÓÚÑ]'),
-            ('BUSINESS SH', r'(?:<b>)?(?:<u>)?\s*BUSINESS SH:\s*[A-ZÁÉÍÓÚÑ]'),
-            ('ECONOMY LH', r'(?:<b>)?(?:<u>)?\s*ECONOMY LH:\s*[A-ZÁÉÍÓÚÑ]'),
-            ('BUSINESS LH', r'(?:<b>)?(?:<u>)?\s*BUSINESS LH:\s*[A-ZÁÉÍÓÚÑ]'),
-            ('PREMIUM LH', r'(?:<b>)?(?:<u>)?\s*PREMIUM LH:\s*[A-ZÁÉÍÓÚÑ]'),
-        ]
+        # Obtener patrones dinámicos según el segmento
+        section_patterns = self._get_section_patterns_for_segment(segment)
         
         # Find all section headers and their positions
         section_positions = []
@@ -1137,14 +1314,14 @@ class AnomalySummaryAgent:
         # Sort by position
         section_positions.sort(key=lambda x: x[0])
         
-        # Safety net: Check if there is text before the first section that should be GLOBAL
-        # This handles cases where GLOBAL header is missing or not matched
+        # Safety net: Check if there is text before the first section that should be GLOBAL/root
         if section_positions and section_positions[0][0] > 0:
             intro_text = weekly_analysis[0:section_positions[0][0]].strip()
-            # Only use intro as GLOBAL if the first detected section is NOT GLOBAL
-            if len(intro_text) > 50 and section_positions[0][1] != 'GLOBAL':
-                sections['GLOBAL'] = intro_text
-                self.logger.info(f"   ⚠️ Recovered {len(intro_text)} chars of intro text as GLOBAL section")
+            # Only use intro as root section if the first detected section is NOT the root
+            root_section = section_patterns[0][0] if section_patterns else 'GLOBAL'
+            if len(intro_text) > 50 and section_positions[0][1] != root_section:
+                sections[root_section] = intro_text
+                self.logger.info(f"   ⚠️ Recovered {len(intro_text)} chars of intro text as {root_section} section")
         
         # Extract content for each section
         for i, (pos, section_name, _) in enumerate(section_positions):
@@ -1160,74 +1337,116 @@ class AnomalySummaryAgent:
             if section_name not in sections:
                 sections[section_name] = content
         
-        # If no sections found, use the whole text as GLOBAL
+        # If no sections found, use the whole text as root section
         if not sections:
-            sections['GLOBAL'] = weekly_analysis
+            root_section = section_patterns[0][0] if section_patterns else 'GLOBAL'
+            sections[root_section] = weekly_analysis
         
-        self.logger.info(f"📊 Parsed sections: {list(sections.keys())}")
+        self.logger.info(f"📊 Parsed sections for segment '{segment}': {list(sections.keys())}")
         return sections
     
     def _filter_daily_for_section(self, daily_analyses: str, section_name: str) -> str:
         """
-        Filter daily analyses to show content relevant to a specific section.
+        Filter daily analyses to extract ONLY the specific section content from each day.
         
-        IMPORTANTE: Siempre devuelve TODAS las fechas para que el modelo tenga
-        contexto temporal correcto. Para secciones específicas, prioriza entradas
-        que mencionen esa cabina, pero NUNCA devuelve vacío.
+        Cada día contiene un informe completo con todas las secciones. Esta función
+        extrae solo la sección específica de cada día para reducir el contexto.
         """
-        if section_name == 'GLOBAL':
-            return daily_analyses
+        import re
         
-        # Map section names to keywords to search for
-        keyword_map = {
-            'ECONOMY SH': ['economy sh', 'economy de sh', 'sh economy', 'short haul economy', 'economy short', 'economía sh', 'turista sh'],
-            'BUSINESS SH': ['business sh', 'business de sh', 'sh business', 'short haul business', 'business short', 'negocios sh'],
-            'ECONOMY LH': ['economy lh', 'economy de lh', 'lh economy', 'long haul economy', 'economy long', 'economía lh', 'turista lh'],
-            'BUSINESS LH': ['business lh', 'business de lh', 'lh business', 'long haul business', 'business long', 'negocios lh'],
-            'PREMIUM LH': ['premium lh', 'premium de lh', 'lh premium', 'long haul premium', 'premium long', 'premium economy lh'],
-        }
+        # Patrones para encontrar el HEADER de cada sección
+        # Formato: <b><u>SECTION_NAME: título</u></b>
+        # GLOBAL puede no tener <b> si fue extraído por _extract_executive_synthesis_from_daily
+        all_section_patterns = [
+            ('GLOBAL', r'(?:<b>)?SÍNTESIS EJECUTIVA(?:</b>)?'),
+            ('SH', r'<b><u>SHORT HAUL[^<]*</u></b>'),
+            ('LH', r'<b><u>LONG HAUL[^<]*</u></b>'),
+            ('BUSINESS SH', r'<b><u>BUSINESS SH(?!\s*[-/]?\s*(?:IB|YW))[^<]*</u></b>'),
+            ('BUSINESS SH IB', r'<b><u>BUSINESS SH\s*[-/]?\s*IB[^<]*</u></b>'),
+            ('BUSINESS SH YW', r'<b><u>BUSINESS SH\s*[-/]?\s*YW[^<]*</u></b>'),
+            ('ECONOMY SH', r'<b><u>ECONOMY SH(?!\s*[-/]?\s*(?:IB|YW))[^<]*</u></b>'),
+            ('ECONOMY SH IB', r'<b><u>ECONOMY SH\s*[-/]?\s*IB[^<]*</u></b>'),
+            ('ECONOMY SH YW', r'<b><u>ECONOMY SH\s*[-/]?\s*YW[^<]*</u></b>'),
+            ('BUSINESS LH', r'<b><u>BUSINESS LH[^<]*</u></b>'),
+            ('PREMIUM LH', r'<b><u>PREMIUM LH[^<]*</u></b>'),
+            ('ECONOMY LH', r'<b><u>ECONOMY LH[^<]*</u></b>'),
+        ]
         
-        keywords = keyword_map.get(section_name, [section_name.lower()])
+        # Split por días primero (📅 marca cada día)
+        day_pattern = r'(📅\s*\d{4}-\d{2}-\d{2})'
+        day_parts = re.split(day_pattern, daily_analyses)
         
-        # Split into daily entries
-        daily_entries = daily_analyses.split('---')
-        
-        # Separate entries into relevant and other
-        relevant_entries = []
-        other_entries = []
-        
-        for entry in daily_entries:
-            entry_stripped = entry.strip()
-            if not entry_stripped:
-                continue
-            entry_lower = entry_stripped.lower()
-            if any(kw in entry_lower for kw in keywords):
-                relevant_entries.append(entry_stripped)
+        # Reconstruir días
+        daily_entries = []
+        i = 0
+        while i < len(day_parts):
+            if re.match(r'📅\s*\d{4}-\d{2}-\d{2}', day_parts[i] if i < len(day_parts) else ''):
+                date = day_parts[i]
+                content = day_parts[i + 1] if i + 1 < len(day_parts) else ''
+                daily_entries.append((date, content))
+                i += 2
             else:
-                other_entries.append(entry_stripped)
+                i += 1
         
-        # SIEMPRE devolver contenido con fechas para evitar alucinaciones
-        if relevant_entries:
-            # Si hay entradas específicas de esta cabina, mostrarlas primero
-            result = f"**Análisis específicos de {section_name}:**\n\n"
-            result += "\n\n---\n\n".join(relevant_entries)
-            
-            # También incluir resumen de fechas de otros días para contexto temporal
-            if other_entries:
-                # Extraer solo las fechas de las otras entradas
-                other_dates = []
-                for entry in other_entries:
-                    if entry.startswith("📅"):
-                        date_line = entry.split('\n')[0]
-                        other_dates.append(date_line)
-                if other_dates:
-                    result += f"\n\n**Otros días analizados (sin mención específica a {section_name}):**\n"
-                    result += ", ".join(other_dates[:5])  # Máximo 5 fechas adicionales
+        # Extraer la sección específica de cada día
+        extracted_sections = []
+        for date, content in daily_entries:
+            section_content = self._extract_section_from_text(content, section_name, all_section_patterns)
+            if section_content and len(section_content) > 50:
+                extracted_sections.append(f"{date}:\n{section_content}")
+        
+        if extracted_sections:
+            result = f"**Análisis de {section_name} ({len(extracted_sections)} días):**\n\n"
+            result += "\n\n---\n\n".join(extracted_sections)
             return result
         else:
-            # Si NO hay entradas específicas, devolver TODOS los análisis diarios
-            # para que el modelo tenga el contexto temporal correcto
-            return f"**Análisis diarios disponibles (sin mención específica a {section_name}, usar como contexto general):**\n\n{daily_analyses}"
+            return f"**No se encontró la sección {section_name} en los análisis diarios.**"
+    
+    def _extract_section_from_text(self, text: str, target_section: str, all_patterns: list) -> str:
+        """
+        Extract a specific section from text by finding its header and the next section's header.
+        """
+        import re
+        
+        # Encontrar todas las secciones y sus posiciones
+        positions = []
+        for name, pattern in all_patterns:
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                positions.append((match.start(), name, match.end()))
+        
+        # Ordenar por posición
+        positions.sort(key=lambda x: x[0])
+        
+        # Encontrar la sección objetivo y extraer hasta la siguiente
+        for i, (start_pos, name, header_end) in enumerate(positions):
+            if name == target_section:
+                # El contenido va desde el inicio del header hasta el inicio del siguiente header
+                if i + 1 < len(positions):
+                    end_pos = positions[i + 1][0]
+                else:
+                    end_pos = len(text)
+                
+                section_text = text[start_pos:end_pos].strip()
+                return section_text
+        
+        return ""
+    
+    def _get_parent_section(self, section_name: str) -> str:
+        """Get the parent section for hierarchical fallback."""
+        parent_map = {
+            'ECONOMY SH IB': 'ECONOMY SH',
+            'ECONOMY SH YW': 'ECONOMY SH',
+            'BUSINESS SH IB': 'BUSINESS SH',
+            'BUSINESS SH YW': 'BUSINESS SH',
+            'ECONOMY SH': 'SH',
+            'BUSINESS SH': 'SH',
+            'ECONOMY LH': 'LH',
+            'BUSINESS LH': 'LH',
+            'PREMIUM LH': 'LH',
+            'SH': 'GLOBAL',
+            'LH': 'GLOBAL',
+        }
+        return parent_map.get(section_name)
     
     def _format_periods_for_summary(self, periods_data: List[Dict[str, Any]]) -> str:
         """Format periods data into a structured text for AI analysis."""
@@ -1474,12 +1693,18 @@ PERÍODO {period} ({date_range}):
             self.logger.error(f"❌ Failed to export summary conversation: {e}")
             return ""
 
-    async def _generate_adaptive_card(self, report_text: str, date_range: str = None) -> str:
+    async def _generate_adaptive_card(self, report_text: str, date_range: str = None) -> tuple:
         """Helper to generate Adaptive Card JSON from a report text
         
         Args:
             report_text: The full report text to convert to Adaptive Card
             date_range: Date range string (e.g., "9 Dic - 15 Dic 2025")
+            
+        Returns:
+            Tuple of (adaptive_card_json, conversation_dict) where conversation_dict contains:
+            - messages: list of messages sent to the model
+            - raw_response: the raw response from the model before cleaning
+            - result: the final cleaned/repaired JSON
         """
         try:
             self.logger.info("📋 Generating Adaptive Card JSON...")
@@ -1489,10 +1714,15 @@ PERÍODO {period} ({date_range}):
                 date_range = datetime.now().strftime("%d %b %Y")
             
             step4_config = self.config.get('step4_generate_adaptive_card', {})
-            step4_system = step4_config.get('system_prompt', '')
-            step4_input = step4_config.get('input_template', '').format(
-                full_report=report_text,
-                date_range=date_range
+            # Use .replace() instead of .format() because the system_prompt contains
+            # embedded JSON with {} that would be misinterpreted as placeholders
+            step4_system = step4_config.get('system_prompt', '').replace('{date_range}', date_range)
+            step4_input = step4_config.get('input_template', '').replace(
+                '{comprehensive_response}', report_text
+            ).replace(
+                '{full_report}', report_text
+            ).replace(
+                '{date_range}', date_range
             )
             
             message_history = MessageHistory()
@@ -1500,31 +1730,27 @@ PERÍODO {period} ({date_range}):
             message_history.create_and_add_message(content=step4_input, message_type=MessageType.USER)
             
             response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
-            adaptive_card_json = response.content if hasattr(response, 'content') else str(response)
+            raw_response = response.content if hasattr(response, 'content') else str(response)
             
-            # Use robust cleaning logic
-            adaptive_card_json = self._clean_json_response(adaptive_card_json)
+            # Clean and validate JSON
+            final_json = self._repair_json(raw_response)
             
-            # Validate JSON
-            try:
-                json.loads(adaptive_card_json)
-                self.logger.info(f"✅ Adaptive Card JSON validated ({len(adaptive_card_json)} chars)")
-            except json.JSONDecodeError as e:
-                self.logger.warning(f"⚠️ Generated Adaptive Card is not valid JSON: {e}")
-                # Last resort: try to fix escaped quotes again if not caught
-                if '\\"' in adaptive_card_json:
-                    try:
-                        fixed = adaptive_card_json.replace('\\"', '"')
-                        json.loads(fixed)
-                        adaptive_card_json = fixed
-                        self.logger.info("✅ Fixed JSON by removing escaped quotes")
-                    except Exception:
-                        pass
+            # Build conversation dict for debugging
+            conversation = {
+                'messages': [
+                    {'role': 'system', 'content': step4_system},
+                    {'role': 'user', 'content': step4_input},
+                    {'role': 'assistant', 'content': raw_response}
+                ],
+                'raw_response_length': len(raw_response),
+                'result': final_json,
+                'result_length': len(final_json)
+            }
             
-            return adaptive_card_json
+            return final_json, conversation
         except Exception as e:
             self.logger.error(f"❌ Error generating adaptive card: {e}")
-            return "{}"
+            return "{}", {'error': str(e), 'result': '{}'}
 
 
 # Convenience function for standalone usage

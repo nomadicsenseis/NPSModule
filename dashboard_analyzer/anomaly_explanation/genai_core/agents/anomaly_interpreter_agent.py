@@ -1133,6 +1133,121 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         else:
             return 'unknown'
 
+    def get_segment_hierarchy(self, segment: str) -> Dict[str, Any]:
+        """
+        Devuelve la estructura jerárquica completa para un segmento dado.
+        Incluye el segmento raíz y TODAS las agregaciones por debajo.
+        
+        Args:
+            segment: El segmento a analizar (ej: 'Global', 'SH', 'Economy SH')
+            
+        Returns:
+            Dict con:
+                - 'root': El segmento raíz normalizado
+                - 'sections': Lista ordenada de secciones para el informe
+                - 'hierarchy': Dict con la estructura jerárquica completa
+                - 'sh_cabins': Cabinas SH con análisis IB/YW
+                - 'lh_cabins': Cabinas LH (resumen directo)
+        """
+        segment = self._normalize_segment_name(segment)
+        
+        # Definir la jerarquía completa
+        full_hierarchy = {
+            'Global': {
+                'sections': ['Global', 'SH', 'LH', 'Business SH', 'Business SH IB', 'Business SH YW', 
+                            'Economy SH', 'Economy SH IB', 'Economy SH YW',
+                            'Business LH', 'Premium LH', 'Economy LH'],
+                'sh_cabins': ['Economy SH', 'Business SH'],
+                'lh_cabins': ['Economy LH', 'Business LH', 'Premium LH'],
+                'children': {
+                    'SH': ['Economy SH', 'Business SH'],
+                    'LH': ['Economy LH', 'Business LH', 'Premium LH'],
+                    'Economy SH': ['Economy SH IB', 'Economy SH YW'],
+                    'Business SH': ['Business SH IB', 'Business SH YW'],
+                }
+            },
+            'SH': {
+                'sections': ['SH', 'Business SH', 'Business SH IB', 'Business SH YW',
+                            'Economy SH', 'Economy SH IB', 'Economy SH YW'],
+                'sh_cabins': ['Economy SH', 'Business SH'],
+                'lh_cabins': [],
+                'children': {
+                    'SH': ['Economy SH', 'Business SH'],
+                    'Economy SH': ['Economy SH IB', 'Economy SH YW'],
+                    'Business SH': ['Business SH IB', 'Business SH YW'],
+                }
+            },
+            'LH': {
+                'sections': ['LH', 'Economy LH', 'Business LH', 'Premium LH'],
+                'sh_cabins': [],
+                'lh_cabins': ['Economy LH', 'Business LH', 'Premium LH'],
+                'children': {
+                    'LH': ['Economy LH', 'Business LH', 'Premium LH'],
+                }
+            },
+            'Economy SH': {
+                'sections': ['Economy SH', 'Economy SH IB', 'Economy SH YW'],
+                'sh_cabins': ['Economy SH'],
+                'lh_cabins': [],
+                'children': {
+                    'Economy SH': ['Economy SH IB', 'Economy SH YW'],
+                }
+            },
+            'Business SH': {
+                'sections': ['Business SH', 'Business SH IB', 'Business SH YW'],
+                'sh_cabins': ['Business SH'],
+                'lh_cabins': [],
+                'children': {
+                    'Business SH': ['Business SH IB', 'Business SH YW'],
+                }
+            },
+            'Economy LH': {
+                'sections': ['Economy LH'],
+                'sh_cabins': [],
+                'lh_cabins': ['Economy LH'],
+                'children': {}
+            },
+            'Business LH': {
+                'sections': ['Business LH'],
+                'sh_cabins': [],
+                'lh_cabins': ['Business LH'],
+                'children': {}
+            },
+            'Premium LH': {
+                'sections': ['Premium LH'],
+                'sh_cabins': [],
+                'lh_cabins': ['Premium LH'],
+                'children': {}
+            },
+            'IB': {
+                'sections': ['IB'],
+                'sh_cabins': [],
+                'lh_cabins': [],
+                'children': {}
+            },
+            'YW': {
+                'sections': ['YW'],
+                'sh_cabins': [],
+                'lh_cabins': [],
+                'children': {}
+            },
+        }
+        
+        hierarchy_data = full_hierarchy.get(segment, {
+            'sections': [segment],
+            'sh_cabins': [],
+            'lh_cabins': [],
+            'children': {}
+        })
+        
+        return {
+            'root': segment,
+            'sections': hierarchy_data['sections'],
+            'hierarchy': hierarchy_data['children'],
+            'sh_cabins': hierarchy_data['sh_cabins'],
+            'lh_cabins': hierarchy_data['lh_cabins']
+        }
+
     def _get_cabin_radios_for_segment(self, segment: str) -> Dict[str, List[str]]:
         """
         Retorna las cabinas-radio que aplican para un segmento dado,
@@ -1144,34 +1259,11 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         Returns:
             Dict con 'sh_cabins' (requieren análisis IB/YW) y 'lh_cabins' (resumen directo)
         """
-        # Normalizar el segmento
-        segment = self._normalize_segment_name(segment)
-        
-        cabin_radio_mapping = {
-            'Global': {
-                'sh_cabins': ['Economy SH', 'Business SH'],
-                'lh_cabins': ['Economy LH', 'Business LH', 'Premium LH']
-            },
-            'SH': {
-                'sh_cabins': ['Economy SH', 'Business SH'],
-                'lh_cabins': []
-            },
-            'LH': {
-                'sh_cabins': [],
-                'lh_cabins': ['Economy LH', 'Business LH', 'Premium LH']
-            },
-            # Cabinas individuales no necesitan reflexión por cabina-radio (ya son el nivel más bajo)
-            'Economy SH': {'sh_cabins': [], 'lh_cabins': []},
-            'Business SH': {'sh_cabins': [], 'lh_cabins': []},
-            'Premium SH': {'sh_cabins': [], 'lh_cabins': []},
-            'Economy LH': {'sh_cabins': [], 'lh_cabins': []},
-            'Business LH': {'sh_cabins': [], 'lh_cabins': []},
-            'Premium LH': {'sh_cabins': [], 'lh_cabins': []},
-            'IB': {'sh_cabins': [], 'lh_cabins': []},
-            'YW': {'sh_cabins': [], 'lh_cabins': []},
+        hierarchy = self.get_segment_hierarchy(segment)
+        return {
+            'sh_cabins': hierarchy['sh_cabins'],
+            'lh_cabins': hierarchy['lh_cabins']
         }
-        
-        return cabin_radio_mapping.get(segment, {'sh_cabins': [], 'lh_cabins': []})
 
     def _normalize_segment_name(self, segment: str) -> str:
         """
@@ -1414,6 +1506,7 @@ Confirma que has recibido la información y estás listo para el análisis paso 
     def _get_cabin_sections_for_segment(self, segment: str) -> str:
         """
         Genera las secciones de cabina dinámicas según el segmento seleccionado.
+        Incluye TODAS las agregaciones jerárquicas bajo el segmento.
         
         Args:
             segment: El segmento a analizar
@@ -1422,103 +1515,76 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             String con las secciones de cabina relevantes para el prompt
         """
         # Normalize segment path to dictionary keys
-        if segment in ['Global', 'Global/']: 
-            segment = 'Global'
-        elif segment in ['Global/SH', 'Short Haul (SH)']: 
-            segment = 'SH'
-        elif segment in ['Global/LH', 'Long Haul (LH)']: 
-            segment = 'LH'
-        elif segment in ['Global/SH/Economy', 'SH Economy']: 
-            segment = 'Economy SH'
-        elif segment in ['Global/SH/Business', 'SH Business']: 
-            segment = 'Business SH'
-        elif segment in ['Global/SH/Premium', 'SH Premium']: 
-            segment = 'Premium SH'
-        elif segment in ['Global/LH/Economy', 'LH Economy']: 
-            segment = 'Economy LH'
-        elif segment in ['Global/LH/Business', 'LH Business']: 
-            segment = 'Business LH'
-        elif segment in ['Global/LH/Premium', 'LH Premium']: 
-            segment = 'Premium LH'
-        elif 'IB' in segment and 'Economy' in segment: # e.g. Global/SH/Economy/IB
-            segment = 'IB'
-        elif 'YW' in segment and 'Economy' in segment: # e.g. Global/SH/Economy/YW
-            segment = 'YW'
-        elif segment == 'IB':
-            segment = 'IB'
-        elif segment == 'YW':
-            segment = 'YW'
+        segment = self._normalize_segment_name(segment)
 
+        # Plantillas para cada tipo de agregación
+        radio_template = """
+    **{radio}: [Título]**
+    [PÁRRAFO NARRATIVO FLUIDO] El radio {radio} registró un NPS de [valor] con [variación] pts vs semana anterior. [Resumen de cómo las cabinas bajo este radio contribuyen al resultado total. Menciona las cabinas que más impactan al resultado.]
+"""
+        
+        cabin_sh_template = """
+    **{cabin}: [Título]**
+    [PÁRRAFO NARRATIVO FLUIDO] La cabina {cabin_name} de SH registró un NPS de [valor cabina] con [variación] pts vs L7d. **Desglose por compañía:** IB obtuvo [NPS IB] ([diff IB] pts) y YW [NPS YW] ([diff YW] pts). [Breve explicación de la dinámica: si ambas suben/bajan = efecto conjunto; si una sube y otra baja = se compensan; si solo una tiene variación = esa domina]
+"""
+        
+        company_template = """
+    **{company}: [Título]**
+    [PÁRRAFO NARRATIVO FLUIDO] La compañía {company} [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor] con [variación] pts vs semana anterior. [Para segmentos con variaciones: "La causa principal fue [hipótesis con datos], especialmente en rutas como [top rutas], afectando a perfiles [perfiles específicos]."]
+"""
+        
+        cabin_lh_template = """
+    **{cabin}: [Título]**
+    [PÁRRAFO NARRATIVO FLUIDO] La cabina {cabin_name} de LH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] con [variación] pts vs la semana anterior. [Para segmentos con variaciones: "La causa principal fue [hipótesis con datos (drivers, operativa, NCS, verbatims) que la respaldan]. Esta [mejora/deterioro] se reflejó especialmente en rutas como [top rutas], mientras que los perfiles más reactivos incluyen [perfiles específicos]."]
+"""
+        
+        # Construir las secciones según el segmento
         cabin_sections = {
-            'Global': """
-    **ECONOMY SH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] La cabina Economy de SH registró un NPS de [valor cabina] con [variación] pts vs L7d. **Desglose por compañía:** IB obtuvo [NPS IB] ([diff IB] pts) y YW [NPS YW] ([diff YW] pts). [Breve explicación de la dinámica: si ambas suben/bajan = efecto conjunto; si una sube y otra baja = se compensan; si solo una tiene variación = esa domina]
-    
-    **BUSINESS SH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] El segmento Business de SH registró un NPS de [valor cabina] con [variación] pts vs L7d. **Desglose por compañía:** IB obtuvo [NPS IB] ([diff IB] pts) y YW [NPS YW] ([diff YW] pts). [Breve explicación de la dinámica y causas principales de cada compañía con sus evidencias clave]
-    
-    **ECONOMY LH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] La cabina Economy de LH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha período]) con una [variación de NPS_diff cabina] puntos respecto a la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "La causa principal fue [hipótesis con datos (drivers, operativa, NCS, verbatims) que la respaldan], complementada por [hipótesis secundarias (si las hubiera)]. Esta [mejora/deterioro] se reflejó especialmente en rutas como [top rutas con NPS y diff], mientras que los perfiles más reactivos incluyen [perfiles específicos]."]
-    
-    **BUSINESS LH: [Título]**  
-    [PÁRRAFO NARRATIVO FLUIDO] La cabina Business de LH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha período]) con una [variación de NPS_diff cabina] puntos respecto al período anterior.     [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "Los drivers principales fueron [causas con SHAP], impactando especialmente las rutas [rutas específicas] y perfiles [perfiles específicos]."]
-    
-    **PREMIUM LH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] El segmento Premium de LH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha]) con [diff cabina] puntos de [variación] vs la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "Las causas dominantes fueron [drivers SHAP], especialmente evidentes en [rutas top] y entre [perfiles reactivos]."]
-            """,
-            'SH': """
-    **ECONOMY SH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] La cabina Economy de SH registró un NPS de [valor cabina] con [variación] pts vs L7d. **Desglose por compañía:** IB obtuvo [NPS IB] ([diff IB] pts) y YW [NPS YW] ([diff YW] pts). [Breve explicación de la dinámica: si ambas suben/bajan = efecto conjunto; si una sube y otra baja = se compensan; si solo una tiene variación = esa domina]
-    
-    **BUSINESS SH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] El segmento Business de SH registró un NPS de [valor cabina] con [variación] pts vs L7d. **Desglose por compañía:** IB obtuvo [NPS IB] ([diff IB] pts) y YW [NPS YW] ([diff YW] pts). [Breve explicación de la dinámica y causas principales de cada compañía con sus evidencias clave]
-            """,
-            'LH': """
-    **ECONOMY LH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] La cabina Economy de LH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha período]) con una [variación de NPS_diff cabina] puntos respecto a la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "La causa principal fue [hipótesis con datos (drivers, operativa, NCS, verbatims) que la respaldan], complementada por [hipótesis secundarias (si las hubiera)]. Esta [mejora/deterioro] se reflejó especialmente en rutas como [top rutas con NPS y diff], mientras que los perfiles más reactivos incluyen [perfiles específicos]."]
-    
-    **BUSINESS LH: [Título]**  
-    [PÁRRAFO NARRATIVO FLUIDO] La cabina Business de LH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha]) con [diff cabina] puntos de [variación] vs período anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "Los drivers principales fueron [causas con SHAP], impactando especialmente las rutas transatlánticas [rutas específicas] y perfiles [perfiles específicos]."]
-    
-    **PREMIUM LH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] El segmento Premium de LH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha]) con [diff cabina] puntos de [variación] vs la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "Las causas dominantes fueron [drivers SHAP], especialmente evidentes en [rutas top] y entre [perfiles reactivos]."]
-            """,
-            'Economy SH': """
-    **ECONOMY SH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] La cabina Economy de SH [descripción - para segmentos estables usar: "mantuvo desempeño estable"] durante la semana del [fecha], registrando un NPS de [valor cabina] ([fecha período]) con una [variación de NPS_diff cabina] puntos respecto a la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "La causa principal fue [hipótesis con datos (drivers, operativa, NCS, verbatims) que la respaldan], complementada por [hipótesis secundarias (si las hubiera)]. Esta [mejora/deterioro] se reflejó especialmente en rutas como [top rutas con NPS y diff], mientras que los perfiles más reactivos incluyen [perfiles específicos]."]
-    
-    **IMPORTANTE:** Si hay subsegmentos IB y YW disponibles, analiza ambos y reporta el comportamiento agregado de la cabina completa. MENCIONA EXPLÍCITAMENTE los valores NPS de cada compañía por separado (si una compañía no aparece en el árbol, indica que "mantuvo desempeño estable") antes de explicar el efecto neto en la cabina.
-            """,
-            'Business SH': """
-    **BUSINESS SH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] El segmento Business de SH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha]) con una [variación de diff cabina] puntos vs la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "Esta evolución se explica principalmente por [causas SHAP], siendo especialmente visible en rutas como [rutas top] y entre perfiles [perfiles reactivos]."]
-    
-    **IMPORTANTE:** Si hay subsegmentos IB y YW disponibles, analiza ambos y reporta el comportamiento agregado de la cabina completa. MENCIONA EXPLÍCITAMENTE los valores NPS de cada compañía por separado (si una compañía no aparece en el árbol, indica que "mantuvo desempeño estable") antes de explicar el efecto neto en la cabina.
-            """,
-            'Premium SH': """
-    **PREMIUM SH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] El segmento Premium de SH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha]) con [diff cabina] puntos de [variación] vs la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "Las causas dominantes fueron [drivers SHAP], especialmente evidentes en [rutas top] y entre perfiles [perfiles reactivos]."]
-            """,
-            'Economy LH': """
-    **ECONOMY LH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] La cabina Economy de LH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha período]) con una [variación de NPS_diff cabina] puntos respecto a la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "La causa principal fue [hipótesis con datos (drivers, operativa, NCS, verbatims) que la respaldan], complementada por [hipótesis secundarias (si las hubiera)]. Esta [mejora/deterioro] se reflejó especialmente en rutas como [top rutas con NPS y diff], mientras que los perfiles más reactivos incluyen [perfiles específicos]."]
-            """,
-            'Business LH': """
-    **BUSINESS LH: [Título]**  
-    [PÁRRAFO NARRATIVO FLUIDO] La cabina Business de LH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha]) con [diff cabina] puntos de [variación] vs período anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "Los drivers principales fueron [causas con SHAP], impactando especialmente las rutas transatlánticas [rutas específicas] y perfiles [perfiles específicos]."]
-            """,
-            'Premium LH': """
-    **PREMIUM LH: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] El segmento Premium de LH [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha]) con [diff cabina] puntos de [variación] vs la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "Las causas dominantes fueron [drivers SHAP], especialmente evidentes en [rutas top] y entre [perfiles reactivos]."]
-            """,
-            'IB': """
-    **IB: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] La compañía IB [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha período]) con una [variación de NPS_diff cabina] puntos respecto a la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "La causa principal fue [hipótesis con datos (drivers, operativa, NCS, verbatims) que la respaldan], complementada por [hipótesis secundarias (si las hubiera)]. Esta [mejora/deterioro] se reflejó especialmente en rutas como [top rutas con NPS y diff], mientras que los perfiles más reactivos incluyen [perfiles específicos]."]
-            """,
-            'YW': """
-    **YW: [Título]**
-    [PÁRRAFO NARRATIVO FLUIDO] La compañía YW [descripción - para segmentos estables usar: "mantuvo desempeño estable"], registrando un NPS de [valor cabina] ([fecha período]) con una [variación de NPS_diff cabina] puntos respecto a la semana anterior. [Para segmentos estables: "No se detectaron cambios significativos, manteniendo niveles consistentes de satisfacción." | Para segmentos con variaciones: "La causa principal fue [hipótesis con datos (drivers, operativa, NCS, verbatims) que la respaldan], complementada por [hipótesis secundarias (si las hubiera)]. Esta [mejora/deterioro] se reflejó especialmente en rutas como [top rutas con NPS y diff], mientras que los perfiles más reactivos incluyen [perfiles específicos]."]
-            """
+            'Global': f"""
+{radio_template.format(radio='SH')}
+{radio_template.format(radio='LH')}
+{cabin_sh_template.format(cabin='BUSINESS SH', cabin_name='Business')}
+{company_template.format(company='BUSINESS SH IB')}
+{company_template.format(company='BUSINESS SH YW')}
+{cabin_sh_template.format(cabin='ECONOMY SH', cabin_name='Economy')}
+{company_template.format(company='ECONOMY SH IB')}
+{company_template.format(company='ECONOMY SH YW')}
+{cabin_lh_template.format(cabin='BUSINESS LH', cabin_name='Business')}
+{cabin_lh_template.format(cabin='PREMIUM LH', cabin_name='Premium')}
+{cabin_lh_template.format(cabin='ECONOMY LH', cabin_name='Economy')}
+""",
+            'SH': f"""
+{cabin_sh_template.format(cabin='BUSINESS SH', cabin_name='Business')}
+{company_template.format(company='BUSINESS SH IB')}
+{company_template.format(company='BUSINESS SH YW')}
+{cabin_sh_template.format(cabin='ECONOMY SH', cabin_name='Economy')}
+{company_template.format(company='ECONOMY SH IB')}
+{company_template.format(company='ECONOMY SH YW')}
+""",
+            'LH': f"""
+{cabin_lh_template.format(cabin='ECONOMY LH', cabin_name='Economy')}
+{cabin_lh_template.format(cabin='BUSINESS LH', cabin_name='Business')}
+{cabin_lh_template.format(cabin='PREMIUM LH', cabin_name='Premium')}
+""",
+            'Economy SH': f"""
+{cabin_sh_template.format(cabin='ECONOMY SH', cabin_name='Economy')}
+{company_template.format(company='ECONOMY SH IB')}
+{company_template.format(company='ECONOMY SH YW')}
+
+**IMPORTANTE:** Analiza el comportamiento agregado de la cabina completa. MENCIONA EXPLÍCITAMENTE los valores NPS de cada compañía por separado antes de explicar el efecto neto en la cabina.
+""",
+            'Business SH': f"""
+{cabin_sh_template.format(cabin='BUSINESS SH', cabin_name='Business')}
+{company_template.format(company='BUSINESS SH IB')}
+{company_template.format(company='BUSINESS SH YW')}
+
+**IMPORTANTE:** Analiza el comportamiento agregado de la cabina completa. MENCIONA EXPLÍCITAMENTE los valores NPS de cada compañía por separado antes de explicar el efecto neto en la cabina.
+""",
+            'Economy LH': cabin_lh_template.format(cabin='ECONOMY LH', cabin_name='Economy'),
+            'Business LH': cabin_lh_template.format(cabin='BUSINESS LH', cabin_name='Business'),
+            'Premium LH': cabin_lh_template.format(cabin='PREMIUM LH', cabin_name='Premium'),
+            'IB': company_template.format(company='IB'),
+            'YW': company_template.format(company='YW'),
         }
         return cabin_sections.get(segment, "")
 

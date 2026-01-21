@@ -7,6 +7,7 @@ Consolidates results, uploads to S3, and sends email notifications
 
 import asyncio
 import argparse
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 import logging
@@ -24,8 +25,15 @@ from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_de
 from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
 
 
-async def generate_consolidated_summary(agent, consolidated_data: List[Dict], date_flight_local: str = None) -> str:
-    """Generate a consolidated summary from multiple analysis types including weekly comparative and daily single analyses."""
+async def generate_consolidated_summary(agent, consolidated_data: List[Dict], date_flight_local: str = None, segment: str = 'Global') -> str:
+    """Generate a consolidated summary from multiple analysis types including weekly comparative and daily single analyses.
+    
+    Args:
+        agent: The AnomalySummaryAgent instance
+        consolidated_data: List of consolidated analysis data
+        date_flight_local: Local flight date for context
+        segment: The root segment for hierarchical analysis (default: 'Global')
+    """
     
     # Check if it's the weekly format (with 'weekly_comparative' and 'daily_singles' keys)
     if consolidated_data and isinstance(consolidated_data[0], dict) and 'weekly_comparative' in consolidated_data[0]:
@@ -70,7 +78,8 @@ async def generate_consolidated_summary(agent, consolidated_data: List[Dict], da
                     execution_metadata=execution_metadata,
                     weekly_analysis_params=weekly_params,
                     daily_analysis_params=daily_params,
-                    date_ranges=date_ranges
+                    date_ranges=date_ranges,
+                    segment=segment
                 ),
                 timeout=3600.0  # Increased timeout for 3-step process + payload optimization
             )
@@ -317,7 +326,8 @@ async def run_weekly_comprehensive_analysis(
             executive_summary = await generate_consolidated_summary(
                 summary_agent, 
                 consolidated_data, 
-                date_flight_local
+                date_flight_local,
+                segment=segment
             )
             
             print("\n" + "=" * 80)
@@ -338,11 +348,17 @@ async def run_weekly_comprehensive_analysis(
                     'comparison_end_date': comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None
                 }
                 
-                # In prod, only upload the adaptive card JSON as the final synthesis
+                # In prod, only upload the adaptive card as a JSON object
                 final_synthesis_to_upload = executive_summary
                 if environment == "prod" and "---ADAPTIVE_CARD_JSON---" in executive_summary:
-                    # adaptive_card_json is already minified and escaped by the agent
-                    final_synthesis_to_upload = executive_summary.split("---ADAPTIVE_CARD_JSON---")[-1].strip()
+                    # Extract the adaptive card JSON string
+                    card_json_str = executive_summary.split("---ADAPTIVE_CARD_JSON---")[-1].strip()
+                    try:
+                        # Parse into a dictionary so S3 uploader stores it as a JSON object
+                        final_synthesis_to_upload = json.loads(card_json_str)
+                    except Exception as e:
+                        print(f"⚠️ Could not parse adaptive card JSON: {e}")
+                        final_synthesis_to_upload = card_json_str
 
                 s3_key = await s3_uploader.upload_comprehensive_report(
                     execution_date=datetime.now(),

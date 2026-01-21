@@ -12,17 +12,18 @@ async def test_summary_consolidation():
     # Path to logs
     logs_dir = Path("CLAUDE_SONNET_4_5_agent_conversations/anomaly_interpreter")
     
-    # 1. Identify weekly report
-    weekly_file = logs_dir / "interpreter_2025-12-28 to 2026-01-02_20260107_134420.json"
+    # 1. Identify weekly report (range format: YYYY-MM-DD to YYYY-MM-DD)
+    weekly_file = logs_dir / "interpreter_2026-01-11 to 2026-01-17_20260121_112958.json"
     
     # 2. Identify daily reports (ordered chronologically)
     daily_files = [
-        "interpreter_2025-12-28 to 2025-12-28_20260107_142701.json",
-        "interpreter_2025-12-29 to 2025-12-29_20260107_141956.json",
-        "interpreter_2025-12-30 to 2025-12-30_20260107_142224.json",
-        "interpreter_2025-12-31 to 2025-12-31_20260107_140455.json",
-        "interpreter_2026-01-01 to 2026-01-01_20260107_140426.json",
-        "interpreter_2026-01-02 to 2026-01-02_20260107_140346.json"
+        "interpreter_2026-01-11 to 2026-01-11_20260121_121944.json",
+        "interpreter_2026-01-12 to 2026-01-12_20260121_121722.json",
+        "interpreter_2026-01-13 to 2026-01-13_20260121_121615.json",
+        "interpreter_2026-01-14 to 2026-01-14_20260121_120430.json",
+        "interpreter_2026-01-15 to 2026-01-15_20260121_115334.json",
+        "interpreter_2026-01-16 to 2026-01-16_20260121_114952.json",
+        "interpreter_2026-01-17 to 2026-01-17_20260121_115327.json",
     ]
     
     # Load weekly report content
@@ -37,6 +38,8 @@ async def test_summary_consolidation():
     if not weekly_analysis:
         print(f"❌ Could not find executive synthesis in weekly report: {weekly_file}")
         return
+
+    print(f"✅ Weekly report loaded: {len(weekly_analysis)} chars")
 
     # Load daily reports content
     daily_analyses = []
@@ -63,6 +66,7 @@ async def test_summary_consolidation():
                     'analysis': daily_analysis_text,
                     'anomalies': [] 
                 })
+                print(f"  ✅ Daily {date_str}: {len(daily_analysis_text)} chars")
     
     print(f"📊 Loaded weekly report and {len(daily_analyses)} daily reports.")
     
@@ -70,11 +74,12 @@ async def test_summary_consolidation():
     # Environment "local" to use temporary credentials if needed
     agent = AnomalySummaryAgent(environment="local")
     
-    print("🤖 Running stratified summary (Steps 1, 2, 3 and 4)...")
+    print("🤖 Running stratified summary (Steps 1-6)...")
     result = await agent.generate_comprehensive_summary_stratified(
         weekly_comparative_analysis=weekly_analysis,
         daily_single_analyses=daily_analyses,
-        date_flight_local="2026-01-02"
+        date_flight_local="2026-01-17",
+        segment="Global"
     )
     
     # Save result to a file
@@ -83,6 +88,15 @@ async def test_summary_consolidation():
         f.write(result)
     
     print(f"✅ Summary generated and saved to {output_path}")
+    
+    # Also extract and save Adaptive Card JSON separately
+    if "---ADAPTIVE_CARD_JSON---" in result:
+        parts = result.split("---ADAPTIVE_CARD_JSON---")
+        if len(parts) > 1:
+            adaptive_card = parts[1].strip()
+            with open("test_adaptive_card.json", 'w', encoding='utf-8') as f:
+                f.write(adaptive_card)
+            print(f"✅ Adaptive Card saved to test_adaptive_card.json ({len(adaptive_card)} chars)")
 
 if __name__ == "__main__":
     asyncio.run(test_summary_consolidation())

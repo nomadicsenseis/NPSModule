@@ -9,7 +9,7 @@ shared_rules: |
   ⚠️ **REGLAS GENERALES:**
   - 🚫 **PROHIBICIÓN ESTRICTA:** NUNCA escribas "Young Wings". Si detectas esa entidad, DEBES sustituirla automáticamente por **YW**. Esta regla es absoluta para todo el informe.
   - **NOMENCLATURA DE COMPAÑÍAS:** Las compañías SIEMPRE se escriben como **IB** e **YW**.
-  - NUNCA uses "Short Haul", "Largo Radio", "Corto Radio". USA SIEMPRE **SH** y **LH**.
+  - 🚫 **PROHIBICIÓN ESTRICTA DE RADIO:** NUNCA escribas "Short Haul", "Long Haul", "Largo Radio", "Corto Radio", "radio corto", "radio largo". USA SIEMPRE y ÚNICAMENTE **SH** y **LH**. Esta regla es ABSOLUTA para títulos, cuerpo del texto, listas y Adaptive Cards. Ejemplos: Mal: "Short Haul: Deterioro" → Bien: "SH: Deterioro". Mal: "el radio corto cayó" → Bien: "SH cayó".
   - **UNIDAD DEL NPS (CRÍTICO):** 
     - Para la variación del NPS total del segmento (ej: +10.3), usa siempre "**pts**" o "**puntos**".
     - Reserva "**ppts de NPS** según Explanatory Drivers" exclusivamente para el impacto de los drivers (SHAP).
@@ -206,12 +206,33 @@ step3_extract_synthesis:
     ❌ ✅ ANÁLISIS COMPLETADO (footer)
     
     **SECCIONES A INCLUIR (copiar contenido, convertir a HTML y aplicar reglas):**
-    ✅ 📈 SÍNTESIS EJECUTIVA (párrafo introductorio)
-    ✅ ECONOMY SH con su párrafo semanal + contexto diario
-    ✅ BUSINESS SH con su párrafo semanal + contexto diario
-    ✅ ECONOMY LH con su párrafo semanal + contexto diario
-    ✅ BUSINESS LH con su párrafo semanal + contexto diario
-    ✅ PREMIUM LH con su párrafo semanal + contexto diario
+    ✅ 📈 SÍNTESIS EJECUTIVA (párrafo introductorio del segmento raíz)
+    ✅ Todas las agregaciones jerárquicas bajo el segmento raíz con sus párrafos semanales + contexto diario
+    
+    **ESTRUCTURA JERÁRQUICA PARA GLOBAL:**
+    - GLOBAL (síntesis ejecutiva)
+    - SH
+    - LH
+    - BUSINESS SH + BUSINESS SH IB + BUSINESS SH YW
+    - ECONOMY SH + ECONOMY SH IB + ECONOMY SH YW
+    - BUSINESS LH
+    - PREMIUM LH
+    - ECONOMY LH
+    
+    **ESTRUCTURA PARA SH:**
+    - SH (síntesis ejecutiva)
+    - BUSINESS SH + BUSINESS SH IB + BUSINESS SH YW
+    - ECONOMY SH + ECONOMY SH IB + ECONOMY SH YW
+    
+    **ESTRUCTURA PARA LH:**
+    - LH (síntesis ejecutiva)
+    - ECONOMY LH
+    - BUSINESS LH
+    - PREMIUM LH
+    
+    **PARA CABINAS INDIVIDUALES:**
+    - La cabina como síntesis ejecutiva
+    - Sus subsegmentos (IB/YW para SH, ninguno para LH)
     
     ---
     
@@ -264,107 +285,38 @@ step3_extract_synthesis:
 # =============================================================================
 step4_generate_adaptive_card:
   system_prompt: |
-    Eres un experto en JSON y Adaptive Cards para Microsoft Teams.
-    Te voy a pasar una síntesis ejecutiva (HTML) y una plantilla estructural. Tu tarea es devolver una Adaptive Card en JSON.
+    Eres un experto en Adaptive Cards (v1.5). Tu tarea es generar un JSON que genere una adaptative card con la siguiente estructura, preservando el texto exacto de la síntesis ejecutiva salvo por la nomenclatura de SH y LH que se especifica a continuación.
+
+    **PLANTILLA ESTRUCTURAL (respetar esta forma y ORDEN, ejemplo MINIFICADO):**
+    {"type":"AdaptiveCard","version":"1.5","body":[{"type":"Container","items":[{"type":"TextBlock","text":"Reporte de NPS y Variaciones","weight":"Bolder","size":"Large","color":"Accent"},{"type":"TextBlock","text":"Período: {date_range}","isSubtle":true,"spacing":"None"}]},{"type":"Container","spacing":"Medium","items":[{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"Segmento","weight":"Bolder","size":"Small"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"NPS","weight":"Bolder","size":"Small","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"Var.","weight":"Bolder","size":"Small","horizontalAlignment":"Right"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"🌐 GLOBAL"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"✈️ SH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"🌍 LH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"✈️ Business SH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]} ...[Resto de segmentos: Business SH IB, Business SH YW, Economy SH, Economy SH IB, Economy SH YW, Business LH, Premium LH, Economy LH]...]}],"actions":[{"type":"Action.ShowCard","title":"🌐 GLOBAL","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: GLOBAL","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_global"]}]},{"type":"Container","id":"dailyCtx_global","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}},{"type":"Action.ShowCard","title":"✈️ SH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: SH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_global_sh"]}]},{"type":"Container","id":"dailyCtx_global_sh","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}},{"type":"Action.ShowCard","title":"🌍 LH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: LH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_global_lh"]}]},{"type":"Container","id":"dailyCtx_global_lh","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}},{"type":"Action.ShowCard","title":"✈️ Business SH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: Business SH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_bsh"]}]},{"type":"Container","id":"dailyCtx_bsh","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}} ...[Resto de secciones]...]}
+
+    **REGLA DE FUENTE:**
+    - La síntesis ejecutiva trae secciones con títulos. Usa EXACTAMENTE esos títulos como fuente, salvo si vienen con Short Haul o Long Haul, en cuyo caso usa SH o LH respectivamente.
+    - Si una sección no existe en la síntesis, NO inventes contenido para ella.
+    - Respeta el orden anterior solo para las secciones presentes.
+
+    **REGLAS DE TABLA:**
+    - **ICONOS OBLIGATORIOS:**
+      - GLOBAL: 🌐
+      - SH: ✈️ (y todos sus subsegmentos)
+      - LH: 🌍 (y todos sus subsegmentos)
+      - NO USES otros iconos.
+    - SIN INDENTACIÓN (lista plana de segmentos).
+    - Colores: `Good` para (+) y `Attention` para (-).
     
-    **REGLA CRÍTICA:** Debes respetar TODO el texto de la síntesis ejecutiva (sin omitir ni resumir).
-    **SALIDA:** Devuélvelo en una sola línea, minificado, sin texto adicional.
+
+    **REGLAS TÉCNICAS:**
+    - Devuelve SOLO el JSON minificado en una sola línea.
+    - NO incluyas bloques de código markdown ni texto explicativo.
+    - Escapa las comillas internas si es necesario para que sea un string JSON válido.
 
   input_template: |
-    **PERÍODO DE ANÁLISIS:** {date_range}
+    INFORME:
+    {comprehensive_response}
 
-    **SÍNTESIS EJECUTIVA PARA MAPEAR (TEXTO COMPLETO):**
-    {full_report}
+    PERÍODO: {date_range}
 
-    ---
-
-    **REGLAS DE PROCESAMIENTO:**
-    - **ALINEACIÓN:** Mantén estrictamente los anchos de columna (`stretch`, `50px`, `60px`).
-    - **COLORES:** Para la columna de variación, usa `color: "Good"` si el valor es positivo (+) y `color: "Attention"` si es negativo (-).
-    - **REDONDEO CRÍTICO:** TODOS los valores numéricos (NPS, Variación, ppts) deben tener EXACTAMENTE **1 decimal** (ej: 15.0, -2.4).
-    - **LITERALIDAD:** 🚫 PROHIBIDO resumir o parafrasear. COPIA LITERALMENTE los párrafos del informe HTML.
-    - **EXCEPCIÓN DE TONO:** Si aparecen palabras prohibidas (colapso, crisis, caos, catastrófico, masiva, hundió, caótico), sustitúyelas por alternativas moderadas (deterioro notable, presión operativa, situación crítica, incidencia relevante, descenso, afectó) manteniendo el resto del texto idéntico.
-
-    ---
-
-    **PLANTILLA ESTRUCTURAL (con ejemplos completos de GLOBAL y Business SH):**
-    
-    ⚠️ **CRÍTICO:** CADA sección (GLOBAL + 5 cabinas) DEBE incluir:
-    1. El párrafo semanal LITERAL
-    2. El ActionSet con ToggleVisibility
-    3. El Container colapsable con el contexto diario
-    
-    ```json
-    {{
-      "type": "AdaptiveCard",
-      "version": "1.5",
-      "body": [
-        {{
-          "type": "Container",
-          "items": [
-            {{ "type": "TextBlock", "text": "Reporte de NPS y Variaciones", "weight": "Bolder", "size": "Large", "color": "Accent" }},
-            {{ "type": "TextBlock", "text": "Período: {date_range} (vs semana anterior)", "isSubtle": true, "spacing": "None" }}
-          ]
-        }},
-        {{
-          "type": "Container",
-          "spacing": "Medium",
-          "items": [
-            {{ "type": "ColumnSet", "columns": [
-              {{ "type": "Column", "width": "stretch", "items": [{{ "type": "TextBlock", "text": "Segmento", "weight": "Bolder", "size": "Small" }}] }},
-              {{ "type": "Column", "width": "50px", "items": [{{ "type": "TextBlock", "text": "NPS", "weight": "Bolder", "size": "Small", "horizontalAlignment": "Center" }}] }},
-              {{ "type": "Column", "width": "60px", "items": [{{ "type": "TextBlock", "text": "Var.", "weight": "Bolder", "size": "Small", "horizontalAlignment": "Right" }}] }}
-            ] }},
-            {{ "type": "ColumnSet", "separator": true, "columns": [
-              {{ "type": "Column", "width": "stretch", "items": [{{ "type": "TextBlock", "text": "🌐 GLOBAL", "weight": "Bolder" }}] }},
-              {{ "type": "Column", "width": "50px", "items": [{{ "type": "TextBlock", "text": "[NPS]", "horizontalAlignment": "Center" }}] }},
-              {{ "type": "Column", "width": "60px", "items": [{{ "type": "TextBlock", "text": "[Var]", "horizontalAlignment": "Right", "color": "[Good/Attention]", "weight": "Bolder" }}] }}
-            ] }},
-            [... REPETIR ColumnSet para: ✈️ Business SH, ✈️ Economy SH, 🌍 Business LH, 🌍 Premium LH, 🌍 Economy LH ...]
-          ]
-        }}
-      ],
-      "actions": [
-        {{
-          "type": "Action.ShowCard",
-          "title": "🌐 GLOBAL",
-          "card": {{
-            "type": "AdaptiveCard",
-            "body": [
-              {{ "type": "TextBlock", "text": "Análisis Semanal: GLOBAL", "weight": "Bolder", "color": "Accent" }},
-              {{ "type": "TextBlock", "text": "[PÁRRAFO SEMANAL DE GLOBAL - LITERAL del informe]", "wrap": true }},
-              {{ "type": "ActionSet", "actions": [{{ "type": "Action.ToggleVisibility", "title": "Ver/Ocultar Contexto Diario", "targetElements": ["dailyCtx_global"] }}] }},
-              {{ "type": "Container", "id": "dailyCtx_global", "isVisible": false, "items": [
-                {{ "type": "TextBlock", "text": "Contexto Diario:", "weight": "Bolder", "spacing": "Medium" }},
-                {{ "type": "TextBlock", "text": "[PÁRRAFO DIARIO DE GLOBAL - LITERAL del informe, empieza con 'A nivel diario...']", "wrap": true }}
-              ] }}
-            ],
-            "version": "1.5"
-          }}
-        }},
-        {{
-          "type": "Action.ShowCard",
-          "title": "✈️ Business SH",
-          "card": {{
-            "type": "AdaptiveCard",
-            "body": [
-              {{ "type": "TextBlock", "text": "Análisis Semanal: Business SH", "weight": "Bolder", "color": "Accent" }},
-              {{ "type": "TextBlock", "text": "[PÁRRAFO SEMANAL DE BUSINESS SH - LITERAL del informe]", "wrap": true }},
-              {{ "type": "ActionSet", "actions": [{{ "type": "Action.ToggleVisibility", "title": "Ver/Ocultar Contexto Diario", "targetElements": ["dailyCtx_bsh"] }}] }},
-              {{ "type": "Container", "id": "dailyCtx_bsh", "isVisible": false, "items": [
-                {{ "type": "TextBlock", "text": "Contexto Diario:", "weight": "Bolder", "spacing": "Medium" }},
-                {{ "type": "TextBlock", "text": "[PÁRRAFO DIARIO DE BUSINESS SH - LITERAL del informe, empieza con 'A nivel diario...']", "wrap": true }}
-              ] }}
-            ],
-            "version": "1.5"
-          }}
-        }},
-        [... REPETIR Action.ShowCard con MISMA ESTRUCTURA (semanal + ActionSet + Container diario) para: ✈️ Economy SH (dailyCtx_esh), 🌍 Business LH (dailyCtx_blh), 🌍 Premium LH (dailyCtx_plh), 🌍 Economy LH (dailyCtx_elh) ...]
-      ]
-    }}
-    ```
-
-    **TAREA:** Genera el JSON completo **minificado en una sola línea** y con las comillas escapadas,respetando todo el texto de la síntesis. NO incluyas texto explicativo.
+    Genera la Adaptive Card respetando estrictamente la jerarquía y la nomenclatura SH/LH.
 
 # =============================================================================
 # STEP 5: MODERNIZE TONE (NEW)
@@ -388,58 +340,82 @@ step5_modernize_tone:
 step6a_remove_low_impact_days:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
-    Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
-    - Elimina primero días con las variaciones más pequeñas en valor absoluto y/o días sin eventos destacables.
-    - Mantén los días con variaciones más fuertes y con eventos operativos clave.
-    - NO resumas ni cambies el resto del texto.
-    - No elimines secciones, solo resume las que corresponda con estas directrices.
+    Tu tarea es REDUCIR GRADUALMENTE el tamaño, preservando la estructura completa.
+    
+    **REGLAS CRÍTICAS - LEE ATENTAMENTE:**
+    1. NUNCA elimines Action.ShowCard (botones expandibles). Cada segmento DEBE mantener su botón.
+    2. NUNCA elimines secciones completas de la tabla (ColumnSet con segmentos).
+    3. SOLO puedes reducir el TEXTO dentro de los Container con id "dailyCtx_*" (contexto diario).
+    
+    **QUÉ HACER:**
+    - En cada Container "dailyCtx_*", ACORTA el texto eliminando días con variaciones pequeñas (< ±3 pts).
+    - Mantén los días con variaciones fuertes (> ±5 pts) y eventos operativos críticos.
+    - Si un contexto diario ya es corto (< 200 chars), NO lo modifiques.
+    - El texto semanal (fuera de dailyCtx) debe permanecer INTACTO.
+    
+    **OBJETIVO:** Reducir ~20-30%, NO el 70%. Si el JSON original pesa 58 KB, el resultado debe pesar ~40-45 KB.
 
     **FORMATO DE SALIDA:**
-    Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado) y con las comillas escapadas. NO incluyas bloques de código ni texto explicativo.
+    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
   input_template: |
     JSON ACTUAL: {current_json}
-    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB, pero de forma GRADUAL (máximo -30% por paso).
 
 step6b_shorten_daily_context:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
-    Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
-    - Recorta conectores y adjetivos redundantes en los apartados de contexto diario.
-    - Abrevia meses o términos (diciembre -> dic, puntos -> pts).
-    - Mantén la narrativa y las frases completas de los apartados semanales.
-    - No elimines secciones, solo resume las que corresponda con estas directrices.
+    
+    **REGLAS CRÍTICAS:**
+    1. NUNCA elimines Action.ShowCard (botones). Cada segmento DEBE mantener su botón.
+    2. NUNCA elimines ColumnSet de la tabla.
+    
+    **QUÉ HACER:**
+    - Recorta conectores y adjetivos redundantes SOLO en Container "dailyCtx_*".
+    - Abrevia: diciembre→dic, enero→ene, puntos→pts, puntualidad→OTP.
+    - El texto semanal debe permanecer INTACTO.
+    - Reducción objetivo: ~15-20% adicional.
 
     **FORMATO DE SALIDA:**
-    Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado) y con las comillas escapadas. NO incluyas bloques de código ni texto explicativo.
+    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código.
   input_template: |
     JSON ACTUAL: {current_json}
-    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB (reducción gradual ~15-20%).
 
 step6c_shorten_cabin_haul_weekly:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
-    Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
-    - Rescribe el texto del informe semanal de cada cabina/radio usando formulaciones más cortas. Manten el global tal y como esta. 
-    - Conserva cifras clave (NPS, variación) y menciones críticas de operativa, pts de explainatory drivers (puedes abreviarlo como ED), etc.
-    - No elimines secciones, solo resume las que corresponda con estas directrices.
+    
+    **REGLAS CRÍTICAS:**
+    1. NUNCA elimines Action.ShowCard (botones). Cada segmento DEBE mantener su botón.
+    2. NUNCA elimines ColumnSet de la tabla.
+    
+    **QUÉ HACER:**
+    - Acorta el texto semanal de cabinas/radios (NO el de GLOBAL).
+    - Conserva cifras clave: NPS, variación, ED (explainatory drivers), rutas críticas.
+    - Usa formulaciones más telegráficas (elimina verbos auxiliares, artículos innecesarios).
+    - Reducción objetivo: ~15-20% adicional.
 
     **FORMATO DE SALIDA:**
-    Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado) y con las comillas escapadas. NO incluyas bloques de código ni texto explicativo.
+    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código.
   input_template: |
     JSON ACTUAL: {current_json}
-    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB (reducción gradual ~15-20%).
 
 step6d_shorten_overall_global:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
-    Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
-    - Reescribe el texto del informe general GLOBAL de forma más concisa y clara, pero manteniendo el mensaje.
-    - Conserva cifras clave (NPS, variación) y menciones críticas de operativa, pts de explainatory drivers (puedes abreviarlo como ED) etc.
-    - No elimines secciones, solo resume las que corresponda con estas directrices.
+    
+    **REGLAS CRÍTICAS:**
+    1. NUNCA elimines Action.ShowCard (botones). Cada segmento DEBE mantener su botón.
+    2. NUNCA elimines ColumnSet de la tabla.
+    
+    **QUÉ HACER (ÚLTIMO RECURSO):**
+    - Acorta el texto del resumen GLOBAL.
+    - Conserva cifras clave: NPS, variación, ED, causas principales.
+    - Reducción objetivo: ~10-15% adicional.
 
     **FORMATO DE SALIDA:**
-    Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado) y con las comillas escapadas. NO incluyas bloques de código ni texto explicativo.
+    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código.
   input_template: |
     JSON ACTUAL: {current_json}
-    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
-
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB (reducción gradual ~10-15%).

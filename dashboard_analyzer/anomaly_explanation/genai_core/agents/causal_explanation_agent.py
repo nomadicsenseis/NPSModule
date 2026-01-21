@@ -1358,10 +1358,11 @@ class CausalExplanationAgent:
             
                         for _, route in routes_data.head(10).iterrows():
                             route_name = route.get(route_col, 'Unknown')
-                            nps_value = route.get(nps_col, 0)
-                            sample_size = route.get(pax_col, 0) if pax_col else 0
+                            nps_raw = route.get(nps_col)
+                            nps_value = float(nps_raw) if pd.notna(nps_raw) else 0.0
+                            sample_size = int(route.get(pax_col, 0)) if pax_col and pd.notna(route.get(pax_col)) else 0
                         
-                        result_parts.append(f"• {route_name}: NPS {nps_value:.1f} (n={sample_size})")
+                            result_parts.append(f"• {route_name}: NPS {nps_value:.1f} (n={sample_size})")
                     else:
                         result_parts.append("❌ No hay rutas con suficientes encuestas (mínimo 2).")
                 else:
@@ -4529,14 +4530,19 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                 analysis_parts.append(f"     • {pattern}: {', '.join(routes)}")
         
         # Performance correlation analysis
-        if len(all_routes) > 1:
-            nps_values = [data['nps'] for data in all_routes.values()]
-            nps_range = max(nps_values) - min(nps_values)
-            avg_nps = sum(nps_values) / len(nps_values)
+        if all_routes:
+            # Filter out None values for NPS analysis
+            nps_values = [data['nps'] for data in all_routes.values() if data['nps'] is not None]
             
-            analysis_parts.append(f"   📈 Overall NPS performance:")
-            analysis_parts.append(f"     • Range: {min(nps_values):.1f} to {max(nps_values):.1f} (spread: {nps_range:.1f} pts)")
-            analysis_parts.append(f"     • Average: {avg_nps:.1f}")
+            if nps_values:
+                nps_range = max(nps_values) - min(nps_values)
+                avg_nps = sum(nps_values) / len(nps_values)
+                
+                analysis_parts.append(f"   📈 Overall NPS performance:")
+                analysis_parts.append(f"     • Range: {min(nps_values):.1f} to {max(nps_values):.1f} (spread: {nps_range:.1f} pts)")
+                analysis_parts.append(f"     • Average: {avg_nps:.1f}")
+            else:
+                analysis_parts.append(f"   📈 Overall NPS performance: N/A (no valid NPS data found for identified routes)")
         
         # Source-specific insights
         exp_count = len(exp_drivers_routes.get('routes', []))

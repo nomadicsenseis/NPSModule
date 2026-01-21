@@ -69,8 +69,9 @@ class AWSLLM(LLM):
         provider = self._get_provider()
         
         # Build a boto3 client with extended timeouts and retries to handle long generations
-        read_timeout = int(os.getenv("BEDROCK_READ_TIMEOUT", "300"))
-        connect_timeout = int(os.getenv("BEDROCK_CONNECT_TIMEOUT", "15"))
+        # Increased to 1 hour (3600s) to handle large JSON outputs like Adaptive Cards
+        read_timeout = int(os.getenv("BEDROCK_READ_TIMEOUT", "3600"))
+        connect_timeout = int(os.getenv("BEDROCK_CONNECT_TIMEOUT", "60"))
         max_attempts = int(os.getenv("BEDROCK_MAX_RETRIES", "3"))
         cfg = Config(read_timeout=read_timeout, connect_timeout=connect_timeout, retries={"max_attempts": max_attempts, "mode": "standard"})
 
@@ -84,12 +85,16 @@ class AWSLLM(LLM):
         bedrock_client = session.client("bedrock-runtime", config=cfg)
 
         # Create ChatBedrock client with custom boto3 client and tunable generation params
-        max_tokens = int(os.getenv("BEDROCK_MAX_TOKENS", "15000"))
+        # Increased default to 64000 to avoid truncation of large JSON outputs (Adaptive Cards)
+        max_tokens = int(os.getenv("BEDROCK_MAX_TOKENS", "64000"))
         
         # Adjust max_tokens for models with lower limits
         # Nova Pro limit is 5k-10k depending on region/version (error said 10000)
         if self.llm_type in [LLMType.AMAZON_NOVA_PRO, LLMType.AMAZON_NOVA_2_LITE]:
             max_tokens = min(max_tokens, 5000)  # Safe limit
+        # Claude Sonnet 4.5 supports up to 64k output tokens
+        elif self.llm_type == LLMType.CLAUDE_SONNET_4_5:
+            max_tokens = min(max_tokens, 64000)
             
         temperature = float(os.getenv("BEDROCK_TEMPERATURE", "0.7"))
         

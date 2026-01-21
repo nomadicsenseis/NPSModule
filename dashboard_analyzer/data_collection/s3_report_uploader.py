@@ -169,8 +169,11 @@ class S3ReportUploader:
             )
             s3_key = f"{self.base_prefix}{filename}"
             
-            # Convert to JSON string
-            json_content = json.dumps(report_data, indent=2, ensure_ascii=False)
+            # Convert to JSON string - Minify in prod to save space
+            if self.environment == "prod":
+                json_content = json.dumps(report_data, ensure_ascii=False, separators=(',', ':'))
+            else:
+                json_content = json.dumps(report_data, indent=2, ensure_ascii=False)
             
             # Upload to S3
             self.logger.info(f"📤 Uploading comprehensive report to S3: s3://{self.bucket_name}/{s3_key}")
