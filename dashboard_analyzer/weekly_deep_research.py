@@ -341,7 +341,9 @@ async def run_weekly_comprehensive_analysis(
                 # In prod, only upload the adaptive card JSON as the final synthesis
                 final_synthesis_to_upload = executive_summary
                 if environment == "prod" and "---ADAPTIVE_CARD_JSON---" in executive_summary:
-                    final_synthesis_to_upload = executive_summary.split("---ADAPTIVE_CARD_JSON---")[-1].strip()
+                    card_json = executive_summary.split("---ADAPTIVE_CARD_JSON---")[-1].strip()
+                    # Minify and escape quotes as requested
+                    final_synthesis_to_upload = card_json.replace('"', '\\"')
 
                 s3_key = await s3_uploader.upload_comprehensive_report(
                     execution_date=datetime.now(),

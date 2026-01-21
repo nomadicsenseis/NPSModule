@@ -214,15 +214,52 @@ class AnomalySummaryAgent:
             return 0.0
         return len(payload.encode('utf-8')) / 1024.0
 
+    def _clean_json_response(self, text: str) -> str:
+        """Robustly extract JSON from LLM response, handling code blocks and escaped quotes."""
+        if not text:
+            return "{}"
+        
+        cleaned = text.strip()
+        
+        # 1. Handle common LLM prefixes like "json\n" or "Here is the JSON:"
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:].strip()
+            
+        # 2. Extract from markdown code blocks if present
+        if "```" in cleaned:
+            if "```json" in cleaned:
+                cleaned = cleaned.split("```json")[1].split("```")[0].strip()
+            else:
+                cleaned = cleaned.split("```")[1].split("```")[0].strip()
+        
+        # 3. Handle escaped quotes if the user requested them (e.g. \"type\": \"AdaptiveCard\")
+        # but only if it looks like the whole thing is escaped
+        if '\\"' in cleaned and cleaned.count('\\"') > cleaned.count('"'):
+            cleaned = cleaned.replace('\\"', '"')
+            
+        # 4. Final attempt to find the first '{' and last '}'
+        try:
+            start_idx = cleaned.find('{')
+            end_idx = cleaned.rfind('}')
+            if start_idx != -1 and end_idx != -1:
+                cleaned = cleaned[start_idx:end_idx+1]
+        except Exception:
+            pass
+            
+        return cleaned
+
     def _minify_json(self, json_payload: str) -> str:
         """Minify JSON string if possible to reduce size."""
         if not json_payload:
             return json_payload
+        
+        cleaned = self._clean_json_response(json_payload)
         try:
-            parsed = json.loads(json_payload)
+            parsed = json.loads(cleaned)
             return json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
         except Exception:
-            return json_payload.strip()
+            # If parsing fails, just return the cleaned text as a last resort
+            return cleaned.strip()
 
     async def _optimize_adaptive_card_payload(
         self,
@@ -233,7 +270,7 @@ class AnomalySummaryAgent:
         if not adaptive_card_json:
             return adaptive_card_json
 
-        # Minify first as a cheap win
+        # Initial cleaning and minification
         adaptive_card_json = self._minify_json(adaptive_card_json)
         current_kb = self._measure_kb(adaptive_card_json)
         self.logger.info(f"📦 Initial Adaptive Card size (minified): {current_kb:.2f} KB")
@@ -274,10 +311,7 @@ class AnomalySummaryAgent:
             response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
             optimized = response.content if hasattr(response, 'content') else str(response)
 
-            # Strip code fences if present
-            if "```" in optimized:
-                optimized = optimized.split("```")[-2].strip() if optimized.count("```") >= 2 else optimized.replace("```", "").strip()
-
+            # Clean and minify the optimized response
             optimized = self._minify_json(optimized)
             size_kb = self._measure_kb(optimized)
             
@@ -486,6 +520,9 @@ class AnomalySummaryAgent:
                     daily_analysis_params and date_ranges):
                     try:
                         self.logger.info("📤 Uploading comprehensive report to S3...")
+                        # Prepare final synthesis: minified and with escaped quotes as requested
+                        escaped_adaptive_card = adaptive_card_json.replace('"', '\\"')
+                        
                         s3_key = await self.s3_uploader.upload_comprehensive_report(
                             execution_date=datetime.now(),
                             analysis_date=execution_metadata.get('analysis_date', ''),
@@ -495,8 +532,8 @@ class AnomalySummaryAgent:
                             weekly_analysis_params=weekly_analysis_params,
                             daily_analysis_params=daily_analysis_params,
                             date_ranges=date_ranges,
-                            # Parse JSON string to dict for Power Automate compatibility
-                            final_synthesis=json.loads(adaptive_card_json) if self.environment == "prod" else final_output,
+                            # Use escaped minified JSON for prod, full text for other envs
+                            final_synthesis=escaped_adaptive_card if self.environment == "prod" else final_output,
                             comparison_start_date=date_ranges.get('comparison_start_date'),
                             comparison_end_date=date_ranges.get('comparison_end_date')
                         )
@@ -780,6 +817,9 @@ class AnomalySummaryAgent:
             if final_output and execution_metadata and weekly_analysis_params and daily_analysis_params and date_ranges:
                 try:
                     self.logger.info("📤 Uploading executive synthesis and adaptive card to S3...")
+                    # Prepare final synthesis: minified and with escaped quotes as requested
+                    escaped_adaptive_card = adaptive_card_json.replace('"', '\\"')
+                    
                     s3_key = await self.s3_uploader.upload_comprehensive_report(
                         execution_date=datetime.now(),
                         analysis_date=execution_metadata.get('analysis_date', ''),
@@ -789,8 +829,8 @@ class AnomalySummaryAgent:
                         weekly_analysis_params=weekly_analysis_params,
                         daily_analysis_params=daily_analysis_params,
                         date_ranges=date_ranges,
-                        # Parse JSON string to dict for Power Automate compatibility
-                        final_synthesis=json.loads(adaptive_card_json) if self.environment == "prod" else final_output,
+                        # Use escaped minified JSON for prod, full output for others
+                        final_synthesis=escaped_adaptive_card if self.environment == "prod" else final_output,
                         comparison_start_date=date_ranges.get('comparison_start_date'),
                         comparison_end_date=date_ranges.get('comparison_end_date')
                     )
@@ -1422,19 +1462,24 @@ PERÍODO {period} ({date_range}):
             response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
             adaptive_card_json = response.content if hasattr(response, 'content') else str(response)
             
-            # Clean up JSON if it contains markdown code blocks
-            if "```json" in adaptive_card_json:
-                adaptive_card_json = adaptive_card_json.split("```json")[1].split("```")[0].strip()
-            elif "```" in adaptive_card_json:
-                adaptive_card_json = adaptive_card_json.split("```")[1].split("```")[0].strip()
+            # Use robust cleaning logic
+            adaptive_card_json = self._clean_json_response(adaptive_card_json)
             
-            # Validate JSON if possible
+            # Validate JSON
             try:
                 json.loads(adaptive_card_json)
                 self.logger.info(f"✅ Adaptive Card JSON validated ({len(adaptive_card_json)} chars)")
-            except json.JSONDecodeError:
-                self.logger.warning("⚠️ Generated Adaptive Card is not valid JSON")
-                # Attempt to fix common issues if needed, but for now just log it
+            except json.JSONDecodeError as e:
+                self.logger.warning(f"⚠️ Generated Adaptive Card is not valid JSON: {e}")
+                # Last resort: try to fix escaped quotes again if not caught
+                if '\\"' in adaptive_card_json:
+                    try:
+                        fixed = adaptive_card_json.replace('\\"', '"')
+                        json.loads(fixed)
+                        adaptive_card_json = fixed
+                        self.logger.info("✅ Fixed JSON by removing escaped quotes")
+                    except Exception:
+                        pass
             
             return adaptive_card_json
         except Exception as e:
