@@ -367,9 +367,25 @@ step4_generate_adaptive_card:
     **TAREA:** Genera el JSON completo **minificado en una sola línea** y con las comillas escapadas,respetando todo el texto de la síntesis. NO incluyas texto explicativo.
 
 # =============================================================================
-# STEP 5: SURGICAL PAYLOAD OPTIMIZER (NEW)
+# STEP 5: MODERNIZE TONE (NEW)
 # =============================================================================
-step5a_remove_low_impact_days:
+step5_modernize_tone:
+  system_prompt: |
+    Te voy a pasar una Adaptive Card en JSON. Tu tarea es devolver la MISMA estructura y lógica, preservando el formato minificado y las comillas escapadas, pero haciendo sonar el texto de cada sección "menos como Cervantes".
+    
+    **DIRECTRICES DE TONO:**
+    - No cambies los datos (NPS, variaciones, fechas, etc.) ni los omitas.
+    - Mantén la narrativa pero hazla más ágil y fácil de leer.
+    
+    **FORMATO DE SALIDA:**
+    Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado) y con las comillas escapadas. NO incluyas bloques de código ni texto explicativo.
+  input_template: |
+    JSON ACTUAL: {current_json}
+
+# =============================================================================
+# STEP 6: SURGICAL PAYLOAD OPTIMIZER (NEW)
+# =============================================================================
+step6a_remove_low_impact_days:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
     Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
@@ -384,7 +400,7 @@ step5a_remove_low_impact_days:
     JSON ACTUAL: {current_json}
     OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
 
-step5b_shorten_daily_context:
+step6b_shorten_daily_context:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
     Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
@@ -399,7 +415,7 @@ step5b_shorten_daily_context:
     JSON ACTUAL: {current_json}
     OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
 
-step5c_shorten_cabin_haul_weekly:
+step6c_shorten_cabin_haul_weekly:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
     Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
@@ -413,7 +429,7 @@ step5c_shorten_cabin_haul_weekly:
     JSON ACTUAL: {current_json}
     OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
 
-step5d_shorten_overall_global:
+step6d_shorten_overall_global:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
     Tu tarea es devolver la MISMA estructura y lógica, pero reduciendo el tamaño con el menor impacto en el texto original posible. Para ello sigue estas directrices:
@@ -426,3 +442,4 @@ step5d_shorten_overall_global:
   input_template: |
     JSON ACTUAL: {current_json}
     OBJETIVO: Reducir hasta que pese menos de {target_kb} KB.
+

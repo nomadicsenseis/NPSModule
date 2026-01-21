@@ -270,25 +270,62 @@ class AnomalySummaryAgent:
         if not adaptive_card_json:
             return adaptive_card_json
 
-        # Initial cleaning and minification
-        adaptive_card_json = self._minify_json(adaptive_card_json)
-        current_kb = self._measure_kb(adaptive_card_json)
+        # Initial cleaning and minification (returns normal quotes)
+        best_json = self._minify_json(adaptive_card_json)
+        current_kb = self._measure_kb(best_json)
         self.logger.info(f"📦 Initial Adaptive Card size (minified): {current_kb:.2f} KB")
 
+        # --- STEP 5: Modernize Tone (Now First) ---
+        step_key = 'step5_modernize_tone'
+        step_config = self.config.get(step_key, {})
+        step_system = step_config.get('system_prompt', '')
+        step_input_template = step_config.get('input_template', '')
+
+        if step_system and step_input_template:
+            self.logger.info("🔄 Applying tone modernization (less Cervantes) BEFORE size optimization...")
+            
+            # Pass escaped version to the LLM
+            escaped_for_llm = best_json.replace('"', '\\"')
+            
+            message_history = MessageHistory()
+            message_history.create_and_add_message(content=step_system, message_type=MessageType.SYSTEM)
+            message_history.create_and_add_message(
+                content=step_input_template.format(current_json=escaped_for_llm),
+                message_type=MessageType.USER
+            )
+
+            try:
+                response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+                modernized = response.content if hasattr(response, 'content') else str(response)
+                
+                # Clean and minify (returns with normal quotes)
+                clean_modernized = self._clean_json_response(modernized)
+                best_json = self._minify_json(clean_modernized)
+                
+                # Verify size after modernization
+                current_kb = self._measure_kb(best_json)
+                self.logger.info(f"📦 Adaptive Card size after tone modernization: {current_kb:.2f} KB")
+                self.logger.info("✅ Tone modernization applied successfully")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to apply tone modernization: {e}")
+
+        # --- STEP 6: Surgical Size Optimization (Now Second) ---
         if current_kb <= target_kb:
             self.logger.info(f"✅ Adaptive Card already fits ({current_kb:.2f} KB)")
-            return adaptive_card_json
+            # Final step: ensure it is minified and quotes are escaped for output
+            final_escaped = best_json.replace('"', '\\"')
+            self.logger.info(f"🚀 Final Adaptive Card JSON (escaped):\n{final_escaped}")
+            return final_escaped
 
         optimization_steps = [
-            'step5a_remove_low_impact_days',
-            'step5b_shorten_daily_context',
-            'step5c_shorten_cabin_haul_weekly',
-            'step5d_shorten_overall_global'
+            'step6a_remove_low_impact_days',
+            'step6b_shorten_daily_context',
+            'step6c_shorten_cabin_haul_weekly',
+            'step6d_shorten_overall_global'
         ]
 
-        best_json = adaptive_card_json
+        last_step_applied = "modernize_only"
         best_kb = current_kb
-        last_step_applied = "minify_only"
 
         for step_key in optimization_steps:
             step_config = self.config.get(step_key, {})
@@ -301,10 +338,13 @@ class AnomalySummaryAgent:
 
             self.logger.info(f"🔄 Applying optimization step: {step_key}...")
             
+            # Pass escaped version to the LLM
+            escaped_for_llm = best_json.replace('"', '\\"')
+            
             message_history = MessageHistory()
             message_history.create_and_add_message(content=step_system.format(target_kb=target_kb), message_type=MessageType.SYSTEM)
             message_history.create_and_add_message(
-                content=step_input_template.format(current_json=best_json, target_kb=target_kb),
+                content=step_input_template.format(current_json=escaped_for_llm, target_kb=target_kb),
                 message_type=MessageType.USER
             )
 
@@ -312,14 +352,16 @@ class AnomalySummaryAgent:
             optimized = response.content if hasattr(response, 'content') else str(response)
 
             # Clean and minify the optimized response
-            optimized = self._minify_json(optimized)
-            size_kb = self._measure_kb(optimized)
+            optimized_clean = self._clean_json_response(optimized)
+            optimized_min = self._minify_json(optimized_clean)
+            size_kb = self._measure_kb(optimized_min)
             
             self.logger.info(f"📦 Adaptive Card size after {step_key}: {size_kb:.2f} KB")
-            self.logger.info(f"📄 Optimized JSON content after {step_key}:\n{optimized}")
+            # Log snippet for debugging
+            self.logger.info(f"📄 Optimized JSON snippet after {step_key}:\n{optimized_min[:200]}...")
 
             if size_kb < best_kb:
-                best_json = optimized
+                best_json = optimized_min
                 best_kb = size_kb
                 last_step_applied = step_key
 
@@ -330,10 +372,12 @@ class AnomalySummaryAgent:
         if best_kb > target_kb:
             self.logger.warning(f"⚠️ Adaptive Card still over limit after {last_step_applied}: {best_kb:.2f} KB")
         else:
-            self.logger.info(f"✅ Adaptive Card final step: {last_step_applied} ({best_kb:.2f} KB)")
-            self.logger.info(f"🚀 Final optimized Adaptive Card JSON:\n{best_json}")
+            self.logger.info(f"✅ Adaptive Card final size optimization step: {last_step_applied} ({best_kb:.2f} KB)")
 
-        return best_json
+        # Final step: ensure it is minified and quotes are escaped as requested for the final output
+        final_escaped = best_json.replace('"', '\\"')
+        self.logger.info(f"🚀 Final optimized Adaptive Card JSON (escaped):\n{final_escaped}")
+        return final_escaped
     
     async def generate_summary_report(self, periods_data: List[Dict[str, Any]]) -> str:
         """
@@ -520,8 +564,6 @@ class AnomalySummaryAgent:
                     daily_analysis_params and date_ranges):
                     try:
                         self.logger.info("📤 Uploading comprehensive report to S3...")
-                        # Prepare final synthesis: minified and with escaped quotes as requested
-                        escaped_adaptive_card = adaptive_card_json.replace('"', '\\"')
                         
                         s3_key = await self.s3_uploader.upload_comprehensive_report(
                             execution_date=datetime.now(),
@@ -532,8 +574,8 @@ class AnomalySummaryAgent:
                             weekly_analysis_params=weekly_analysis_params,
                             daily_analysis_params=daily_analysis_params,
                             date_ranges=date_ranges,
-                            # Use escaped minified JSON for prod, full text for other envs
-                            final_synthesis=escaped_adaptive_card if self.environment == "prod" else final_output,
+                            # adaptive_card_json is already minified and escaped
+                            final_synthesis=adaptive_card_json if self.environment == "prod" else final_output,
                             comparison_start_date=date_ranges.get('comparison_start_date'),
                             comparison_end_date=date_ranges.get('comparison_end_date')
                         )
@@ -817,8 +859,6 @@ class AnomalySummaryAgent:
             if final_output and execution_metadata and weekly_analysis_params and daily_analysis_params and date_ranges:
                 try:
                     self.logger.info("📤 Uploading executive synthesis and adaptive card to S3...")
-                    # Prepare final synthesis: minified and with escaped quotes as requested
-                    escaped_adaptive_card = adaptive_card_json.replace('"', '\\"')
                     
                     s3_key = await self.s3_uploader.upload_comprehensive_report(
                         execution_date=datetime.now(),
@@ -829,8 +869,8 @@ class AnomalySummaryAgent:
                         weekly_analysis_params=weekly_analysis_params,
                         daily_analysis_params=daily_analysis_params,
                         date_ranges=date_ranges,
-                        # Use escaped minified JSON for prod, full output for others
-                        final_synthesis=escaped_adaptive_card if self.environment == "prod" else final_output,
+                        # adaptive_card_json is already minified and escaped
+                        final_synthesis=adaptive_card_json if self.environment == "prod" else final_output,
                         comparison_start_date=date_ranges.get('comparison_start_date'),
                         comparison_end_date=date_ranges.get('comparison_end_date')
                     )
