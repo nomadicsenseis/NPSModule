@@ -286,9 +286,18 @@ async def run_weekly_comprehensive_analysis(
         # Use Summary Agent to consolidate
         try:
             print("\n🤖 Initializing Summary Agent...")
+            # Configure summary agent logger with handlers for production
+            summary_logger = logging.getLogger("summary_agent")
+            summary_logger.setLevel(logging.INFO)
+            if not summary_logger.handlers:
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                handler.setFormatter(formatter)
+                summary_logger.addHandler(handler)
+            
             summary_agent = AnomalySummaryAgent(
                 llm_type=get_default_llm_type(),
-                logger=logging.getLogger("summary_agent"),
+                logger=summary_logger,
                 environment=environment
             )
             print("✅ Summary Agent initialized. Generating executive summary...")

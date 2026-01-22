@@ -1325,13 +1325,31 @@ class AnomalySummaryAgent:
         
         # Extract content for each section
         for i, (pos, section_name, _) in enumerate(section_positions):
-            # Find end of this section (start of next section or end of text)
-            if i + 1 < len(section_positions):
-                end_pos = section_positions[i + 1][0]
-            else:
+            # Special handling for GLOBAL: extract until DETALLE POR AGREGACIÓN or first detail header
+            if section_name == 'GLOBAL':
+                # Find end: DETALLE POR AGREGACIÓN or first <b><u>SECTION: header
+                end_patterns = [
+                    r'<b><u>DETALLE POR AGREGACIÓN</u></b>',
+                    r'<b><u>(?:SH|SHORT HAUL|LH|LONG HAUL|BUSINESS|ECONOMY|PREMIUM)[^<]*:</u></b>',
+                ]
+                
                 end_pos = len(weekly_analysis)
-            
-            content = weekly_analysis[pos:end_pos].strip()
+                for pattern in end_patterns:
+                    match = re.search(pattern, weekly_analysis[pos:], re.IGNORECASE)
+                    if match:
+                        candidate_end = pos + match.start()
+                        if candidate_end < end_pos:
+                            end_pos = candidate_end
+                
+                content = weekly_analysis[pos:end_pos].strip()
+            else:
+                # Standard handling: find end of this section (start of next section or end of text)
+                if i + 1 < len(section_positions):
+                    end_pos = section_positions[i + 1][0]
+                else:
+                    end_pos = len(weekly_analysis)
+                
+                content = weekly_analysis[pos:end_pos].strip()
             
             # Only keep if we don't already have this section (avoid duplicates)
             if section_name not in sections:
@@ -1405,9 +1423,39 @@ class AnomalySummaryAgent:
     def _extract_section_from_text(self, text: str, target_section: str, all_patterns: list) -> str:
         """
         Extract a specific section from text by finding its header and the next section's header.
+        
+        Special handling for GLOBAL: extracts from SÍNTESIS EJECUTIVA until 
+        DETALLE POR AGREGACIÓN or the first <b><u>...: header in the detail section.
         """
         import re
         
+        # Special handling for GLOBAL section
+        if target_section == 'GLOBAL':
+            # Find SÍNTESIS EJECUTIVA start
+            synthesis_match = re.search(r'(?:<b>)?SÍNTESIS EJECUTIVA(?:</b>)?', text, re.IGNORECASE)
+            if not synthesis_match:
+                return ""
+            
+            start_pos = synthesis_match.start()
+            
+            # Find end: DETALLE POR AGREGACIÓN or first <b><u>SECTION: header
+            end_patterns = [
+                r'<b><u>DETALLE POR AGREGACIÓN</u></b>',
+                r'<b><u>(?:SH|SHORT HAUL|LH|LONG HAUL|BUSINESS|ECONOMY|PREMIUM)[^<]*:</u></b>',
+            ]
+            
+            end_pos = len(text)
+            for pattern in end_patterns:
+                match = re.search(pattern, text[start_pos:], re.IGNORECASE)
+                if match:
+                    candidate_end = start_pos + match.start()
+                    if candidate_end < end_pos:
+                        end_pos = candidate_end
+            
+            section_text = text[start_pos:end_pos].strip()
+            return section_text
+        
+        # Standard handling for other sections
         # Encontrar todas las secciones y sus posiciones
         positions = []
         for name, pattern in all_patterns:
