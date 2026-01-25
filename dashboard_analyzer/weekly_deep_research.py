@@ -8,21 +8,126 @@ Consolidates results, uploads to S3, and sends email notifications
 import asyncio
 import argparse
 import json
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import sys
+
+import pandas as pd
 
 # Import execute_analysis_flow and helpers from deep_research_period
 from dashboard_analyzer.deep_research_period import (
     execute_analysis_flow,
     determine_anomaly_mode_for_vslast
 )
-
+from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector
+from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type
-from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
+
+
+# Constants for data availability probing
+MIN_PBI_LAG_DAYS = 4   # Minimum expected PBI lag
+MAX_PBI_LAG_DAYS = 10  # Maximum lag to probe before giving up
+
+
+async def find_latest_available_date(
+    simulated_today: datetime,
+    segment: str = "Global",
+    environment: str = "prod"
+) -> Tuple[datetime, int]:
+    """
+    Probe for the latest date with available data, starting from MIN_PBI_LAG_DAYS.
+    
+    This function handles variable PBI data pipeline delays by progressively
+    checking older dates until data is found.
+    
+    Args:
+        simulated_today: The date we're simulating as "today" (from --insert-date-ci)
+        segment: Segment to check data for (default: "Global")
+        environment: Environment setting ("local" or "prod")
+        
+    Returns:
+        Tuple of (analysis_date, actual_lag_days_used)
+        
+    Raises:
+        ValueError: If no data found within MAX_PBI_LAG_DAYS
+        
+    Example:
+        If simulated_today is 2025-01-25 and data is available starting from 2025-01-19:
+        - Tries 2025-01-21 (lag 4)... no data
+        - Tries 2025-01-20 (lag 5)... no data
+        - Tries 2025-01-19 (lag 6)... data found!
+        - Returns (datetime(2025-01-19), 6)
+    """
+    print(f"\n🔍 PROBING DATA AVAILABILITY")
+    print(f"   Starting from: {simulated_today.strftime('%Y-%m-%d')} - {MIN_PBI_LAG_DAYS} days")
+    print(f"   Max lag to try: {MAX_PBI_LAG_DAYS} days")
+    print("=" * 50)
+    
+    collector = PBIDataCollector(environment=environment)
+    
+    for lag in range(MIN_PBI_LAG_DAYS, MAX_PBI_LAG_DAYS + 1):
+        candidate_date = simulated_today - timedelta(days=lag)
+        print(f"\n   🔍 Checking {candidate_date.strftime('%Y-%m-%d')} (lag: -{lag} days)...")
+        
+        try:
+            # Create a temporary directory for the probe
+            with tempfile.TemporaryDirectory() as tmp_folder:
+                # Lightweight probe: 1 day aggregation, Global node only
+                # This is fast because we only need to check if ANY data exists
+                results = await collector.collect_flexible_data_for_node(
+                    "Global",  # Always check Global - if Global has data, segments will too
+                    aggregation_days=1,
+                    target_folder=tmp_folder,
+                    analysis_date=candidate_date
+                )
+                
+                # Check if NPS data was collected AND has data for Period 1 (the target date)
+                if results.get('flexible_NPS', False):
+                    # Read the CSV and check if Period 1 exists with valid NPS data
+                    nps_file = Path(tmp_folder) / "Global" / "flexible_NPS_1d.csv"
+                    if nps_file.exists():
+                        df = pd.read_csv(nps_file)
+                        
+                        # Create Unified_NPS from year-specific columns (same logic as FlexibleAnomalyDetector)
+                        year_cols = ['NPS_2026', 'NPS_2025', 'NPS_2024', 'NPS_2019']
+                        df['Unified_NPS'] = pd.NA
+                        for col in year_cols:
+                            if col in df.columns:
+                                df['Unified_NPS'] = df['Unified_NPS'].fillna(df[col])
+                        
+                        # Check if Period_Group 1 exists and has valid NPS
+                        if 'Period_Group' in df.columns:
+                            period_1_data = df[df['Period_Group'] == 1]
+                            if not period_1_data.empty and period_1_data['Unified_NPS'].notna().any():
+                                nps_value = period_1_data['Unified_NPS'].dropna().iloc[0] if not period_1_data['Unified_NPS'].dropna().empty else None
+                                print(f"   ✅ DATA FOUND for {candidate_date.strftime('%Y-%m-%d')} (lag: {lag} days) - NPS: {nps_value:.1f}")
+                                print("=" * 50)
+                                return candidate_date, lag
+                            else:
+                                print(f"      ⚠️ No data for Period 1 (target date) - trying older date...")
+                        else:
+                            print(f"      ⚠️ Period_Group column not found - trying older date...")
+                    else:
+                        print(f"      ⚠️ NPS file not found - trying older date...")
+                else:
+                    print(f"      ⚠️ No NPS data collected - trying older date...")
+                    
+        except Exception as e:
+            print(f"      ⚠️ Probe error: {str(e)[:100]} - trying older date...")
+    
+    # No data found within max lag
+    error_msg = (
+        f"❌ No data available within {MAX_PBI_LAG_DAYS} days of "
+        f"{simulated_today.strftime('%Y-%m-%d')}. "
+        f"Checked dates from {(simulated_today - timedelta(days=MIN_PBI_LAG_DAYS)).strftime('%Y-%m-%d')} "
+        f"to {(simulated_today - timedelta(days=MAX_PBI_LAG_DAYS)).strftime('%Y-%m-%d')}."
+    )
+    print(f"\n{error_msg}")
+    raise ValueError(error_msg)
 
 
 async def generate_consolidated_summary(agent, consolidated_data: List[Dict], date_flight_local: str = None, segment: str = 'Global') -> str:
@@ -413,7 +518,7 @@ async def main():
     
     # Date-related parameters
     parser.add_argument('--insert-date-ci', type=str,
-                       help='Simulate today being this date (YYYY-MM-DD). Data available until this date - 4 days')
+                       help='Simulate today being this date (YYYY-MM-DD). Auto-probes for latest available data (starting from -4 days, up to -10 days)')
     parser.add_argument('--date-flight-local', type=str,
                        help='Use this date directly as available in dashboard (YYYY-MM-DD)')
     
@@ -459,10 +564,21 @@ async def main():
         return
     elif args.insert_date_ci:
         try:
-            simulated_today = datetime.strptime(args.insert_date_ci, '%Y-%m-%d').date()
-            analysis_date = datetime.combine(simulated_today - timedelta(days=pbi_lag_days), datetime.min.time())
-            date_parameter = 'insert_ci'
-            date_description = f"Simulating today as {simulated_today.strftime('%Y-%m-%d')}"
+            simulated_today = datetime.strptime(args.insert_date_ci, '%Y-%m-%d')
+            
+            # Probe for the latest available data date (handles variable PBI lag)
+            try:
+                analysis_date, actual_lag = await find_latest_available_date(
+                    simulated_today=simulated_today,
+                    segment=args.segment,
+                    environment=args.environment
+                )
+                date_parameter = 'insert_ci'
+                date_description = f"Simulating today as {simulated_today.strftime('%Y-%m-%d')} (actual lag: {actual_lag} days)"
+            except ValueError as probe_error:
+                print(f"❌ {probe_error}")
+                return
+                
         except ValueError:
             print("❌ Error: --insert-date-ci must be in YYYY-MM-DD format")
             return
@@ -482,9 +598,11 @@ async def main():
     
     print(f"\n📅 DATE CONFIGURATION:")
     print(f"   • {date_description}")
-    print(f"   • Analysis date: {analysis_date.strftime('%Y-%m-%d')}")
+    print(f"   • Analysis date (end of 7-day window): {analysis_date.strftime('%Y-%m-%d')}")
     if date_parameter == 'insert_ci':
-        print(f"   • Note: Simulating CI run on {args.insert_date_ci}")
+        week_start = analysis_date - timedelta(days=6)
+        print(f"   • Week analyzed: {week_start.strftime('%Y-%m-%d')} to {analysis_date.strftime('%Y-%m-%d')}")
+        print(f"   • Note: Data availability was auto-probed from {args.insert_date_ci}")
     elif date_parameter == 'flight_local':
         print(f"   • Note: Using date directly from dashboard without lag simulation")
     
