@@ -1316,7 +1316,24 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         if not all_cabins:
             return "No hay cabinas-radio para analizar en este segmento."
         
-        # Tabla principal de cabinas
+        # TABLA 1: RADIOS (SH, LH) - valores agregados por radio
+        lines.append("**VALORES DE RADIOS (SH, LH):**")
+        lines.append("| Radio | NPS Actual | Variación | Estado |")
+        lines.append("|-------|------------|-----------|--------|")
+        
+        # Extraer SH si hay cabinas SH
+        if cabin_radios['sh_cabins']:
+            sh_nps, sh_diff, sh_state = self._parse_radio_values_from_tree(tree_data, 'SH')
+            lines.append(f"| SH | {sh_nps} | {sh_diff} | {sh_state} |")
+        
+        # Extraer LH si hay cabinas LH
+        if cabin_radios['lh_cabins']:
+            lh_nps, lh_diff, lh_state = self._parse_radio_values_from_tree(tree_data, 'LH')
+            lines.append(f"| LH | {lh_nps} | {lh_diff} | {lh_state} |")
+        
+        lines.append("")
+        
+        # TABLA 2: CABINAS-RADIO
         lines.append("**VALORES DE CABINAS-RADIO:**")
         lines.append("| Cabina | NPS Actual | Variación | Estado |")
         lines.append("|--------|------------|-----------|--------|")
@@ -1325,10 +1342,10 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             nps, diff, state = self._parse_cabin_values_from_tree(tree_data, cabin)
             lines.append(f"| {cabin} | {nps} | {diff} | {state} |")
         
-        # Tabla adicional de compañías para SH
+        # TABLA 3: COMPAÑÍAS para cabinas SH (IB, YW por cada cabina)
         if cabin_radios['sh_cabins']:
             lines.append("")
-            lines.append("**VALORES DE COMPAÑÍAS (para cabinas SH):**")
+            lines.append("**VALORES DE COMPAÑÍAS SH (IB, YW por cabina):**")
             lines.append("| Cabina | Compañía | NPS Actual | Variación | Estado |")
             lines.append("|--------|----------|------------|-----------|--------|")
             
@@ -1342,6 +1359,44 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 lines.append(f"| {cabin} | YW | {yw_nps} | {yw_diff} | {yw_state} |")
         
         return "\n".join(lines)
+    
+    def _parse_radio_values_from_tree(self, tree_data: str, radio: str) -> Tuple[str, str, str]:
+        """
+        Parsea los valores de NPS de un radio específico (SH o LH) del tree_data.
+        
+        Args:
+            tree_data: Los datos del árbol
+            radio: 'SH' o 'LH'
+            
+        Returns:
+            Tupla (nps_actual, variacion, estado)
+        """
+        # Determinar marcadores del radio
+        if radio == 'SH':
+            radio_marker = 'Short Haul'
+        else:
+            radio_marker = 'Long Haul'
+        
+        # Patrón para buscar el radio: "Short Haul (SH): Normal (+6.8 pts - within normal range) (NPS: 37.49..."
+        # o "Global/SH: Normal (+6.8 pts) (NPS: 37.49..."
+        patterns = [
+            # Patrón 1: "Short Haul (SH): Normal (+6.8 pts...) (NPS: 37.49...)"
+            rf'{radio_marker}\s*\({radio}\)[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?[^)]*\)\s*\(NPS:\s*(?P<nps>[\d.]+)',
+            # Patrón 2: "Global/SH: Normal (+6.8 pts) (NPS: 37.49...)"
+            rf'Global/{radio}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?[^)]*\)\s*\(NPS:\s*(?P<nps>[\d.]+)',
+            # Patrón 3: Más flexible - solo el radio marker seguido de estado
+            rf'{radio_marker}[:\s]+(?P<state>NEGATIVE ANOMALY|POSITIVE ANOMALY|Normal)\s*\((?P<diff>[+-]?\d+\.?\d*)\s*pts?[^)]*\)\s*\(NPS:\s*(?P<nps>[\d.]+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, tree_data, re.IGNORECASE)
+            if match:
+                nps = float(match.group('nps'))
+                diff = float(match.group('diff'))
+                state = match.group('state')
+                return f"{nps:.1f}", f"{diff:+.1f}", state
+        
+        return "N/A", "N/A", "N/A"
 
     def _parse_cabin_values_from_tree(self, tree_data: str, cabin: str) -> Tuple[str, str, str]:
         """

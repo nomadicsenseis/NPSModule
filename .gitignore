@@ -103,4 +103,9 @@ htmlcov/
 # Agent conversation logs and temporary reports (runtime artifacts)
 dashboard_analyzer/agent_conversations/
 dashboard_analyzer/summary_reports/
-dashboard_analyzer/tables/ 
+dashboard_analyzer/tables/
+
+# Root level runtime artifacts (generated during analysis)
+summary_reports/
+tables/
+CLAUDE_SONNET_4_5_agent_conversations/

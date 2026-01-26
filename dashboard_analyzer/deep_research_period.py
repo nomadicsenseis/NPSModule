@@ -725,6 +725,15 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
                 target_node["anomaly_state"] = period_anomalies.get(node_path, "?")
                 target_node["deviation"] = period_deviations.get(node_path, 0.0)
                 
+                # Add NPS value from period_nps_values
+                if period_nps_values and node_path in period_nps_values:
+                    nps_data = period_nps_values[node_path]
+                    if isinstance(nps_data, dict):
+                        target_node["nps"] = nps_data.get('current', None)
+                        target_node["nps_baseline"] = nps_data.get('baseline', None)
+                    else:
+                        target_node["nps"] = nps_data
+                
                 if node_path in detailed_tree_data:
                     target_node["causal_analysis"] = detailed_tree_data[node_path]
                 elif node_path in explanations:
@@ -2207,7 +2216,7 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
         if hasattr(detector, 'causal_comparison_dates') and detector.causal_comparison_dates:
             # Detector already has comparison dates configured
             print(f"🔍 DEBUG: Using existing comparison dates: {detector.causal_comparison_dates}")
-            period_anomalies, period_deviations, _, _ = await detector.analyze_period(data_folder, period, analysis_date)
+            period_anomalies, period_deviations, _, period_nps_values = await detector.analyze_period(data_folder, period, analysis_date)
         elif comparison_start_date and comparison_end_date:
             # Configure detector with comparison dates before calling analyze_period
             # Convert datetime objects to strings if needed
@@ -2220,11 +2229,11 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
             
             detector.causal_comparison_dates = (start_str, end_str)
             print(f"🔍 DEBUG: Configured comparison dates: {detector.causal_comparison_dates}")
-            period_anomalies, period_deviations, _, _ = await detector.analyze_period(data_folder, period, analysis_date)
+            period_anomalies, period_deviations, _, period_nps_values = await detector.analyze_period(data_folder, period, analysis_date)
         else:
             # Fallback to original call
             print(f"🔍 DEBUG: Using fallback call (no comparison dates)")
-            period_anomalies, period_deviations, _, _ = await detector.analyze_period(data_folder, period, analysis_date)
+            period_anomalies, period_deviations, _, period_nps_values = await detector.analyze_period(data_folder, period, analysis_date)
         
         # DEBUG: Log what the detector returned
         print(f"🔍 DEBUG DETECTOR RESULT: period_anomalies type={type(period_anomalies)}, keys={list(period_anomalies.keys()) if isinstance(period_anomalies, dict) else 'Not a dict'}")
@@ -2374,7 +2383,7 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
                 
                 # Always use the complete tree format with integrated causal explanations
                 ai_input = build_ai_input_string(period, period_anomalies, period_deviations, 
-                                               parent_interpretations, explanations, date_range, segment, None,
+                                               parent_interpretations, explanations, date_range, segment, period_nps_values,
                                                comparison_context=interpreter_comparison_context)
                 
                 print(f"🔍 Using complete tree format with integrated explanations: {len(ai_input)} characters")
