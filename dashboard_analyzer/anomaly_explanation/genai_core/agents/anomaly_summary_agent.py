@@ -534,12 +534,19 @@ class AnomalySummaryAgent:
             if not weekly_comparative_analysis and not daily_single_analyses:
                 return "⚠️ No data provided for comprehensive summary generation"
             
+            # Sort daily analyses chronologically (oldest first) to help the model narrate in order
+            daily_single_analyses_sorted = sorted(
+                daily_single_analyses,
+                key=lambda x: x.get('date', '0000-00-00')
+            )
+            self.logger.info(f"📅 Sorted {len(daily_single_analyses_sorted)} daily analyses chronologically")
+            
             # Format daily analyses - only include days with relevant analysis
             daily_analyses_formatted = []
-            total_days = len(daily_single_analyses)
+            total_days = len(daily_single_analyses_sorted)
             filtered_days = 0
             
-            for daily_analysis in daily_single_analyses:
+            for daily_analysis in daily_single_analyses_sorted:
                 date = daily_analysis.get('date', 'Unknown')
                 analysis = daily_analysis.get('analysis', '')
                 anomalies = daily_analysis.get('anomalies', [])
@@ -706,9 +713,16 @@ class AnomalySummaryAgent:
             if not weekly_comparative_analysis and not daily_single_analyses:
                 return "⚠️ No data provided for comprehensive summary generation"
             
+            # Sort daily analyses chronologically (oldest first) to help the model narrate in order
+            daily_single_analyses_sorted = sorted(
+                daily_single_analyses,
+                key=lambda x: x.get('date', '0000-00-00')
+            )
+            self.logger.info(f"📅 Sorted {len(daily_single_analyses_sorted)} daily analyses chronologically")
+            
             # Format daily analyses
             daily_analyses_formatted = []
-            for daily_analysis in daily_single_analyses:
+            for daily_analysis in daily_single_analyses_sorted:
                 date = daily_analysis.get('date', 'Unknown')
                 analysis = daily_analysis.get('analysis', '')
                 
