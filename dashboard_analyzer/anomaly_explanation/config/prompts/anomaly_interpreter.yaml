@@ -228,6 +228,8 @@ hierarchical_diagnostic_helpers:
     4. **DILUCIÓN (+,N | N) o (-,N | N):** Un radio anómalo se diluye en el Global.
     5. **TRANSFERENCIA (+,N | +) o (-,N | -):** Un radio anómalo contagia al Global.
 
+    Ten en cuenta en lo anterior que SH pesa sustancialmente más que LH en el Global, asique si domina/cancela/diluye/transfiere LH es porque su cambio es mayor. Sh puede hacerlo incluso con un cambio menor por su mayor peso.
+
     **PARTE B: SELECCIÓN DE NARRATIVA CAUSAL (Herencia de Explicaciones)**
     Basado en el escenario de agregación, decide qué historia contar:
 
