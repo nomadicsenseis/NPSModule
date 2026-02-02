@@ -335,53 +335,148 @@ step5_modernize_tone:
     JSON ACTUAL: {current_json}
 
 # =============================================================================
-# STEP 6: SURGICAL PAYLOAD OPTIMIZER (NEW)
+# STEP 6: SURGICAL PAYLOAD OPTIMIZER (PROGRESSIVE REDUCTION)
 # =============================================================================
-step6a_remove_low_impact_days:
+# Proceso validado de reducción progresiva:
+#
+# JERARQUÍA DE IMPORTANCIA (de mayor a menor):
+# - Nivel 1: GLOBAL, SH, LH (segmentos principales)
+# - Nivel 2: Business SH, Economy SH (cabina-radio)
+# - Nivel 3: Business SH IB, Business SH YW, Economy SH IB, Economy SH YW (cabina-radio-compañía)
+# - Nivel 4: Business LH, Premium LH, Economy LH (cabina LH, sin desglose por compañía)
+#
+# PASOS DE REDUCCIÓN:
+# 6a: Recortar días menos importantes del contexto diario (todos los segmentos)
+# 6b: Eliminar contexto diario: primero de cabina-radio-compañía (IB/YW), luego de cabina-radio
+# 6c: Resumir análisis semanal: primero cabina-radio-compañía, luego cabina-radio
+# 6d: Acortar texto semanal de cabinas/radios agregados (NO Global)
+# 6e: Acortar resumen GLOBAL (último recurso)
+# =============================================================================
+
+step6a_trim_low_impact_days:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
-    Tu tarea es REDUCIR GRADUALMENTE el tamaño, preservando la estructura completa.
+    Tu tarea es REDUCIR el contenido del CONTEXTO DIARIO manteniendo solo los días más críticos.
     
     **REGLAS CRÍTICAS - LEE ATENTAMENTE:**
     1. NUNCA elimines Action.ShowCard (botones expandibles). Cada segmento DEBE mantener su botón.
     2. NUNCA elimines secciones completas de la tabla (ColumnSet con segmentos).
-    3. SOLO puedes reducir el TEXTO dentro de los Container con id "dailyCtx_*" (contexto diario).
+    3. NUNCA elimines el Container "dailyCtx_*" completo, solo RECORTA su contenido.
+    4. El texto semanal (fuera de dailyCtx) debe permanecer INTACTO.
     
     **QUÉ HACER:**
-    - En cada Container "dailyCtx_*", ACORTA el texto eliminando días con variaciones pequeñas (< ±3 pts).
-    - Mantén los días con variaciones fuertes (> ±5 pts) y eventos operativos críticos.
-    - Si un contexto diario ya es corto (< 200 chars), NO lo modifiques.
-    - El texto semanal (fuera de dailyCtx) debe permanecer INTACTO.
+    - En cada Container "dailyCtx_*", CONSERVA SOLO los días con:
+      - Caídas severas de NPS (> –10 pts)
+      - Picos de incidentes operativos (cancelaciones masivas, disrupciones)
+      - Eventos meteorológicos críticos
+    - ELIMINA los días con:
+      - Variaciones pequeñas (< ±5 pts)
+      - Comportamiento estable o sin incidentes destacados
+      - Mejoras artificiales por sesgo de muestra
+    - Mantén 2-3 días críticos por segmento, no más.
     
-    **OBJETIVO:** Reducir ~20-30%, NO el 70%. Si el JSON original pesa 58 KB, el resultado debe pesar ~40-45 KB.
+    **EJEMPLO DE REDUCCIÓN:**
+    ANTES: "23-ene: +9.1 pts falso. 24-ene: +14.1 pts artificial. 25-ene: –0.9 pts. 26-ene: –0.7 pts. 27-ene: +5.2 pts. 28-ene: –25.9 pts crítico. 29-ene: –0.9 pts."
+    DESPUÉS: "28-ene: –25.9 pts crítico, puntualidad 58.1%, casos MAD-OSL/AGP-MAD. 29-ene: OTP 81.0%, 15 incidentes Praga."
+    
+    **OBJETIVO:** Reducir ~30-40% del tamaño total.
 
     **FORMATO DE SALIDA:**
     JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
   input_template: |
     JSON ACTUAL: {current_json}
-    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB, pero de forma GRADUAL (máximo -30% por paso).
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB, recortando días de bajo impacto del contexto diario.
 
-step6b_shorten_daily_context:
+step6b_remove_subsegment_daily_context:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
+    Tu tarea es ELIMINAR las secciones de contexto diario siguiendo la JERARQUÍA DE IMPORTANCIA.
+    
+    **JERARQUÍA DE IMPORTANCIA (de mayor a menor):**
+    - Nivel 1: GLOBAL, SH, LH (segmentos principales) → CONSERVAR SIEMPRE
+    - Nivel 2: Business SH, Economy SH (cabina-radio) → ELIMINAR SI ES NECESARIO
+    - Nivel 3: Business SH IB/YW, Economy SH IB/YW (cabina-radio-compañía) → ELIMINAR PRIMERO
     
     **REGLAS CRÍTICAS:**
     1. NUNCA elimines Action.ShowCard (botones). Cada segmento DEBE mantener su botón.
     2. NUNCA elimines ColumnSet de la tabla.
+    3. NUNCA elimines el texto de análisis semanal.
     
-    **QUÉ HACER:**
-    - Recorta conectores y adjetivos redundantes SOLO en Container "dailyCtx_*".
-    - Abrevia: diciembre→dic, enero→ene, puntos→pts, puntualidad→OTP.
-    - El texto semanal debe permanecer INTACTO.
-    - Reducción objetivo: ~15-20% adicional.
+    **QUÉ HACER (EN ORDEN):**
+    
+    **PASO 1 - Eliminar contexto diario de cabina-radio-compañía (Nivel 3):**
+    - ELIMINA COMPLETAMENTE el Container "dailyCtx_*" (y su ActionSet de toggle) de:
+      - Business SH IB (dailyCtx_bsh_ib)
+      - Business SH YW (dailyCtx_bsh_yw)
+      - Economy SH IB (dailyCtx_esh_ib)
+      - Economy SH YW (dailyCtx_esh_yw)
+    
+    **PASO 2 - Si aún excede el límite, eliminar contexto diario de cabina-radio (Nivel 2):**
+    - ELIMINA COMPLETAMENTE el Container "dailyCtx_*" (y su ActionSet de toggle) de:
+      - Business SH (dailyCtx_bsh)
+      - Economy SH (dailyCtx_esh)
+    
+    **CONSERVAR SIEMPRE (Nivel 1):**
+    - GLOBAL (dailyCtx_global)
+    - SH (dailyCtx_sh)
+    - LH (dailyCtx_lh)
+    
+    **CRITERIO:** Primero se sacrifica el detalle por compañía, luego el detalle por cabina-radio.
+    
+    **OBJETIVO:** Reducir ~20-30% del tamaño total.
 
     **FORMATO DE SALIDA:**
     JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código.
   input_template: |
     JSON ACTUAL: {current_json}
-    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB (reducción gradual ~15-20%).
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB, eliminando contexto diario primero de IB/YW, luego de cabina-radio.
 
-step6c_shorten_cabin_haul_weekly:
+step6c_summarize_cabin_haul_company_weekly:
+  system_prompt: |
+    Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
+    Tu tarea es RESUMIR el análisis semanal siguiendo la JERARQUÍA DE IMPORTANCIA.
+    
+    **JERARQUÍA DE IMPORTANCIA (de mayor a menor):**
+    - Nivel 1: GLOBAL, SH, LH → MANTENER INTACTOS
+    - Nivel 2: Business SH, Economy SH (cabina-radio) → RESUMIR SI ES NECESARIO
+    - Nivel 3: Business SH IB/YW, Economy SH IB/YW (cabina-radio-compañía) → RESUMIR PRIMERO
+    - Nivel 4: Business LH, Premium LH, Economy LH → RESUMIR PRIMERO
+    
+    **REGLAS CRÍTICAS:**
+    1. NUNCA elimines Action.ShowCard (botones). Cada segmento DEBE mantener su botón.
+    2. NUNCA elimines ColumnSet de la tabla.
+    
+    **QUÉ HACER (EN ORDEN):**
+    
+    **PASO 1 - Resumir cabina-radio-compañía (Niveles 3 y 4):**
+    - Reduce a ~50-60 palabras:
+      - Business SH IB, Business SH YW
+      - Economy SH IB, Economy SH YW
+      - Business LH, Premium LH, Economy LH
+    - CONSERVA solo: NPS, variación, 1-2 drivers principales (ppts), 1-2 rutas críticas.
+    
+    **PASO 2 - Si aún excede el límite, resumir cabina-radio (Nivel 2):**
+    - Reduce a ~80-100 palabras:
+      - Business SH (agregado)
+      - Economy SH (agregado)
+    - CONSERVA: NPS, variación, drivers principales, comparación IB vs YW resumida, rutas más críticas.
+    
+    **MANTENER INTACTOS (Nivel 1):**
+    - GLOBAL, SH, LH
+    
+    **EJEMPLO DE REDUCCIÓN (cabina-radio-compañía):**
+    ANTES: "IB en Business SH registró NPS de 39.9 (–2.0 pts), el deterioro más moderado del segmento pese a compartir el mismo impacto operativo que YW. El driver de puntualidad generó reducción de 2.0 ppts de NPS según Explanatory Drivers (con OTP cayendo 11.1 puntos a 83.8%), pero el factor diferenciador crítico fue el servicio de tripulación de cabina, que logró contribución positiva de +0.5 ppts de NPS, siendo la única compañía en Business SH con este driver en positivo."
+    DESPUÉS: "NPS 39.9 (–2.0 pts). Caída moderada. Factor diferenciador: tripulación cabina (+0.5 ppts). Puntualidad impactó –2.0 ppts con OTP 83.8%."
+    
+    **OBJETIVO:** Reducir ~25-35% del tamaño total.
+
+    **FORMATO DE SALIDA:**
+    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código.
+  input_template: |
+    JSON ACTUAL: {current_json}
+    OBJETIVO: Reducir hasta que pese menos de {target_kb} KB, resumiendo análisis semanales primero de cabina-radio-compañía, luego de cabina-radio.
+
+step6d_shorten_cabin_haul_weekly:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
     
@@ -390,8 +485,9 @@ step6c_shorten_cabin_haul_weekly:
     2. NUNCA elimines ColumnSet de la tabla.
     
     **QUÉ HACER:**
-    - Acorta el texto semanal de cabinas/radios (NO el de GLOBAL).
-    - Conserva cifras clave: NPS, variación, ED (explainatory drivers), rutas críticas.
+    - Acorta el texto semanal de cabinas/radios agregados (SH, LH, Business SH, Economy SH).
+    - NO toques el texto de GLOBAL.
+    - Conserva cifras clave: NPS, variación, ED (explanatory drivers), rutas críticas.
     - Usa formulaciones más telegráficas (elimina verbos auxiliares, artículos innecesarios).
     - Reducción objetivo: ~15-20% adicional.
 
@@ -401,7 +497,7 @@ step6c_shorten_cabin_haul_weekly:
     JSON ACTUAL: {current_json}
     OBJETIVO: Reducir hasta que pese menos de {target_kb} KB (reducción gradual ~15-20%).
 
-step6d_shorten_overall_global:
+step6e_shorten_overall_global:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de {target_kb} KB.
     

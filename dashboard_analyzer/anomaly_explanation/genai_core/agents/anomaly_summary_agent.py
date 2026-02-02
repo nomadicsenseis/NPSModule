@@ -365,10 +365,11 @@ class AnomalySummaryAgent:
             return best_json, debug_info
 
         optimization_steps = [
-            'step6a_remove_low_impact_days',
-            'step6b_shorten_daily_context',
-            'step6c_shorten_cabin_haul_weekly',
-            'step6d_shorten_overall_global'
+            'step6a_trim_low_impact_days',
+            'step6b_remove_subsegment_daily_context',
+            'step6c_summarize_cabin_haul_company_weekly',
+            'step6d_shorten_cabin_haul_weekly',
+            'step6e_shorten_overall_global'
         ]
 
         last_step_applied = "modernize_only"
