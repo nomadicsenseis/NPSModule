@@ -34,7 +34,7 @@ class S3ReportUploader:
         
         # S3 configuration
         self.bucket_name = "ibdata-sbx-ew1-s3-customer"
-        self.base_prefix = "customer/catia/reports/raw/"
+        self.base_prefix = "customer/catia/reports/business/"
         
         # Environment configuration
         self.environment = environment
@@ -133,6 +133,11 @@ class S3ReportUploader:
             S3 key of uploaded file if successful, None if failed
         """
         try:
+            # Only upload in production environment
+            if self.environment != "prod":
+                self.logger.info("🔧 Local environment: Skipping S3 upload for comprehensive report")
+                return None
+            
             # Validate inputs
             if not final_synthesis:
                 self.logger.warning("⚠️ Final synthesis is empty, skipping S3 upload")

@@ -634,7 +634,7 @@ dashboard_analyzer/
 
 Reports are automatically uploaded to:
 ```
-s3://ibdata-sbx-ew1-s3-customer/customer/catia/reports/raw/
+s3://ibdata-sbx-ew1-s3-customer/customer/catia/reports/business/
 ```
 
 ---
