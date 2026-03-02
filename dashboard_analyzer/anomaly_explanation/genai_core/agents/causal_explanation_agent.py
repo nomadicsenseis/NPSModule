@@ -1,4 +1,4 @@
-"""
+﻿"""
 Clean Causal Explanation Agent
 ==============================
 
@@ -1855,10 +1855,10 @@ class CausalExplanationAgent:
                     aggregation_days=aggregation_days
                 )
                 
-                # Export conversation log
-                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
-                if conversation_file:
-                    self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
+                # NOTE: Conversation export disabled - only final consolidated report is saved
+                # conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                # if conversation_file:
+                #     self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
                 
                 self.logger.info("✅ Investigación de período único completada")
                 return final_response
@@ -2170,10 +2170,10 @@ class CausalExplanationAgent:
                     message_history, node_path, start_date, end_date, nps_context
                 )
                 
-                # Export conversation log
-                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
-                if conversation_file:
-                    self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
+                # NOTE: Conversation export disabled - only final consolidated report is saved
+                # conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                # if conversation_file:
+                #     self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
                     
                 self.logger.info("✅ Investigación comparativa completada")
                 return final_response
@@ -5713,15 +5713,15 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                 json.dump(conversation_data, f, indent=2, ensure_ascii=False)
             self.logger.info(f"📝 Conversation exported to: {full_path}")
             
-            # Upload to S3 in production
-            try:
-                s3_key = await self.s3_uploader.upload_causal_conversation(conversation_data, filename)
-                if s3_key:
-                    self.logger.info(f"📤 Causal conversation uploaded to S3: {s3_key}")
-                else:
-                    self.logger.info("🔧 S3 upload skipped (local environment or failed)")
-            except Exception as e:
-                self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
+            # NOTE: S3 upload of causal conversations disabled - only final consolidated report is saved
+            # try:
+            #     s3_key = await self.s3_uploader.upload_causal_conversation(conversation_data, filename)
+            #     if s3_key:
+            #         self.logger.info(f"📤 Causal conversation uploaded to S3: {s3_key}")
+            #     else:
+            #         self.logger.info("🔧 S3 upload skipped (local environment or failed)")
+            # except Exception as e:
+            #     self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
             
             return str(full_path)
         except Exception as e:
@@ -6546,6 +6546,24 @@ ORDER BY 'Route_Master'[route]
                         direction = "+" if delta > 0 else ""
                         incident_changes_context += f"   • {incident_type.capitalize()}: {direction}{delta}\n"
             
+            # Build radio heuristic section — Global nodes must NOT filter by haul
+            is_global_node = node_path.strip() == "Global"
+            if is_global_node:
+                radio_section = (
+                    "📌 **RADIO DEL SEGMENTO: GLOBAL**\n"
+                    "- Este análisis cubre TODA la red (LH + SH). NO apliques filtros de radio.\n"
+                    "- Todos los incidentes son relevantes independientemente de si la ruta es LH o SH.\n"
+                    "- La heurística de radio NO aplica aquí. No descartes ningún incidente por su destino."
+                )
+            else:
+                radio_section = (
+                    "📌 **HEURÍSTICA DE RADIO (solo si NO aparece la ruta completa):**\n"
+                    "- Asume que Iberia vuela **en** o **desde** la península ibérica.\n"
+                    "- Si el comentario menciona destinos en **América, Asia u Oriente Medio**, interprétalo como **LH**.\n"
+                    "- En caso contrario (principalmente **Europa**, **norte de África**, etc.), interprétalo como **SH**.\n"
+                    "- Si no hay suficiente información para inferir el radio con confianza, indícalo como **\"no concluyente\"** (no inventes rutas)."
+                )
+
             # Create enhanced NCS helper prompt with DARK HORSES analysis
             ncs_helper_prompt = f"""
 🚨 **ANÁLISIS NCS - REFLEXIÓN CON DETECCIÓN DE DARK HORSES**
@@ -6656,15 +6674,11 @@ Genera una **REFLEXIÓN NCS** que pueda persistirse y reutilizarse en la síntes
    - Si el cuantitativo parece NO alinearse con el NPS, dilo y sugiere hipótesis alternativas.
    - **No asumas causalidad**: etiqueta como “posible”, “consistente con”, “no concluyente”.
 
-📌 **HEURÍSTICA DE RADIO (solo si NO aparece la ruta completa):**
-- Asume que Iberia vuela **en** o **desde** la península ibérica.
-- Si el comentario menciona destinos en **América, Asia u Oriente Medio**, interprétalo como **LH**.
-- En caso contrario (principalmente **Europa**, **norte de África**, etc.), interprétalo como **SH**.
-- Si no hay suficiente información para inferir el radio con confianza, indícalo como **“no concluyente”** (no inventes rutas).
+{radio_section}
 
 📌 **REGLA DE USO DE INCIDENTES NO ATRIBUIDOS (OBLIGATORIA):**
-- Los bloques “INCIDENTES NO ATRIBUIDOS” NO están en los conteos cuantitativos por radio/cabina.
-- Clasifícalos tú en: **RELEVANTES para este radio**, **RELEVANTES para el radio opuesto**, o **NO CONCLUYENTE (solo Global)**.
+- Los bloques "INCIDENTES NO ATRIBUIDOS" NO están en los conteos cuantitativos por radio/cabina.
+- Clasíficalos tú en: **RELEVANTES para este radio**, **RELEVANTES para el radio opuesto**, o **NO CONCLUYENTE (solo Global)**.
 - Solo usa los **RELEVANTES para este radio** para explicar NPS/incidentes del nodo.
 
 🧩 **FORMATO DE SALIDA (OBLIGATORIO, para persistencia):**
