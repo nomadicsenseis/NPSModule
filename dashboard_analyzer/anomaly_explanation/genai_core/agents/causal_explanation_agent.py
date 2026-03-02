@@ -5576,8 +5576,22 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                 summary_parts.append(f"   📅 Días analizados: {ncs_data.get('days_analyzed', 'N/A')}")
                 summary_parts.append(f"   ⚙️ Estado fuente datos: {ncs_data.get('data_source_status', 'N/A')}")
                 analysis_summary = ncs_data.get('analysis_summary', 'No disponible')
-                # Keep a larger snippet so the persisted NCS reflection (incl. dark horses + NPS↔incidents) reaches final synthesis.
-                if len(analysis_summary) > 1200:
+                # If the analysis contains a structured NCS_REFLEXION block, extract and preserve
+                # the key sections (INCIDENTES_DELTA, DARK_HORSES, HIPOTESIS_DE_RELACION) so they
+                # reach the final synthesis intact even if the full text is long.
+                if "NCS_REFLEXION" in analysis_summary:
+                    parsed = self._parse_ncs_reflexion(analysis_summary)
+                    inc_delta = parsed.get("incidentes_delta_compact", "")
+                    dark_horses = parsed.get("dark_horses_compact", "")
+                    structured_block = "NCS_REFLEXION:\n"
+                    if inc_delta:
+                        structured_block += f"- INCIDENTES_DELTA: {inc_delta}\n"
+                    if dark_horses:
+                        structured_block += f"- DARK_HORSES: {dark_horses}\n"
+                    # Append remaining free text (truncated) after the structured block
+                    free_text = analysis_summary[:800] + '...' if len(analysis_summary) > 800 else analysis_summary
+                    analysis_summary = structured_block + free_text
+                elif len(analysis_summary) > 1200:
                     analysis_summary = analysis_summary[:1200] + '...'
                 summary_parts.append(f"   📊 Análisis: {analysis_summary}")
             else:
