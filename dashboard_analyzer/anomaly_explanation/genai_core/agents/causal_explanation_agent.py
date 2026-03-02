@@ -6561,7 +6561,7 @@ ORDER BY 'Route_Master'[route]
                         incident_changes_context += f"   • {incident_type.capitalize()}: {direction}{delta}\n"
             
             # Build radio heuristic section — Global nodes must NOT filter by haul
-            is_global_node = node_path.strip() == "Global"
+            is_global_node = node_path.strip().lower() == "global"
             if is_global_node:
                 radio_section = (
                     "📌 **RADIO DEL SEGMENTO: GLOBAL**\n"
@@ -6584,6 +6584,8 @@ ORDER BY 'Route_Master'[route]
 
 📊 **CONTEXTO DEL ANÁLISIS:**
 - Segmento: {node_path}
+- Segmento (repr): {repr(node_path)}
+- is_global_node: {is_global_node}
 - Período actual: {current_start_date or 'N/A'} a {current_end_date or 'N/A'} ({total_days} días)
 - Período comparativo: {comparison_start_date or 'N/A'} a {comparison_end_date or 'N/A'}
 - Incidentes período actual: {incident_count}
