@@ -969,15 +969,15 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 json.dump(conversation_data, f, indent=2, ensure_ascii=False)
             self.logger.info(f"📝 Hierarchical conversation exported to: {full_path}")
             
-            # Upload to S3 in production
-            try:
-                s3_key = await self.s3_uploader.upload_interpreter_conversation(conversation_data, filename)
-                if s3_key:
-                    self.logger.info(f"📤 Interpreter conversation uploaded to S3: {s3_key}")
-                else:
-                    self.logger.info("🔧 S3 upload skipped (local environment or failed)")
-            except Exception as e:
-                self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
+            # NOTE: S3 upload of interpreter conversations disabled - only final consolidated report is saved
+            # try:
+            #     s3_key = await self.s3_uploader.upload_interpreter_conversation(conversation_data, filename)
+            #     if s3_key:
+            #         self.logger.info(f"📤 Interpreter conversation uploaded to S3: {s3_key}")
+            #     else:
+            #         self.logger.info("🔧 S3 upload skipped (local environment or failed)")
+            # except Exception as e:
+            #     self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
             
             return str(full_path)
             

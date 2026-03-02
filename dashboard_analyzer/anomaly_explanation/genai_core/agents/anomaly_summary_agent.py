@@ -488,11 +488,11 @@ class AnomalySummaryAgent:
             response, structured_response, tool_calls = await self.agent.invoke(messages=message_history.get_messages())
             summary_response = response.content if hasattr(response, 'content') else str(response)
             
-            # Export conversation for debugging (use first period date as identifier)
-            first_period_date = periods_data[0].get('period', 'unknown') if periods_data else None
-            conversation_file = await self.export_conversation(message_history, first_period_date)
-            if conversation_file:
-                self.logger.info(f"🗂️ Conversación de summary guardada: {conversation_file}")
+            # NOTE: Conversation export disabled - only final consolidated report is saved
+            # first_period_date = periods_data[0].get('period', 'unknown') if periods_data else None
+            # conversation_file = await self.export_conversation(message_history, first_period_date)
+            # if conversation_file:
+            #     self.logger.info(f"🗂️ Conversación de summary guardada: {conversation_file}")
             
             if summary_response:
                 self.logger.info(f"✅ Generated summary report for {num_periods} periods")
@@ -615,10 +615,10 @@ class AnomalySummaryAgent:
             response, structured_response, tool_calls = await self.agent.invoke(messages=message_history.get_messages())
             comprehensive_response = response.content if hasattr(response, 'content') else str(response)
             
-            # Export conversation for debugging
-            conversation_file = await self.export_conversation(message_history, date_flight_local)
-            if conversation_file:
-                self.logger.info(f"🗂️ Conversación de summary guardada: {conversation_file}")
+            # NOTE: Conversation export disabled - only final consolidated report is saved
+            # conversation_file = await self.export_conversation(message_history, date_flight_local)
+            # if conversation_file:
+            #     self.logger.info(f"🗂️ Conversación de summary guardada: {conversation_file}")
             
             if comprehensive_response:
                 self.logger.info(f"✅ Generated comprehensive summary: weekly + {len(daily_single_analyses)} daily analyses")
@@ -1684,15 +1684,15 @@ PERÍODO {period} ({date_range}):
             
             self.logger.info(f"📝 Full stratified conversation exported to: {full_path}")
             
-            # Upload to S3 in production
-            try:
-                s3_key = await self.s3_uploader.upload_summary_conversation(conversation_data, filename)
-                if s3_key:
-                    self.logger.info(f"📤 Full stratified conversation uploaded to S3: {s3_key}")
-                else:
-                    self.logger.info("🔧 S3 upload skipped (local environment or failed)")
-            except Exception as e:
-                self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
+            # NOTE: S3 upload of stratified conversations disabled - only final consolidated report is saved
+            # try:
+            #     s3_key = await self.s3_uploader.upload_summary_conversation(conversation_data, filename)
+            #     if s3_key:
+            #         self.logger.info(f"📤 Full stratified conversation uploaded to S3: {s3_key}")
+            #     else:
+            #         self.logger.info("🔧 S3 upload skipped (local environment or failed)")
+            # except Exception as e:
+            #     self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
             
             return str(full_path)
             
@@ -1740,15 +1740,15 @@ PERÍODO {period} ({date_range}):
             
             self.logger.info(f"📝 Summary conversation exported to: {full_path}")
             
-            # Upload to S3 in production
-            try:
-                s3_key = await self.s3_uploader.upload_summary_conversation(conversation_data, filename)
-                if s3_key:
-                    self.logger.info(f"📤 Summary conversation uploaded to S3: {s3_key}")
-                else:
-                    self.logger.info("🔧 S3 upload skipped (local environment or failed)")
-            except Exception as e:
-                self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
+            # NOTE: S3 upload of summary conversations disabled - only final consolidated report is saved
+            # try:
+            #     s3_key = await self.s3_uploader.upload_summary_conversation(conversation_data, filename)
+            #     if s3_key:
+            #         self.logger.info(f"📤 Summary conversation uploaded to S3: {s3_key}")
+            #     else:
+            #         self.logger.info("🔧 S3 upload skipped (local environment or failed)")
+            # except Exception as e:
+            #     self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
             
             return str(full_path)
             

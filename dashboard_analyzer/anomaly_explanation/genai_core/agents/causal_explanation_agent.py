@@ -1855,10 +1855,9 @@ class CausalExplanationAgent:
                     aggregation_days=aggregation_days
                 )
                 
-                # NOTE: Conversation export disabled - only final consolidated report is saved
-                # conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
-                # if conversation_file:
-                #     self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
+                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                if conversation_file:
+                    self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
                 
                 self.logger.info("✅ Investigación de período único completada")
                 return final_response
@@ -2170,10 +2169,9 @@ class CausalExplanationAgent:
                     message_history, node_path, start_date, end_date, nps_context
                 )
                 
-                # NOTE: Conversation export disabled - only final consolidated report is saved
-                # conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
-                # if conversation_file:
-                #     self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
+                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                if conversation_file:
+                    self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
                     
                 self.logger.info("✅ Investigación comparativa completada")
                 return final_response
