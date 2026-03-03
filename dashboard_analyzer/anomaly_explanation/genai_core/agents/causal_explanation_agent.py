@@ -299,7 +299,8 @@ class CausalExplanationAgent:
         comparison_end_date: datetime = None,
         study_mode: str = "comparative",
         environment: str = "prod",
-        reference_date: Optional[datetime] = None
+        reference_date: Optional[datetime] = None,
+        focus_touchpoint: Optional[str] = None
     ):
         # Use default LLM type if none provided
         if llm_type is None:
@@ -310,6 +311,7 @@ class CausalExplanationAgent:
         self.silent_mode = silent_mode
         self.environment = environment
         self.reference_date = reference_date  # Anchor date for fixed baseline in single mode
+        self.focus_touchpoint = focus_touchpoint  # Optional touchpoint to force-investigate
         
         # Transform detection_mode if needed (vslast -> vslast_dynamic when causal_filter is "vs Sel. Period")
         if detection_mode == "vslast" and causal_filter == "vs Sel. Period":
@@ -617,6 +619,32 @@ class CausalExplanationAgent:
     
     # Removed _create_tools method - tools are now implemented directly
 
+    async def _collect_focus_touchpoint_data(
+        self,
+        node_path: str,
+        start_dt: datetime,
+        end_dt: datetime,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Collect CSAT and target data for the focus touchpoint without the explanatory_drivers filter.
+        Returns dict with keys: csat, target, gap, satisfaction_diff, shapdiff — or None on failure.
+        """
+        if not self.focus_touchpoint:
+            return None
+        try:
+            return await self.pbi_collector.collect_focus_touchpoint_csat_vs_target(
+                node_path=node_path,
+                start_date=start_dt,
+                end_date=end_dt,
+                touchpoint_name=self.focus_touchpoint,
+                comparison_filter=self.causal_filter,
+                comparison_start_date=self.comparison_start_date,
+                comparison_end_date=self.comparison_end_date,
+            )
+        except Exception as e:
+            self.logger.warning(f"⚠️ _collect_focus_touchpoint_data failed: {e}")
+            return None
+
     async def _explanatory_drivers_tool(self, node_path: str, start_date: str, end_date: str, min_surveys: int = 10) -> str:
         """Tool for analyzing explanatory drivers and SHAP values."""
         try:
@@ -773,6 +801,62 @@ class CausalExplanationAgent:
                     analysis_result.append("No SHAP drivers found at all")
                     analysis_result.append("RECOMMENDATION: Use verbatims_tool for qualitative insights and patterns")
             
+            # --- FOCUS TOUCHPOINT LOGIC ---
+            if self.focus_touchpoint:
+                candidate_touchpoint_cols = [
+                    'TouchPoint_Master[filtered_name]',
+                    'TouchPoint_Master[filtered_name',
+                    'filtered_name',
+                    'Filtered_name',
+                    'TouchPoint_Master filtered_name'
+                ]
+                touchpoint_col = next((c for c in candidate_touchpoint_cols if c in df.columns), None)
+
+                focus_in_results = (
+                    touchpoint_col is not None
+                    and self.focus_touchpoint in df[touchpoint_col].values
+                )
+
+                if focus_in_results:
+                    # Mark existing row with 🎯 FOCUS prefix
+                    df.loc[df[touchpoint_col] == self.focus_touchpoint, touchpoint_col] = (
+                        f"🎯 FOCUS: {self.focus_touchpoint}"
+                    )
+                    analysis_result.append(f"🎯 FOCUS TOUCHPOINT '{self.focus_touchpoint}' found in normal drivers — marked.")
+                else:
+                    # Query additional data without explanatory_drivers filter
+                    focus_row = await self._collect_focus_touchpoint_data(
+                        node_path,
+                        start_dt if isinstance(start_date, datetime) else datetime.strptime(start_date, '%Y-%m-%d'),
+                        end_dt if isinstance(end_date, datetime) else datetime.strptime(end_date, '%Y-%m-%d'),
+                    )
+                    if focus_row is not None and touchpoint_col:
+                        new_row = {col: None for col in df.columns}
+                        new_row[touchpoint_col] = f"🎯 FOCUS: {self.focus_touchpoint}"
+                        if 'Satisfaction diff' in df.columns:
+                            new_row['Satisfaction diff'] = focus_row.get('satisfaction_diff')
+                        if 'Satisfaction' in df.columns:
+                            new_row['Satisfaction'] = focus_row.get('csat')
+                        if 'Shapdiff' in df.columns:
+                            new_row['Shapdiff'] = focus_row.get('shapdiff')
+                        if 'NPS diff' in df.columns:
+                            new_row['NPS diff'] = None
+                        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                        analysis_result.append(
+                            f"🎯 FOCUS TOUCHPOINT '{self.focus_touchpoint}' added: "
+                            f"CSAT={focus_row.get('csat')}, "
+                            f"Sat_diff={focus_row.get('satisfaction_diff')}, "
+                            f"SHAP={focus_row.get('shapdiff')}"
+                        )
+                    else:
+                        no_data_label = f"🎯 FOCUS: {self.focus_touchpoint} (sin datos)"
+                        if touchpoint_col:
+                            new_row = {col: None for col in df.columns}
+                            new_row[touchpoint_col] = no_data_label
+                            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                        analysis_result.append(f"🎯 FOCUS TOUCHPOINT '{self.focus_touchpoint}': sin datos disponibles.")
+            # --- END FOCUS TOUCHPOINT LOGIC ---
+
             return " | ".join(analysis_result)
             
         except Exception as e:
@@ -1534,11 +1618,15 @@ class CausalExplanationAgent:
         anomaly_detection_mode: str = "target",
         aggregation_days: int = 7,
         comparison_context: str = "",
-        baseline_periods: int = 7
+        baseline_periods: int = 7,
+        focus_touchpoint: Optional[str] = None
     ) -> str:
         """
         Main investigation method that routes to single or comparative mode based on study_mode
         """
+        # Override focus_touchpoint if provided at call time
+        if focus_touchpoint is not None:
+            self.focus_touchpoint = focus_touchpoint
         print(f"🔍 DEBUG CAUSAL AGENT: investigate_anomaly called with start_date='{start_date}', end_date='{end_date}'")
         
         # Convert dates to datetime objects (handle both string and datetime inputs)

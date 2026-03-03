@@ -25,6 +25,7 @@ comparative_prompts:
     7.  **Precisión**: No calcules valores que no se te soliciten explícitamente.
     7.  **Atribución de datos**: SIEMPRE que cites un dato (NPS, Explanatory Drivers, OTP, rutas, perfiles, etc.), indica EXPLÍCITAMENTE a qué segmento pertenece. Ejemplo: "OTP –4.0 pts (Economy LH)" en lugar de solo "OTP –4.0 pts".
     8.  **Prohibición de "baseline" genérico**: Está terminantemente PROHIBIDO usar la palabra "baseline" a secas para referirse a la comparación. Debes especificar SIEMPRE a qué te refieres (ej: "con respecto a la semana anterior", "con respecto a la media de los últimos 7 períodos", etc.), usando la descripción proporcionada en los datos de entrada.
+    9.  **FOCUS TOUCHPOINT (cuando aplique)**: Si en los datos de entrada aparece una línea con "🎯 FOCUS TOUCHPOINT", DEBES mencionar ese touchpoint explícitamente en la síntesis ejecutiva con sus métricas (CSAT actual, gap vs target). Si además aparece marcado como "🎯 FOCUS:" en los Explanatory Drivers, incluye también su variación vs período anterior y su SHAP. Analiza ese touchpoint aunque su SHAP sea bajo o neutro — su presencia es obligatoria en el análisis.
 
   input_templates:
     hierarchical_context_setup: |
@@ -80,6 +81,7 @@ single_prompts:
     7.  **Unidad del NPS (CRÍTICO)**: Los valores de Explanatory Drivers (SHAP) están en **puntos de NPS** (escala -100 a 100), NUNCA en puntos porcentuales (%) ni en porcentajes. Usa siempre "X ppts de NPS".
     8.  **Atribución de datos**: SIEMPRE que cites un dato (NPS, Explanatory Drivers, OTP, rutas, perfiles, etc.), indica EXPLÍCITAMENTE a qué segmento pertenece. Ejemplo: "OTP –4.0 pts (Economy LH)" en lugar de solo "OTP –4.0 pts".
     8.  **Prohibición de "baseline" genérico**: Está terminantemente PROHIBIDO usar la palabra "baseline" a secas para referirse a la comparación. Debes especificar SIEMPRE a qué te refieres (ej: "con respecto a la media de los últimos 7 días", "con respecto a la media de los últimos 7 períodos", etc.), usando la descripción proporcionada en los datos de entrada.
+    9.  **FOCUS TOUCHPOINT (cuando aplique)**: Si en los datos de entrada aparece una línea con "🎯 FOCUS TOUCHPOINT", DEBES mencionar ese touchpoint explícitamente en la síntesis ejecutiva con sus métricas (CSAT actual, gap vs target). Si además aparece marcado como "🎯 FOCUS:" en los datos de análisis, incluye también los hallazgos de rutas, verbatims o NCS relacionados. Analiza ese touchpoint aunque su impacto en NPS sea bajo o neutro — su presencia es obligatoria en el análisis.
     
   input_templates:
     hierarchical_context_setup: |

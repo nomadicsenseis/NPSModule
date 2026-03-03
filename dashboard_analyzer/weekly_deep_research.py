@@ -214,7 +214,8 @@ async def run_weekly_comprehensive_analysis(
     daily_baseline_periods: int = 7,
     daily_aggregation_days: int = 1,
     daily_periods: int = 7,
-    environment: str = "prod"
+    environment: str = "prod",
+    focus_touchpoint: Optional[str] = None,
 ):
     """
     Comprehensive weekly analysis orchestrator.
@@ -259,7 +260,8 @@ async def run_weekly_comprehensive_analysis(
                 comparison_end_date=comparison_end_date,
                 date_flight_local=date_flight_local,
                 study_mode="comparative",
-                environment=environment
+                environment=environment,
+                focus_touchpoint=focus_touchpoint,
             )
             
             # Check for success (list or non-error string)
@@ -295,7 +297,8 @@ async def run_weekly_comprehensive_analysis(
                 comparison_end_date=None,
                 date_flight_local=date_flight_local,
                 study_mode="single",
-                environment=environment
+                environment=environment,
+                focus_touchpoint=focus_touchpoint,
             )
             
             # Check for success (list or non-error string)
@@ -546,6 +549,19 @@ async def main():
     parser.add_argument('--environment', type=str, default='prod', choices=['local', 'prod'],
                        help='Environment: local (reads .env) or prod (uses system env vars). Default: local')
     
+    # Focus touchpoint parameter
+    VALID_TOUCHPOINTS = [
+        "Response provided to the issue", "Wi-Fi", "Ease of contact by phone",
+        "Ease of contact by IB Plus email", "In flight food and beverage",
+        "Connections experience", "IFE", "IB Plus loyalty program",
+        "Journey preparation support", "Aircraft interior", "Boarding",
+        "Lounge", "Comms", "Punctuality", "Arrivals experience",
+        "Cabin Crew", "Check-in", "Pilot's announcements", "Airport security",
+    ]
+    parser.add_argument('--focus-touchpoint', type=str, default=None,
+                       choices=VALID_TOUCHPOINTS,
+                       help='Touchpoint a investigar en profundidad (filtered_name del modelo PBI)')
+    
     args = parser.parse_args()
     
     # Add placeholders for arguments that might not be defined
@@ -643,7 +659,8 @@ async def main():
             daily_baseline_periods=args.daily_baseline_periods,
             daily_aggregation_days=1,
             daily_periods=7,
-            environment=args.environment
+            environment=args.environment,
+            focus_touchpoint=args.focus_touchpoint or None,
         )
     except KeyboardInterrupt:
         print("\n⏸️ Analysis interrupted by user")

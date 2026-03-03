@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 from datetime import datetime, timedelta
 from pathlib import Path
 import pandas as pd
@@ -15,7 +15,7 @@ class FlexibleAnomalyInterpreter:
     Handles date range conversion and multi-source data collection
     """
     
-    def __init__(self, data_folder: str, pbi_collector: PBIDataCollector = None, drivers_survey_threshold: int = 100, default_comparison_days: int = 7, silent_mode: bool = False, detection_mode: str = "vslast", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, study_mode: str = None, environment: str = "local", analysis_date: datetime = None):
+    def __init__(self, data_folder: str, pbi_collector: PBIDataCollector = None, drivers_survey_threshold: int = 100, default_comparison_days: int = 7, silent_mode: bool = False, detection_mode: str = "vslast", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, study_mode: str = None, environment: str = "local", analysis_date: datetime = None, focus_touchpoint: Optional[str] = None):
         print(f"         🔍 DEBUG: FlexibleAnomalyInterpreter.__init__ called with detection_mode: '{detection_mode}', causal_filter: '{causal_filter}', environment: '{environment}', analysis_date: '{analysis_date}'")
         self.data_folder = data_folder
         self.pbi_collector = pbi_collector
@@ -36,6 +36,7 @@ class FlexibleAnomalyInterpreter:
         self.comparison_start_date = comparison_start_date  # Start date for comparison period
         self.comparison_end_date = comparison_end_date  # End date for comparison period
         self.study_mode = study_mode  # Study mode: "single" or "comparative"
+        self.focus_touchpoint = focus_touchpoint  # Optional touchpoint to force-investigate
         
         # Initialize agent lazily (will be created when needed with correct causal_filter)
         self.causal_agent = None
@@ -72,7 +73,8 @@ class FlexibleAnomalyInterpreter:
                     comparison_end_date=agent_comparison_end_date, 
                     study_mode=agent_study_mode,
                     environment=self.environment,
-                    reference_date=self.analysis_date
+                    reference_date=self.analysis_date,
+                    focus_touchpoint=self.focus_touchpoint
                 )
                 self._agent_initialized = True
                 if not self.silent_mode:
@@ -82,7 +84,7 @@ class FlexibleAnomalyInterpreter:
                 raise
         
     async def explain_anomaly(self, node_path: str, target_period: int, aggregation_days: int, 
-                            anomaly_state: str = None, start_date: datetime = None, end_date: datetime = None, anomaly_magnitude: float = None, nps_context: str = "", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, anomaly_detection_mode: str = "target", comparison_context: str = "", baseline_periods: int = 7) -> str:
+                            anomaly_state: str = None, start_date: datetime = None, end_date: datetime = None, anomaly_magnitude: float = None, nps_context: str = "", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, anomaly_detection_mode: str = "target", comparison_context: str = "", baseline_periods: int = 7, focus_touchpoint: Optional[str] = None) -> str:
         """
         Generate comprehensive explanation for an anomaly in a flexible time period
         
@@ -113,6 +115,11 @@ class FlexibleAnomalyInterpreter:
             self.comparison_start_date = comparison_start_date
         if comparison_end_date:
             self.comparison_end_date = comparison_end_date
+        
+        # Override focus_touchpoint if provided at call time
+        effective_focus = focus_touchpoint or self.focus_touchpoint
+        if effective_focus is not None:
+            self.focus_touchpoint = effective_focus
         
         # Initialize or update the causal agent with the correct filter
         print(f"         🔍 DEBUG: Agent init check - _agent_initialized: {self._agent_initialized}")
@@ -202,7 +209,8 @@ class FlexibleAnomalyInterpreter:
                 anomaly_detection_mode=anomaly_detection_mode,
                 aggregation_days=aggregation_days,
                 comparison_context=comparison_context,
-                baseline_periods=baseline_periods
+                baseline_periods=baseline_periods,
+                focus_touchpoint=self.focus_touchpoint
             )
             
             # Capture the investigation log

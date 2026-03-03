@@ -1504,3 +1504,152 @@ class PBIDataCollector:
         except Exception as e:
             self.logger.error(f"❌ Error collecting customer profile data: {e}")
             return pd.DataFrame()
+
+    def _get_focus_touchpoint_csat_query(
+        self,
+        cabins: List[str],
+        companies: List[str],
+        hauls: List[str],
+        start_date,
+        end_date,
+        touchpoint_name: str,
+        comparison_filter: Optional[str] = None,
+        comparison_start_date=None,
+        comparison_end_date=None,
+    ) -> str:
+        """Build DAX query for focus touchpoint CSAT vs target.
+
+        Uses SUMMARIZECOLUMNS with FILTER(ALL(...)) for date/cabin/haul filters
+        and [Monthly_Satisfaction] + [Target_Satisfaction_filtered] measures.
+        Filters by filtered_name = touchpoint_name.
+        """
+        # Normalise dates to datetime if they are strings
+        if isinstance(start_date, str):
+            start_date = datetime.strptime(start_date, "%Y-%m-%d")
+        if isinstance(end_date, str):
+            end_date = datetime.strptime(end_date, "%Y-%m-%d")
+
+        # Build filter strings
+        start_date_str = f"{start_date.year}, {start_date.month}, {start_date.day}"
+        end_date_str = f"{end_date.year}, {end_date.month}, {end_date.day}"
+
+        # Escape double quotes in touchpoint name for DAX safety
+        safe_touchpoint = touchpoint_name.replace('"', '""')
+
+        # Build FILTER(ALL(...)) expressions for each dimension
+        cabin_values = " || ".join([f"Cabin_Master[Cabin_Show] = \"{c}\"" for c in cabins])
+        haul_values = " || ".join([f"Haul_Master[Haul_Aggr] = \"{h}\"" for h in hauls])
+        company_values = " || ".join([f"Company_Master[Company] = \"{c}\"" for c in companies])
+
+        query = (
+            "EVALUATE\n"
+            "VAR _start = DATE(" + start_date_str + ")\n"
+            "VAR _end   = DATE(" + end_date_str + ")\n"
+            "VAR _tabla =\n"
+            "    SUMMARIZECOLUMNS(\n"
+            "        TouchPoint_Master[filtered_name],\n"
+            "        TREATAS({1}, TouchPoint_Master[explanatory_drivers]),\n"
+            f"        FILTER(ALL(Date_Master), Date_Master[Date] >= _start && Date_Master[Date] <= _end),\n"
+            f"        FILTER(ALL(Cabin_Master), {cabin_values}),\n"
+            f"        FILTER(ALL(Haul_Master), {haul_values}),\n"
+            f"        FILTER(ALL(Company_Master), {company_values}),\n"
+            f"        FILTER(ALL(TouchPoint_Master), TouchPoint_Master[filtered_name] = \"{safe_touchpoint}\"),\n"
+            '        "CSAT", [Monthly_Satisfaction],\n'
+            '        "Target_CSAT", [Target_Satisfaction_filtered]\n'
+            "    )\n"
+            "RETURN _tabla\n"
+        )
+
+        return query
+
+    async def collect_focus_touchpoint_csat_vs_target(
+        self,
+        node_path: str,
+        start_date,
+        end_date,
+        touchpoint_name: str,
+        comparison_filter: Optional[str] = None,
+        comparison_start_date=None,
+        comparison_end_date=None,
+    ) -> Optional[Dict[str, float]]:
+        """
+        Collect CSAT and Target_Satisfaction_filtered for a specific touchpoint.
+
+        Based on Exp. Drivers query but without the explanatory_drivers=1 filter,
+        filtering instead by filtered_name = touchpoint_name.
+
+        Args:
+            node_path: Node path like "Global/LH/Business"
+            start_date: Start date (datetime or str YYYY-MM-DD)
+            end_date: End date (datetime or str YYYY-MM-DD)
+            touchpoint_name: filtered_name of the touchpoint to query
+            comparison_filter: Comparison filter string (e.g. "vs L7d"). None for single mode.
+            comparison_start_date: Start date for comparison period (optional)
+            comparison_end_date: End date for comparison period (optional)
+
+        Returns:
+            Dict with keys: 'csat', 'target', 'gap'
+            or None if no data or error.
+        """
+        try:
+            cabins, companies, hauls = self._get_node_filters(node_path)
+
+            query = self._get_focus_touchpoint_csat_query(
+                cabins=cabins,
+                companies=companies,
+                hauls=hauls,
+                start_date=start_date,
+                end_date=end_date,
+                touchpoint_name=touchpoint_name,
+                comparison_filter=comparison_filter,
+                comparison_start_date=comparison_start_date,
+                comparison_end_date=comparison_end_date,
+            )
+
+            df = await self._execute_query_async(query)
+
+            if df.empty:
+                self.logger.warning(
+                    f"⚠️ No data returned for focus touchpoint '{touchpoint_name}' "
+                    f"on node '{node_path}'"
+                )
+                return None
+
+            df = self._safe_clean_columns(df)
+
+            # Locate the first row (there should be exactly one for the specific touchpoint)
+            row = df.iloc[0]
+
+            def _to_float(val) -> Optional[float]:
+                """Convert a value to float, returning None if not possible."""
+                try:
+                    if val is None or (isinstance(val, float) and pd.isna(val)):
+                        return None
+                    return float(val)
+                except (TypeError, ValueError):
+                    return None
+
+            csat = _to_float(row.get("CSAT"))
+            target = _to_float(row.get("Target_CSAT"))
+
+            if csat is None or target is None:
+                self.logger.warning(
+                    f"⚠️ Missing CSAT or Target for focus touchpoint '{touchpoint_name}': "
+                    f"csat={csat}, target={target}"
+                )
+                return None
+
+            gap = csat - target
+
+            return {
+                "csat": csat,
+                "target": target,
+                "gap": gap,
+            }
+
+        except Exception as e:
+            self.logger.warning(
+                f"⚠️ Error collecting focus touchpoint CSAT vs target for "
+                f"'{touchpoint_name}' on '{node_path}': {e}"
+            )
+            return None

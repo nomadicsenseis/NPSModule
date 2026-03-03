@@ -307,7 +307,8 @@ async def process_single_period(
     pbi_collector,
     ai_agent,
     ai_available: bool,
-    period_semaphore: asyncio.Semaphore
+    period_semaphore: asyncio.Semaphore,
+    focus_touchpoint: Optional[str] = None,
 ) -> dict:
     """
     Process a single period's analysis - designed to run in parallel with other periods.
@@ -348,7 +349,8 @@ async def process_single_period(
             comparison_start_date=comparison_start_date, 
             comparison_end_date=comparison_end_date, 
             environment=environment,
-            analysis_date=analysis_date
+            analysis_date=analysis_date,
+            focus_touchpoint=focus_touchpoint,
         )
         
         # Get anomalies for this period
@@ -412,7 +414,8 @@ async def process_single_period(
                             detection_mode=detector.detection_mode, 
                             comparison_start_date=comparison_start_date, 
                             comparison_end_date=comparison_end_date, 
-                            environment=environment
+                            environment=environment,
+                            focus_touchpoint=focus_touchpoint,
                         )
                         
                         anomaly_state = period_anomalies.get(node_path, "?")
@@ -451,6 +454,29 @@ async def process_single_period(
                             else:
                                 nps_context = f"NPS: {nps_data}"
                         
+                        # --- FOCUS TOUCHPOINT: añadir CSAT vs Target al nps_context ---
+                        if focus_touchpoint and node_start_date and node_end_date:
+                            try:
+                                focus_data = await pbi_collector.collect_focus_touchpoint_csat_vs_target(
+                                    node_path=node_path,
+                                    start_date=node_start_date,
+                                    end_date=node_end_date,
+                                    touchpoint_name=focus_touchpoint,
+                                    comparison_filter=causal_filter,
+                                    comparison_start_date=comparison_start_date,
+                                    comparison_end_date=comparison_end_date,
+                                )
+                                if focus_data:
+                                    focus_line = (
+                                        f"🎯 FOCUS TOUCHPOINT '{focus_touchpoint}': "
+                                        f"CSAT={focus_data['csat']:.1f}, "
+                                        f"vs Target={focus_data['gap']:+.1f}pts"
+                                    )
+                                    nps_context = f"{nps_context}\n{focus_line}" if nps_context else focus_line
+                            except Exception as _fe:
+                                print(f"⚠️ No se pudo obtener datos del focus touchpoint para {node_path}: {_fe}")
+                        # --- END FOCUS TOUCHPOINT ---
+                        
                         explanation = await asyncio.wait_for(
                             node_interpreter.explain_anomaly(
                                 node_path=node_path,
@@ -464,7 +490,8 @@ async def process_single_period(
                                 causal_filter=causal_filter,
                                 anomaly_detection_mode=analysis_data.get('anomaly_detection_mode', 'target'),
                                 comparison_context=comparison_context_local,
-                                baseline_periods=analysis_data.get('baseline_periods', 7)
+                                baseline_periods=analysis_data.get('baseline_periods', 7),
+                                focus_touchpoint=focus_touchpoint,
                             ),
                             timeout=3000.0  # Increased to 50 min for heavy nodes like Global
                         )
@@ -560,7 +587,7 @@ async def process_single_period(
         }
 
 
-async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None):
+async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None, focus_touchpoint: Optional[str] = None):
     """Show trees for all periods analyzed INCLUDING explanations and parent interpretations.
     
     PARALLEL EXECUTION: All periods are processed concurrently for faster results.
@@ -635,7 +662,8 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             pbi_collector=pbi_collector,
             ai_agent=ai_agent if ai_available else None,
             ai_available=ai_available,
-            period_semaphore=period_semaphore
+            period_semaphore=period_semaphore,
+            focus_touchpoint=focus_touchpoint,
         )
         for period in periods_with_anomalies
     ]
@@ -2621,6 +2649,19 @@ async def main():
     parser.add_argument('--environment', type=str, default='prod', choices=['local', 'prod'],
                        help='Environment: local (reads .env) or prod (uses system env vars). Default: local')
     
+    # Focus touchpoint parameter
+    VALID_TOUCHPOINTS = [
+        "Response provided to the issue", "Wi-Fi", "Ease of contact by phone",
+        "Ease of contact by IB Plus email", "In flight food and beverage",
+        "Connections experience", "IFE", "IB Plus loyalty program",
+        "Journey preparation support", "Aircraft interior", "Boarding",
+        "Lounge", "Comms", "Punctuality", "Arrivals experience",
+        "Cabin Crew", "Check-in", "Pilot's announcements", "Airport security",
+    ]
+    parser.add_argument('--focus-touchpoint', type=str, default=None,
+                       choices=VALID_TOUCHPOINTS,
+                       help='Touchpoint a investigar en profundidad (filtered_name del modelo PBI)')
+    
     args = parser.parse_args()
 
     # Add placeholders for arguments that might not be defined by the parser in all cases
@@ -2714,7 +2755,8 @@ async def main():
             comparison_end_date=args.comparison_end_date,
             date_flight_local=args.date_flight_local,
             study_mode=args.study_mode,
-            environment=args.environment
+            environment=args.environment,
+            focus_touchpoint=args.focus_touchpoint or None,
         )
 
     except KeyboardInterrupt:
@@ -3138,6 +3180,7 @@ async def execute_analysis_flow(
     date_flight_local: Optional[str] = None,
     study_mode: str = "comparative",
     environment: str = "prod",
+    focus_touchpoint: Optional[str] = None,
 ) -> str:
     """
     Executes a complete analysis flow for a given configuration.
@@ -3218,7 +3261,8 @@ async def execute_analysis_flow(
         comparison_start_date=comparison_start_date,
         comparison_end_date=comparison_end_date,
         environment=environment,
-        study_mode=study_mode
+        study_mode=study_mode,
+        focus_touchpoint=focus_touchpoint,
     )
     
     print(f"🔍 DEBUG EXECUTE_ANALYSIS_FLOW: show_all_anomaly_periods_with_explanations completed")

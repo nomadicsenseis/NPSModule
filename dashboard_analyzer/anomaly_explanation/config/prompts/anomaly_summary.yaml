@@ -184,6 +184,7 @@ step3_extract_synthesis:
     - 🔢 **REDONDEO:** 1 decimal para todo (NPS, SHAP, %). Enteros para conteos.
     - 📝 **HTML:** Estructura clara con títulos subrayados.
     - 🗣️ **TONO MODERADO (OBLIGATORIO):** Evita lenguaje catastrofista o alarmista. NO uses palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió". USA alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
+    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** Si en el informe aparece información de un FOCUS TOUCHPOINT (marcado con 🎯), incluye una sección dedicada con el nombre del touchpoint, su CSAT actual, gap vs target, variación vs período de comparación (si modo comparative) y resumen de hallazgos de rutas/verbatims/NCS relacionados. Esta sección es OBLIGATORIA cuando el dato está presente.
 
   input_template: |
     **INFORME COMPLETO:**
@@ -293,6 +294,7 @@ step4_generate_adaptive_card:
     **REGLA DE FUENTE:**
     - La síntesis ejecutiva trae secciones con títulos. Usa EXACTAMENTE esos títulos como fuente, salvo si vienen con Short Haul o Long Haul, en cuyo caso usa SH o LH respectivamente.
     - Si una sección no existe en la síntesis, NO inventes contenido para ella.
+    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** Si en la síntesis aparece información de un FOCUS TOUCHPOINT (marcado con 🎯), añade una acción `Action.ShowCard` adicional con título "🎯 FOCUS: {nombre_touchpoint}" que incluya CSAT actual, gap vs target, variación vs comparación y hallazgos clave. Esta tarjeta es OBLIGATORIA cuando el dato está presente.
     - Respeta el orden anterior solo para las secciones presentes.
 
     **REGLAS DE TABLA:**
