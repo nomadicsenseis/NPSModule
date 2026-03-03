@@ -41,7 +41,7 @@ from dashboard_analyzer.anomaly_explanation.genai_core.message_history import Me
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.agent import Agent
 
 # Data collection imports
-from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector
+from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector, get_touchpoint_display_name
 from dashboard_analyzer.data_collection.chatbot_verbatims_collector import ChatbotVerbatimsCollector
 from dashboard_analyzer.data_collection.ncs_collector import NCSDataCollector
 
@@ -1663,17 +1663,169 @@ class CausalExplanationAgent:
         
         # Route to appropriate investigation method based on study_mode
         if self.study_mode == "single":
-            return await self._investigate_anomaly_single_period(
+            result = await self._investigate_anomaly_single_period(
                 node_path, start_date_dt, end_date_dt, anomaly_type, anomaly_magnitude, nps_context,
                 anomaly_detection_mode, aggregation_days, comparison_context, baseline_periods
             )
         else:
-            return await self._investigate_anomaly_with_comparison(
+            result = await self._investigate_anomaly_with_comparison(
                 node_path, start_date_dt, end_date_dt, anomaly_type, anomaly_magnitude, nps_context,
                 causal_filter, comparison_start_date, comparison_end_date,
                 anomaly_detection_mode, aggregation_days, comparison_context, baseline_periods
             )
+
+        # --- FOCUS TOUCHPOINT ENRICHMENT: verbatims + % issues per segment ---
+        effective_focus = self.focus_touchpoint
+        if effective_focus:
+            enrichment = await self._collect_focus_touchpoint_enrichment(
+                node_path=node_path,
+                start_date=start_date_dt,
+                end_date=end_date_dt,
+                comparison_start_date=self.comparison_start_date,
+                comparison_end_date=self.comparison_end_date,
+            )
+            if enrichment:
+                result = f"{result}\n\n{enrichment}"
+
+        return result
     
+    def _get_relevant_nodes_for_segment(self, node_path: str) -> List[str]:
+        """
+        Return the list of nodes to cover for focus touchpoint verbatims / % issues,
+        based on the root segment of the current analysis.
+
+        - Global (or any Global/* path) → [Global, Global_LH, Global_SH]
+        - Global/SH or Global/SH/* → [Global_SH]
+        - Global/LH or Global/LH/* → [Global_LH]
+        - Any other path → [node_path] (best-effort)
+        """
+        parts = [p.strip() for p in node_path.split("/") if p.strip()]
+        root = parts[0].lower() if parts else ""
+        second = parts[1].lower() if len(parts) > 1 else ""
+
+        if root == "global":
+            if second == "sh":
+                return ["Global_SH"]
+            elif second == "lh":
+                return ["Global_LH"]
+            else:
+                # Full global analysis — cover all three top-level segments
+                return ["Global", "Global_LH", "Global_SH"]
+        # Fallback: use the node itself
+        return [node_path.replace("/", "_")]
+
+    async def _collect_focus_touchpoint_enrichment(
+        self,
+        node_path: str,
+        start_date: datetime,
+        end_date: datetime,
+        comparison_start_date: Optional[datetime] = None,
+        comparison_end_date: Optional[datetime] = None,
+    ) -> Optional[str]:
+        """
+        Collect verbatims and % issues for the focus touchpoint across all relevant
+        nodes for the current segment.  Returns a formatted string to append to the
+        investigation result, or None if nothing was collected.
+        """
+        effective_focus = self.focus_touchpoint
+        if not effective_focus:
+            return None
+
+        display_name = get_touchpoint_display_name(effective_focus)
+        relevant_nodes = self._get_relevant_nodes_for_segment(node_path)
+
+        parts: List[str] = []
+        parts.append(f"━━━ 🎯 FOCUS TOUCHPOINT ENRICHMENT: '{effective_focus}' ━━━")
+
+        # ── Verbatims per node ──────────────────────────────────────────────
+        verbatim_query = display_name if display_name else effective_focus
+        self._focus_verbatims_by_node: Dict[str, str] = {}
+
+        for node in relevant_nodes:
+            try:
+                verbatims_result = await self._verbatims_tool_for_node(
+                    node_path=node,
+                    start_date=start_date.strftime("%Y-%m-%d"),
+                    end_date=end_date.strftime("%Y-%m-%d"),
+                    query=verbatim_query,
+                )
+                self._focus_verbatims_by_node[node] = verbatims_result
+                parts.append(f"\n📝 VERBATIMS [{node}] — query: '{verbatim_query}'")
+                parts.append(verbatims_result)
+            except Exception as e:
+                self.logger.warning(f"⚠️ Could not collect focus verbatims for node '{node}': {e}")
+                self._focus_verbatims_by_node[node] = f"(sin datos — error: {e})"
+                parts.append(f"\n📝 VERBATIMS [{node}]: sin datos disponibles")
+
+        # ── % Issues per node (only if display_name mapping exists) ─────────
+        self._focus_issues_pct_by_node: Dict[str, Dict] = {}
+
+        if display_name and comparison_start_date and comparison_end_date:
+            for node in relevant_nodes:
+                try:
+                    issues_result = await self.pbi_collector.collect_focus_touchpoint_issues_pct(
+                        node_path=node,
+                        start_date=start_date,
+                        end_date=end_date,
+                        comparison_start_date=comparison_start_date,
+                        comparison_end_date=comparison_end_date,
+                        touchpoint_display_name=display_name,
+                    )
+                    if issues_result:
+                        self._focus_issues_pct_by_node[node] = issues_result
+                        pct_cur = issues_result.get("pct_issues_current")
+                        pct_prev = issues_result.get("pct_issues_prev")
+                        diff = issues_result.get("diff")
+                        pct_cur_str = f"{pct_cur*100:.1f}%" if pct_cur is not None else "N/A"
+                        pct_prev_str = f"{pct_prev*100:.1f}%" if pct_prev is not None else "N/A"
+                        diff_str = f"{diff*100:+.1f}%" if diff is not None else "N/A"
+                        parts.append(
+                            f"\n📊 % ISSUES [{node}] — '{display_name}': "
+                            f"L7D={pct_cur_str}, prev={pct_prev_str}, diff={diff_str}"
+                        )
+                    else:
+                        parts.append(f"\n📊 % ISSUES [{node}]: sin datos disponibles")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Could not collect focus issues pct for node '{node}': {e}")
+                    parts.append(f"\n📊 % ISSUES [{node}]: sin datos disponibles (error: {e})")
+        elif not display_name:
+            self.logger.warning(
+                f"⚠️ No display_name mapping for '{effective_focus}' — skipping % issues query"
+            )
+            parts.append(
+                f"\n📊 % ISSUES: omitido (no existe mapeo display_name para '{effective_focus}')"
+            )
+        else:
+            # Single mode — no comparison dates available
+            parts.append("\n📊 % ISSUES: omitido (modo single, sin fechas de comparación)")
+
+        return "\n".join(parts)
+
+    async def _verbatims_tool_for_node(
+        self,
+        node_path: str,
+        start_date: str,
+        end_date: str,
+        query: str,
+    ) -> str:
+        """
+        Call the verbatims tool for a specific node and search query.
+        Delegates to the existing _verbatims_tool or _verbatims_tool_single_period
+        depending on study_mode.
+        """
+        if self.study_mode == "single":
+            return await self._verbatims_tool_single_period(
+                node_path=node_path,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        else:
+            return await self._verbatims_tool(
+                node_path=node_path,
+                start_date=start_date,
+                end_date=end_date,
+            )
+
     async def _investigate_anomaly_single_period(
         self,
         node_path: str,

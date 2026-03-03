@@ -53,7 +53,7 @@ Implementación incremental del parámetro `--focus-touchpoint` siguiendo la cad
     - Verificar que si `_collect_focus_touchpoint_data` lanza excepción, el DataFrame resultante contiene la fila `(sin datos)` y no se propaga la excepción
     - _Requisitos: 2.4, 3.5_
 
-- [ ] 4. Añadir `focus_touchpoint` a `FlexibleAnomalyInterpreter`
+- [x] 4. Añadir `focus_touchpoint` a `FlexibleAnomalyInterpreter`
   - Añadir `focus_touchpoint: Optional[str] = None` en `__init__` de `FlexibleAnomalyInterpreter` (`dashboard_analyzer/anomaly_detection/flexible_anomaly_interpreter.py`)
   - Añadir `focus_touchpoint: Optional[str] = None` en `explain_anomaly`
   - Al inicializar/reinicializar el `CausalExplanationAgent` dentro de `_initialize_causal_agent`, pasar `focus_touchpoint=self.focus_touchpoint`
@@ -64,10 +64,10 @@ Implementación incremental del parámetro `--focus-touchpoint` siguiendo la cad
     - Mockear `CausalExplanationAgent` y verificar que se instancia con el `focus_touchpoint` correcto cuando se inicializa `FlexibleAnomalyInterpreter` con ese valor
     - _Requisitos: 1.3, 4.4_
 
-- [ ] 5. Checkpoint — Verificar que los tests pasan
+- [x] 5. Checkpoint — Verificar que los tests pasan
   - Asegurarse de que todos los tests pasan, preguntar al usuario si surgen dudas.
 
-- [ ] 6. Implementar lógica en `process_node_anomaly` para el `nps_context`
+- [x] 6. Implementar lógica en `process_node_anomaly` para el `nps_context`
   - En la función interna `process_node_anomaly` dentro de `process_single_period` (`dashboard_analyzer/deep_research_period.py`), añadir bloque condicional `if focus_touchpoint:` después de construir el `nps_context` normal
   - Llamar a `pbi_collector.collect_focus_touchpoint_csat_vs_target(...)` con los parámetros del nodo
   - Si devuelve datos: construir la línea `🎯 FOCUS TOUCHPOINT '{touchpoint}': CSAT={csat:.1f}, vs Target={gap:+.1f}pts` y añadirla al `nps_context`
@@ -80,14 +80,14 @@ Implementación incremental del parámetro `--focus-touchpoint` siguiendo la cad
     - Verificar que un gap positivo se formatea con `+`
     - _Requisitos: 2.3_
 
-- [ ] 7. Propagar `focus_touchpoint` por las funciones de orquestación en `deep_research_period.py`
+- [x] 7. Propagar `focus_touchpoint` por las funciones de orquestación en `deep_research_period.py`
   - Añadir `focus_touchpoint: Optional[str] = None` en `process_single_period`
   - Añadir `focus_touchpoint: Optional[str] = None` en `show_all_anomaly_periods_with_explanations`
   - Añadir `focus_touchpoint: Optional[str] = None` en `execute_analysis_flow`
   - Propagar el parámetro en cada llamada interna: `execute_analysis_flow` → `show_all_anomaly_periods_with_explanations` → `process_single_period` → `process_node_anomaly`
   - _Requisitos: 1.3_
 
-- [ ] 8. Añadir argumento CLI `--focus-touchpoint` en `deep_research_period.py`
+- [x] 8. Añadir argumento CLI `--focus-touchpoint` en `deep_research_period.py`
   - En `main()`, añadir `parser.add_argument('--focus-touchpoint', type=str, default=None, help='...')`
   - Normalizar el valor: si es string vacío o solo espacios, convertir a `None`
   - Pasar `focus_touchpoint=args.focus_touchpoint` a `execute_analysis_flow`
@@ -102,14 +102,14 @@ Implementación incremental del parámetro `--focus-touchpoint` siguiendo la cad
     - Verificar que llamar con `focus_touchpoint=None` produce el mismo resultado que llamar sin el parámetro (usando mocks)
     - _Requisitos: 1.2_
 
-- [ ] 9. Propagar `focus_touchpoint` en `weekly_deep_research.py`
+- [x] 9. Propagar `focus_touchpoint` en `weekly_deep_research.py`
   - Añadir `focus_touchpoint: Optional[str] = None` en `run_weekly_comprehensive_analysis`
   - Propagar a ambas llamadas a `execute_analysis_flow` (weekly y daily)
   - Añadir `parser.add_argument('--focus-touchpoint', ...)` en `main()` de `weekly_deep_research.py`
   - Normalizar el valor (vacío → None) igual que en `deep_research_period.py`
   - _Requisitos: 1.4_
 
-- [ ] 10. Actualizar prompts YAML del `AnomalyInterpreterAgent`
+- [x] 10. Actualizar prompts YAML del `AnomalyInterpreterAgent`
   - En `dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml`, añadir instrucciones al `system_prompt` de `comparative_prompts` y `single_prompts`
   - Las instrucciones deben indicar: si aparece `🎯 FOCUS TOUCHPOINT` en los datos de entrada, mencionar ese touchpoint en la síntesis con sus métricas (CSAT, gap vs target, variación vs comparación si disponible), aunque su SHAP sea bajo o neutro
   - _Requisitos: 5.1, 5.2, 5.3_
@@ -118,7 +118,7 @@ Implementación incremental del parámetro `--focus-touchpoint` siguiendo la cad
     - Verificar que el YAML cargado contiene las instrucciones de focus_touchpoint en ambos modos
     - _Requisitos: 5.2_
 
-- [ ] 11. Actualizar prompts YAML del `AnomalySummaryAgent`
+- [x] 11. Actualizar prompts YAML del `AnomalySummaryAgent`
   - En `dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_summary.yaml`, añadir instrucciones en `step3_extract_synthesis` y `step4_generate_adaptive_card`
   - Las instrucciones deben indicar: si hay información de `🎯 FOCUS TOUCHPOINT` en los datos, incluir sección dedicada con CSAT actual, gap vs target, variación vs comparación y resumen de hallazgos
   - Si no hay `focus_touchpoint`, generar el resumen normal sin cambios
@@ -128,7 +128,7 @@ Implementación incremental del parámetro `--focus-touchpoint` siguiendo la cad
     - Verificar que el YAML cargado contiene las instrucciones de focus_touchpoint en los pasos relevantes
     - _Requisitos: 6.3_
 
-- [ ] 12. Checkpoint final — Verificar integración completa
+- [x] 12. Checkpoint final — Verificar integración completa
   - Asegurarse de que todos los tests pasan, preguntar al usuario si surgen dudas.
   - Verificar que `python -m dashboard_analyzer.deep_research_period --help` muestra `--focus-touchpoint`
   - Verificar que `python -m dashboard_analyzer.weekly_deep_research --help` muestra `--focus-touchpoint`

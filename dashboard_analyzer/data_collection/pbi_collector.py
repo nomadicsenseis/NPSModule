@@ -19,6 +19,27 @@ PBI_BASE_DELAY = 2.0  # Base delay in seconds for exponential backoff
 PBI_MAX_DELAY = 30.0  # Maximum delay between retries
 PBI_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}  # HTTP codes that trigger retry
 
+# Mapping from filtered_name (TouchPoint_Master) to display_name (Issue_touchpoint_Dict).
+# Needed because the two tables use different naming conventions.
+# Extend this dict to support additional touchpoints without code changes.
+TOUCHPOINT_DISPLAY_NAME_MAP: Dict[str, str] = {
+    "ifl_100_cabin_crew_satisfaction": "Cabin Crew",
+    "ifl_200_food_satisfaction": "Food & Beverage",
+    "ifl_300_seat_satisfaction": "Seat",
+    "ifl_400_entertainment_satisfaction": "Entertainment",
+    "ifl_500_wifi_satisfaction": "Wi-Fi",
+    "ifl_600_checkin_satisfaction": "Check-in",
+    "ifl_700_boarding_satisfaction": "Boarding",
+    "ifl_800_baggage_satisfaction": "Baggage",
+    "ifl_900_lounge_satisfaction": "Lounge",
+}
+
+
+def get_touchpoint_display_name(filtered_name: str) -> Optional[str]:
+    """Return the display_name for a touchpoint filtered_name, or None if no mapping exists."""
+    return TOUCHPOINT_DISPLAY_NAME_MAP.get(filtered_name)
+
+
 class PBIDataCollector:
     """Collects data from Power BI API for each node in the NPS tree hierarchy"""
     
@@ -1651,5 +1672,181 @@ class PBIDataCollector:
             self.logger.warning(
                 f"⚠️ Error collecting focus touchpoint CSAT vs target for "
                 f"'{touchpoint_name}' on '{node_path}': {e}"
+            )
+            return None
+
+    def _get_focus_touchpoint_issues_pct_query(
+        self,
+        cabins: List[str],
+        companies: List[str],
+        hauls: List[str],
+        start_date,
+        end_date,
+        comparison_start_date,
+        comparison_end_date,
+        touchpoint_display_name: str,
+    ) -> str:
+        """Build the DAX query for % issues of a focus touchpoint vs L7D."""
+        def _to_dt(d):
+            if isinstance(d, str):
+                return datetime.strptime(d, "%Y-%m-%d")
+            return d
+
+        sd = _to_dt(start_date)
+        ed = _to_dt(end_date)
+        csd = _to_dt(comparison_start_date)
+        ced = _to_dt(comparison_end_date)
+
+        def _date_dax(dt: datetime) -> str:
+            return f"DATE({dt.year}, {dt.month}, {dt.day})"
+
+        # Build segment filters
+        cabin_values = ", ".join(f'"{c}"' for c in cabins) if cabins else '"All"'
+        company_values = ", ".join(f'"{c}"' for c in companies) if companies else '"All"'
+        haul_values = ", ".join(f'"{h}"' for h in hauls) if hauls else '"All"'
+
+        cabin_filter_l7d = (
+            f"FILTER(ALL(Cabin_Master), Cabin_Master[Cabin_Show] IN {{{cabin_values}}})"
+            if cabins else ""
+        )
+        company_filter_l7d = (
+            f"FILTER(ALL(Company_Master), Company_Master[Company] IN {{{company_values}}})"
+            if companies else ""
+        )
+        haul_filter_l7d = (
+            f"FILTER(ALL(Haul_Master), Haul_Master[Haul_Aggr] IN {{{haul_values}}})"
+            if hauls else ""
+        )
+
+        seg_filters = ", ".join(
+            f for f in [cabin_filter_l7d, company_filter_l7d, haul_filter_l7d] if f
+        )
+        seg_filters_prefix = (", " + seg_filters) if seg_filters else ""
+
+        safe_display = touchpoint_display_name.replace('"', '\\"')
+
+        query = (
+            "EVALUATE\n"
+            f"VAR _end        = {_date_dax(ed)}\n"
+            f"VAR _start      = {_date_dax(sd)}\n"
+            f"VAR _start_prev = {_date_dax(csd)}\n"
+            f"VAR _end_prev   = {_date_dax(ced)}\n"
+            "VAR _dateL7D   = FILTER(ALL(Date_Master), Date_Master[Date] >= _start      && Date_Master[Date] <= _end)\n"
+            "VAR _datePrev  = FILTER(ALL(Date_Master), Date_Master[Date] >= _start_prev && Date_Master[Date] <= _end_prev)\n"
+            "RETURN\n"
+            "UNION(\n"
+            '    ROW("Period", "L7D",\n'
+            '        "Pct_Issues", CALCULATE([Switch_%_Affected_D&G],\n'
+            f"            _dateL7D{seg_filters_prefix},\n"
+            "            TREATAS({1}, Issue_touchpoint_Dict[explanatory_drivers]),\n"
+            f'            FILTER(ALL(Issue_touchpoint_Dict), Issue_touchpoint_Dict[issue_type_3] = "{safe_display}")\n'
+            "        )\n"
+            "    ),\n"
+            '    ROW("Period", "L7D_prev",\n'
+            '        "Pct_Issues", CALCULATE([Switch_%_Affected_D&G],\n'
+            f"            _datePrev{seg_filters_prefix},\n"
+            "            TREATAS({1}, Issue_touchpoint_Dict[explanatory_drivers]),\n"
+            f'            FILTER(ALL(Issue_touchpoint_Dict), Issue_touchpoint_Dict[issue_type_3] = "{safe_display}")\n'
+            "        )\n"
+            "    )\n"
+            ")\n"
+        )
+        return query
+
+    async def collect_focus_touchpoint_issues_pct(
+        self,
+        node_path: str,
+        start_date,
+        end_date,
+        comparison_start_date,
+        comparison_end_date,
+        touchpoint_display_name: str,
+    ) -> Optional[Dict[str, float]]:
+        """
+        Collect % of passengers affected by issues for a focus touchpoint.
+
+        Args:
+            node_path: Node path like "Global/LH/Business"
+            start_date: Start of current period (datetime or YYYY-MM-DD str)
+            end_date: End of current period
+            comparison_start_date: Start of comparison period
+            comparison_end_date: End of comparison period
+            touchpoint_display_name: Name in Issue_touchpoint_Dict (e.g. "Cabin Crew")
+
+        Returns:
+            Dict with keys: 'pct_issues_current', 'pct_issues_prev', 'diff'
+            or None on error / no data.
+        """
+        try:
+            cabins, companies, hauls = self._get_node_filters(node_path)
+
+            query = self._get_focus_touchpoint_issues_pct_query(
+                cabins=cabins,
+                companies=companies,
+                hauls=hauls,
+                start_date=start_date,
+                end_date=end_date,
+                comparison_start_date=comparison_start_date,
+                comparison_end_date=comparison_end_date,
+                touchpoint_display_name=touchpoint_display_name,
+            )
+
+            df = await self._execute_query_async(query)
+
+            if df.empty:
+                self.logger.warning(
+                    f"⚠️ No issues data for touchpoint '{touchpoint_display_name}' on '{node_path}'"
+                )
+                return None
+
+            df = self._safe_clean_columns(df)
+
+            def _to_float(val) -> Optional[float]:
+                try:
+                    if val is None or (isinstance(val, float) and pd.isna(val)):
+                        return None
+                    return float(val)
+                except (TypeError, ValueError):
+                    return None
+
+            # Locate L7D and L7D_prev rows
+            period_col = next(
+                (c for c in df.columns if "period" in c.lower()), None
+            )
+            pct_col = next(
+                (c for c in df.columns if "pct" in c.lower() or "issues" in c.lower()), None
+            )
+
+            if period_col is None or pct_col is None:
+                self.logger.warning(
+                    f"⚠️ Unexpected columns in issues query result: {list(df.columns)}"
+                )
+                return None
+
+            l7d_row = df[df[period_col] == "L7D"]
+            prev_row = df[df[period_col] == "L7D_prev"]
+
+            pct_current = _to_float(l7d_row.iloc[0][pct_col]) if not l7d_row.empty else None
+            pct_prev = _to_float(prev_row.iloc[0][pct_col]) if not prev_row.empty else None
+
+            if pct_current is None and pct_prev is None:
+                return None
+
+            diff = (
+                (pct_current - pct_prev)
+                if pct_current is not None and pct_prev is not None
+                else None
+            )
+
+            return {
+                "pct_issues_current": pct_current,
+                "pct_issues_prev": pct_prev,
+                "diff": diff,
+            }
+
+        except Exception as e:
+            self.logger.warning(
+                f"⚠️ Error collecting focus touchpoint issues pct for "
+                f"'{touchpoint_display_name}' on '{node_path}': {e}"
             )
             return None
