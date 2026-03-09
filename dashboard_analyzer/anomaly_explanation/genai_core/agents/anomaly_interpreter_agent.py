@@ -411,10 +411,24 @@ Confirma que has recibido la información y estás listo para el análisis paso 
 
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
+        # OpenAI models
         if llm_type in [LLMType.GPT4o, LLMType.O3, LLMType.O3_MINI, LLMType.O4_MINI, LLMType.GPT_5_2]:
             return self._create_openai_llm(llm_type)
-        else:
+        
+        # AWS Bedrock models
+        elif llm_type in [
+            LLMType.CLAUDE_V2, LLMType.CLAUDE_INSTANT, LLMType.CLAUDE_3_HAIKU, LLMType.CLAUDE_3_5_HAIKU,
+            LLMType.CLAUDE_3_OPUS, LLMType.CLAUDE_3_5_SONNET, LLMType.CLAUDE_3_5_SONNET_V2, LLMType.CLAUDE_3_7_SONNET,
+            LLMType.CLAUDE_SONNET_4, LLMType.CLAUDE_OPUS_4_5, LLMType.CLAUDE_OPUS_4_6, LLMType.LLAMA3_70, 
+            LLMType.LLAMA3_1_70, LLMType.LLAMA3_1_405,
+            # New models
+            LLMType.AMAZON_NOVA_2_LITE, LLMType.AMAZON_NOVA_PRO, LLMType.AMAZON_TITAN_EMBED_TEXT_V2,
+            LLMType.CLAUDE_HAIKU_4_5, LLMType.CLAUDE_SONNET_4_5, LLMType.GPT_OSS_120B
+        ]:
             return self._create_aws_llm(llm_type)
+        
+        else:
+            raise ValueError(f"Unsupported LLM type: {llm_type}")
 
     def _create_openai_llm(self, llm_type: LLMType) -> OpenAiLLM:
         """Create OpenAI/Azure OpenAI LLM instance using unified credential strategy."""
