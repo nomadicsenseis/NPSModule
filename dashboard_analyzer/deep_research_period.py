@@ -393,6 +393,45 @@ async def process_single_period(
             nodes_with_anomalies.remove(root_segment)
             nodes_with_anomalies.insert(0, root_segment)
 
+        # ENHANCEMENT: When focus_touchpoint is specified, always include relevant segments (Global, LH, SH)
+        # to get the focus touchpoint data (CSAT, verbatims, issues) even if no anomaly
+        if focus_touchpoint:
+            # Determine relevant segments based on the segment parameter
+            relevant_segments = []
+            if segment == "Global":
+                relevant_segments = ["Global", "Global/LH", "Global/SH"]
+            elif segment == "Global/LH" or segment.startswith("Global/LH/"):
+                relevant_segments = ["Global/LH"]
+            elif segment == "Global/SH" or segment.startswith("Global/SH/"):
+                relevant_segments = ["Global/SH"]
+            else:
+                # For other segments, include the root and its radios
+                relevant_segments = [root_segment]
+                if root_segment == "Global":
+                    relevant_segments.extend(["Global/LH", "Global/SH"])
+            
+            # Add relevant segments to nodes_with_anomalies if not already present
+            for seg in relevant_segments:
+                if seg not in nodes_with_anomalies:
+                    # Check if segment exists in period_anomalies
+                    if seg in period_anomalies:
+                        nodes_with_anomalies.append(seg)
+                        print(f"      🎯 Focus Touchpoint: Adding segment '{seg}' for focus touchpoint analysis (no anomaly but relevant)")
+                    else:
+                        # If segment doesn't exist in period_anomalies, add it with "N" state
+                        period_anomalies[seg] = "N"
+                        period_deviations[seg] = 0.0
+                        nodes_with_anomalies.append(seg)
+                        print(f"      🎯 Focus Touchpoint: Adding segment '{seg}' for focus touchpoint analysis (not in tree)")
+            
+            # Special case: if focus_touchpoint is "Cabin Crew", exclude YW company segments
+            # because YW (Air Nostrum) doesn't have its own cabin crew - they use IB crew
+            if focus_touchpoint == "Cabin Crew":
+                nodes_to_remove = [n for n in nodes_with_anomalies if "/YW" in n]
+                for node in nodes_to_remove:
+                    nodes_with_anomalies.remove(node)
+                    print(f"      🎯 Cabin Crew focus: Excluding YW segment '{node}' (YW uses IB cabin crew)")
+
         detailed_tree_data = {}
         
         if nodes_with_anomalies:
@@ -559,11 +598,33 @@ async def process_single_period(
                     if range_start_date and range_end_date:
                         date_param = f"{range_start_date.strftime('%Y-%m-%d')} to {range_end_date.strftime('%Y-%m-%d')}"
                 
-                ai_interpretation = await asyncio.wait_for(
-                    ai_agent.interpret_anomaly_tree(ai_input, date_param, segment),
-                    timeout=3000.0  # Increased to 50 min for complex interpretations
-                )
-                print(f"      🤖 Period {period}: AI interpretation completed")
+                try:
+                    ai_interpretation = await asyncio.wait_for(
+                        ai_agent.interpret_anomaly_tree(ai_input, date_param, segment),
+                        timeout=3000.0
+                    )
+                    print(f"      🤖 Period {period}: AI interpretation completed")
+                    # Check if the interpreter returned a token-limit error string (it catches internally)
+                    if ai_interpretation and ("prompt is too long" in ai_interpretation or
+                                              ("token" in ai_interpretation.lower() and "Error" in ai_interpretation)):
+                        raise Exception(ai_interpretation)
+                except Exception as e:
+                    err_str = str(e)
+                    # Retry with condensed explanations if the prompt exceeded the token limit
+                    if "prompt is too long" in err_str or "token" in err_str.lower():
+                        print(f"      ⚠️ Period {period}: Prompt too long, retrying with condensed explanations...")
+                        ai_input_condensed = build_ai_input_string_condensed(
+                            period, period_anomalies, period_deviations,
+                            parent_interpretations, explanations, date_range, segment, period_nps_values,
+                            comparison_context=interpreter_comparison_context
+                        )
+                        ai_interpretation = await asyncio.wait_for(
+                            ai_agent.interpret_anomaly_tree(ai_input_condensed, date_param, segment),
+                            timeout=3000.0
+                        )
+                        print(f"      🤖 Period {period}: AI interpretation completed (condensed fallback)")
+                    else:
+                        raise
                 
             except Exception as e:
                 ai_interpretation = f"AI interpretation failed: {str(e)}"
@@ -1047,6 +1108,43 @@ def generate_parent_interpretations(anomalies: dict) -> dict:
                     interpretations["Global/SH/Business"] = f"{business_state.replace('+', 'Positive').replace('-', 'Negative')} anomaly: mixed IB ({ib_bus_state}) and YW ({yw_bus_state}) effects"
 
     return interpretations
+
+def _extract_synthesis_for_interpreter(explanation: str, max_chars: int = 3000) -> str:
+    """
+    Extract the executive synthesis section from a causal agent explanation.
+    Falls back to a truncated version if no synthesis section is found.
+    Keeps the interpreter prompt well under the 200k token limit.
+    """
+    import re
+
+    # Try to find the SÍNTESIS EJECUTIVA section (the final summary)
+    synthesis_patterns = [
+        r'(?:##\s*)?🎯\s*SÍNTESIS EJECUTIVA.*',
+        r'(?:##\s*)?SÍNTESIS EJECUTIVA.*',
+        r'(?:##\s*)?EXECUTIVE SUMMARY.*',
+        r'(?:##\s*)?RESUMEN EJECUTIVO.*',
+    ]
+    for pattern in synthesis_patterns:
+        match = re.search(pattern, explanation, re.DOTALL | re.IGNORECASE)
+        if match:
+            section = match.group(0).strip()
+            if len(section) <= max_chars:
+                return section
+            return section[:max_chars] + "\n[...truncado]"
+
+    # Fallback: try to find the FINAL_SYNTHESIS marker
+    if 'FINAL_SYNTHESIS:' in explanation:
+        idx = explanation.index('FINAL_SYNTHESIS:')
+        section = explanation[idx:].strip()
+        if len(section) <= max_chars:
+            return section
+        return section[:max_chars] + "\n[...truncado]"
+
+    # Last resort: truncate the full explanation
+    if len(explanation) <= max_chars:
+        return explanation
+    return explanation[:max_chars] + "\n[...truncado]"
+
 
 def build_ai_input_string(period: int, anomalies: dict, deviations: dict, 
                          interpretations: dict, explanations: dict, date_range: tuple, segment_filter: str = "Global", nps_values: dict = None,
@@ -1563,6 +1661,27 @@ async def run_flexible_data_download_silent_with_date(aggregation_days: int, per
         return target_folder
     else:
         return None
+
+
+def build_ai_input_string_condensed(period: int, anomalies: dict, deviations: dict,
+                                    interpretations: dict, explanations: dict, date_range: tuple,
+                                    segment_filter: str = "Global", nps_values: dict = None,
+                                    comparison_context: str = None) -> str:
+    """
+    Same as build_ai_input_string but replaces each full causal explanation with only
+    its executive synthesis section. Used as fallback when the full prompt exceeds the
+    model's token limit.
+    """
+    condensed_explanations = {
+        node: _extract_synthesis_for_interpreter(exp)
+        for node, exp in explanations.items()
+        if exp
+    }
+    return build_ai_input_string(
+        period, anomalies, deviations, interpretations,
+        condensed_explanations, date_range, segment_filter, nps_values, comparison_context
+    )
+
 
 def calculate_baseline_period_for_causal_filter(current_period: int, causal_filter: str, aggregation_days: int = 7) -> tuple[int, str]:
     """

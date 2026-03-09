@@ -23,6 +23,7 @@ PBI_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}  # HTTP codes that trigge
 # Needed because the two tables use different naming conventions.
 # Extend this dict to support additional touchpoints without code changes.
 TOUCHPOINT_DISPLAY_NAME_MAP: Dict[str, str] = {
+    # Keys: filtered_name values from TouchPoint_Master[filtered_name]
     "ifl_100_cabin_crew_satisfaction": "Cabin Crew",
     "ifl_200_food_satisfaction": "Food & Beverage",
     "ifl_300_seat_satisfaction": "Seat",
@@ -32,12 +33,75 @@ TOUCHPOINT_DISPLAY_NAME_MAP: Dict[str, str] = {
     "ifl_700_boarding_satisfaction": "Boarding",
     "ifl_800_baggage_satisfaction": "Baggage",
     "ifl_900_lounge_satisfaction": "Lounge",
+    # Keys: display_name values (TouchPoint_Master[filtered_name] confirmed values)
+    # Allows passing the display name directly via CLI (e.g. --focus-touchpoint "Cabin Crew")
+    "Cabin Crew": "Cabin Crew",
+    "Check-in": "Check-in",
+    "Lounge": "Lounge",
+    "Boarding": "Boarding",
+    "Aircraft interior": "Aircraft interior",
+    "Wi-Fi": "Wi-Fi",
+    "IFE": "IFE",
+    "In flight food and beverage": "Food & Beverage",
+    "Arrivals experience": "Arrivals experience",
+    "Connections experience": "Connections experience",
+    "Punctuality": "Punctuality",
+}
+
+
+# Mapping from display_name to Issue_touchpoint_Dict[issue_type_3] value.
+# The issues table uses a different (longer) naming convention than TouchPoint_Master.
+TOUCHPOINT_ISSUE_TYPE_MAP: Dict[str, str] = {
+    "Cabin Crew": "issue with a crew member of staff on-board",
+    "Food & Beverage": "issue with food and beverage on-board",
+    "Seat": "issue with seat on-board",
+    "Entertainment": "issue with entertainment on-board",
+    "Wi-Fi": "issue with wi-fi on-board",
+    "Check-in": "issue with check-in",
+    "Boarding": "issue with boarding",
+    "Baggage": "issue with baggage",
+    "Lounge": "issue with lounge",
+    "Aircraft interior": "issue with aircraft interior",
+    "IFE": "issue with entertainment on-board",
+    "Arrivals experience": "issue with arrivals experience",
+    "Connections experience": "issue with connections experience",
+    "Punctuality": "issue with punctuality",
+}
+
+
+# Mapping from display_name to verbatims_sentiment[topic] value.
+# Used to filter verbatims by touchpoint topic.
+TOUCHPOINT_TOPIC_MAP: Dict[str, str] = {
+    "Cabin Crew": "Comportamiento Tripulación",
+    "Food & Beverage": "Comida y Bebida",
+    "Seat": "Asiento",
+    "Entertainment": "Entretenimiento",
+    "Wi-Fi": "Wi-Fi",
+    "Check-in": "Check-in",
+    "Boarding": "Embarque",
+    "Baggage": "Equipaje",
+    "Lounge": "Sala VIP",
+    "Aircraft interior": "Interior del Avión",
+    "IFE": "Entretenimiento",
+    "Arrivals experience": "Experiencia de Llegada",
+    "Connections experience": "Experiencia de Conexión",
+    "Punctuality": "Puntualidad",
 }
 
 
 def get_touchpoint_display_name(filtered_name: str) -> Optional[str]:
     """Return the display_name for a touchpoint filtered_name, or None if no mapping exists."""
     return TOUCHPOINT_DISPLAY_NAME_MAP.get(filtered_name)
+
+
+def get_touchpoint_issue_type(display_name: str) -> Optional[str]:
+    """Return the Issue_touchpoint_Dict[issue_type_3] value for a display_name, or None."""
+    return TOUCHPOINT_ISSUE_TYPE_MAP.get(display_name)
+
+
+def get_touchpoint_topic(display_name: str) -> Optional[str]:
+    """Return the verbatims_sentiment[topic] value for a display_name, or None."""
+    return TOUCHPOINT_TOPIC_MAP.get(display_name)
 
 
 class PBIDataCollector:
@@ -440,10 +504,10 @@ class PBIDataCollector:
         return query
 
     
-    def _get_smart_verbatims_query(self, cabins: List[str], companies: List[str], hauls: List[str], start_date: datetime, end_date: datetime, anomaly_type: str = "neutral") -> str:
+    def _get_smart_verbatims_query(self, cabins: List[str], companies: List[str], hauls: List[str], start_date: datetime, end_date: datetime, anomaly_type: str = "neutral", route_filter: Optional[str] = None, touchpoint_filter: Optional[str] = None) -> str:
         """
         Generate optimized DAX query for verbatims data using Verbatims_Smart.txt template.
-        Filters by NPS class based on anomaly type and limits to top 30 relevant comments.
+        Filters by NPS class based on anomaly type and limits to top 5 relevant comments.
         
         NOTE: companies is always ["IB", "YW"] for LH (no distinction) or can be ["IB"] or ["YW"] for SH.
         """
@@ -483,6 +547,16 @@ class PBIDataCollector:
             nps_condition = "NOT(ISBLANK('surveys_maritz'[nps_category]))"
             
         query = query.replace('__NPS_CLASS_FILTER__', nps_condition)
+        
+        # Route and touchpoint filters — only injected when present (DAX doesn't accept TRUE() as table filter)
+        # TouchPoint_Master[filtered_name] works because verbatims_sentiment has a relationship with TouchPoint_Master
+        optional_filters = ""
+        if route_filter:
+            optional_filters += f',\n                TREATAS({{"{route_filter}"}}, \'surveys_maritz\'[route])'
+        if touchpoint_filter:
+            optional_filters += f',\n                TouchPoint_Master[filtered_name] = "{touchpoint_filter}"'
+        
+        query = query.replace('__OPTIONAL_FILTERS__', optional_filters)
         
         return query
 
@@ -798,21 +872,27 @@ class PBIDataCollector:
             print(f"  ❌ Error collecting verbatims for {node_path} in date range: {str(e)}")
             return pd.DataFrame()
 
-    def collect_smart_verbatims(self, node_path: str, start_date: datetime, end_date: datetime, anomaly_type: str = "neutral") -> pd.DataFrame:
+    def collect_smart_verbatims(self, node_path: str, start_date: datetime, end_date: datetime, anomaly_type: str = "neutral", route_filter: Optional[str] = None, touchpoint_filter: Optional[str] = None) -> pd.DataFrame:
         """
         Collect smart verbatims data from Power BI using the optimized query strategy.
-        Fetches top 30 relevant comments filtered by anomaly type (promoters vs detractors).
+        Fetches top 5 relevant comments filtered by anomaly type (promoters vs detractors).
+        Optionally filters by route (IATA code) and/or touchpoint name.
         """
-        print(f"🔍 Collecting SMART verbatims for {node_path} ({anomaly_type}) from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        filter_desc = ""
+        if route_filter:
+            filter_desc += f", route={route_filter}"
+        if touchpoint_filter:
+            filter_desc += f", touchpoint={touchpoint_filter}"
+        print(f"🔍 Collecting SMART verbatims for {node_path} ({anomaly_type}{filter_desc}) from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
         
         # Get filters for this node
         cabins, companies, hauls = self._get_node_filters(node_path)
         
-        # Generate smart query
-        query = self._get_smart_verbatims_query(cabins, companies, hauls, start_date, end_date, anomaly_type)
+        # Generate smart query with optional route/touchpoint filters
+        query = self._get_smart_verbatims_query(cabins, companies, hauls, start_date, end_date, anomaly_type, route_filter=route_filter, touchpoint_filter=touchpoint_filter)
         
         try:
-            print(f"  📝 Executing smart query with filters: Cabins={cabins}, Companies={companies}, Hauls={hauls}, Type={anomaly_type}")
+            print(f"  📝 Executing smart query with filters: Cabins={cabins}, Companies={companies}, Hauls={hauls}, Type={anomaly_type}{filter_desc}")
             df = self._execute_query(query)
             
             if not df.empty:
@@ -824,6 +904,136 @@ class PBIDataCollector:
                 
         except Exception as e:
             print(f"  ❌ Error collecting smart verbatims: {e}")
+            return pd.DataFrame()
+
+    async def collect_verbatims_by_topic(
+        self,
+        node_path: str,
+        start_date,
+        end_date,
+        touchpoint_display_name: str,
+        top_n: int = 10,
+    ) -> pd.DataFrame:
+        """
+        Collect verbatims filtered by touchpoint topic from verbatims_sentiment table.
+        
+        Args:
+            node_path: Node path like "Global/SH/Business"
+            start_date: Start date (datetime or YYYY-MM-DD str)
+            end_date: End date
+            touchpoint_display_name: Display name like "Cabin Crew"
+            top_n: Number of verbatims to return (default 10)
+            
+        Returns:
+            DataFrame with verbatims filtered by topic, or empty DataFrame if no data/error.
+        """
+        try:
+            # Get topic from display name
+            topic = get_touchpoint_topic(touchpoint_display_name)
+            if not topic:
+                self.logger.warning(
+                    f"⚠️ No topic mapping found for touchpoint '{touchpoint_display_name}'"
+                )
+                return pd.DataFrame()
+            
+            # Convert dates if needed
+            def _to_dt(d):
+                if isinstance(d, str):
+                    from datetime import datetime
+                    return datetime.strptime(d, "%Y-%m-%d")
+                return d
+            
+            sd = _to_dt(start_date)
+            ed = _to_dt(end_date)
+            
+            # Get node filters
+            cabins, companies, hauls = self._get_node_filters(node_path)
+            
+            # Build filter strings
+            cabin_values = ", ".join(f'"{c}"' for c in cabins) if cabins else '"All"'
+            company_values = ", ".join(f'"{c}"' for c in companies) if companies else '"All"'
+            haul_values = ", ".join(f'"{h}"' for h in hauls) if hauls else '"All"'
+            
+            # Escape topic for DAX
+            safe_topic = topic.replace('"', '\\"')
+            
+            # Build DAX query
+            query = f"""
+DEFINE
+    VAR __DS0FilterTable =
+        TREATAS({{{cabin_values}}}, 'Cabin_Master'[Cabin_Show])
+
+    VAR __DS0FilterTable2 =
+        TREATAS({{{company_values}}}, 'Company_Master'[Company])
+
+    VAR __DS0FilterTable3 =
+        TREATAS({{{haul_values}}}, 'Haul_Master'[Haul_Aggr])
+
+    VAR __DS0FilterTable4 =
+        FILTER(
+            KEEPFILTERS(VALUES('Date_Master'[Date])),
+            AND(
+                'Date_Master'[Date] >= DATE({sd.year}, {sd.month}, {sd.day}),
+                'Date_Master'[Date] <= DATE({ed.year}, {ed.month}, {ed.day})
+            )
+        )
+
+    VAR __TopicFilter =
+        FILTER(
+            ALL(verbatims_sentiment[topic]),
+            verbatims_sentiment[topic] = "{safe_topic}"
+        )
+
+    VAR __VerbatimsWithTopic =
+        TOPN(
+            {top_n},
+            ADDCOLUMNS(
+                CALCULATETABLE(
+                    verbatims_sentiment,
+                    __DS0FilterTable,
+                    __DS0FilterTable2,
+                    __DS0FilterTable3,
+                    __DS0FilterTable4,
+                    __TopicFilter
+                ),
+                "Verbatim", CALCULATE(MIN(surveys_maritz[nps_all_t])),
+                "Route", CALCULATE(MIN(surveys_maritz[route])),
+                "NPS_Score", CALCULATE(MIN(surveys_maritz[nps_100])),
+                "NPS_Category", CALCULATE(MIN(surveys_maritz[nps_category])),
+                "Date", CALCULATE(MIN(surveys_maritz[date_flight_local]))
+            ),
+            LEN([Verbatim]), DESC
+        )
+
+EVALUATE
+    __VerbatimsWithTopic
+"""
+            
+            self.logger.info(
+                f"🔍 Collecting verbatims by topic for '{touchpoint_display_name}' "
+                f"(topic='{topic}') on '{node_path}'"
+            )
+            
+            df = await self._execute_query_async(query)
+            
+            if df.empty:
+                self.logger.warning(
+                    f"⚠️ No verbatims found for topic '{topic}' on '{node_path}'"
+                )
+                return pd.DataFrame()
+            
+            df = self._safe_clean_columns(df)
+            self.logger.info(
+                f"✅ Found {len(df)} verbatims for topic '{topic}' on '{node_path}'"
+            )
+            
+            return df
+            
+        except Exception as e:
+            self.logger.warning(
+                f"⚠️ Error collecting verbatims by topic for '{touchpoint_display_name}' "
+                f"on '{node_path}': {e}"
+            )
             return pd.DataFrame()
     
 
@@ -1594,7 +1804,7 @@ class PBIDataCollector:
         comparison_end_date=None,
     ) -> Optional[Dict[str, float]]:
         """
-        Collect CSAT and Target_Satisfaction_filtered for a specific touchpoint.
+        Collect CSAT, Target_Satisfaction_filtered, and Satisfaction_Diff for a specific touchpoint.
 
         Based on Exp. Drivers query but without the explanatory_drivers=1 filter,
         filtering instead by filtered_name = touchpoint_name.
@@ -1609,7 +1819,7 @@ class PBIDataCollector:
             comparison_end_date: End date for comparison period (optional)
 
         Returns:
-            Dict with keys: 'csat', 'target', 'gap'
+            Dict with keys: 'csat', 'target', 'gap', 'satisfaction_diff'
             or None if no data or error.
         """
         try:
@@ -1652,6 +1862,50 @@ class PBIDataCollector:
 
             csat = _to_float(row.get("CSAT"))
             target = _to_float(row.get("Target_CSAT"))
+            
+            # Calculate Satisfaction diff (CSAT vs comparison period) - only in comparative mode
+            satisfaction_diff = None
+            if comparison_filter and comparison_start_date and comparison_end_date:
+                # Build filter strings for comparison query (same as in _get_focus_touchpoint_csat_query)
+                cabin_values = " || ".join([f"Cabin_Master[Cabin_Show] = \"{c}\"" for c in cabins])
+                haul_values = " || ".join([f"Haul_Master[Haul_Aggr] = \"{h}\"" for h in hauls])
+                company_values = " || ".join([f"Company_Master[Company] = \"{c}\"" for c in companies])
+                safe_touchpoint = touchpoint_name.replace('"', '""')
+                
+                # Build query for comparison period
+                csd = comparison_start_date if isinstance(comparison_start_date, datetime) else datetime.strptime(comparison_start_date, '%Y-%m-%d')
+                ced = comparison_end_date if isinstance(comparison_end_date, datetime) else datetime.strptime(comparison_end_date, '%Y-%m-%d')
+                
+                comparison_start_str = f"{csd.year}, {csd.month}, {csd.day}"
+                comparison_end_str = f"{ced.year}, {ced.month}, {ced.day}"
+                
+                comparison_query = (
+                    "EVALUATE\n"
+                    "VAR _start = DATE(" + comparison_start_str + ")\n"
+                    "VAR _end   = DATE(" + comparison_end_str + ")\n"
+                    "VAR _tabla =\n"
+                    "    SUMMARIZECOLUMNS(\n"
+                    "        TouchPoint_Master[filtered_name],\n"
+                    "        TREATAS({1}, TouchPoint_Master[explanatory_drivers]),\n"
+                    f"        FILTER(ALL(Date_Master), Date_Master[Date] >= _start && Date_Master[Date] <= _end),\n"
+                    f"        FILTER(ALL(Cabin_Master), {cabin_values}),\n"
+                    f"        FILTER(ALL(Haul_Master), {haul_values}),\n"
+                    f"        FILTER(ALL(Company_Master), {company_values}),\n"
+                    f"        FILTER(ALL(TouchPoint_Master), TouchPoint_Master[filtered_name] = \"{safe_touchpoint}\"),\n"
+                    '        "CSAT", [Monthly_Satisfaction]\n'
+                    "    )\n"
+                    "RETURN _tabla\n"
+                )
+                
+                try:
+                    df_comparison = await self._execute_query_async(comparison_query)
+                    if not df_comparison.empty:
+                        df_comparison = self._safe_clean_columns(df_comparison)
+                        csat_comparison = _to_float(df_comparison.iloc[0].get("CSAT"))
+                        if csat_comparison is not None:
+                            satisfaction_diff = csat - csat_comparison
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Could not calculate satisfaction diff for focus touchpoint '{touchpoint_name}': {e}")
 
             if csat is None or target is None:
                 self.logger.warning(
@@ -1666,6 +1920,7 @@ class PBIDataCollector:
                 "csat": csat,
                 "target": target,
                 "gap": gap,
+                "satisfaction_diff": satisfaction_diff,
             }
 
         except Exception as e:
@@ -1723,7 +1978,9 @@ class PBIDataCollector:
         )
         seg_filters_prefix = (", " + seg_filters) if seg_filters else ""
 
-        safe_display = touchpoint_display_name.replace('"', '\\"')
+        # Use issue_type_3 value if available, fall back to display_name
+        issue_type_value = get_touchpoint_issue_type(touchpoint_display_name) or touchpoint_display_name
+        safe_issue_type = issue_type_value.replace('"', '\\"')
 
         query = (
             "EVALUATE\n"
@@ -1739,14 +1996,14 @@ class PBIDataCollector:
             '        "Pct_Issues", CALCULATE([Switch_%_Affected_D&G],\n'
             f"            _dateL7D{seg_filters_prefix},\n"
             "            TREATAS({1}, Issue_touchpoint_Dict[explanatory_drivers]),\n"
-            f'            FILTER(ALL(Issue_touchpoint_Dict), Issue_touchpoint_Dict[issue_type_3] = "{safe_display}")\n'
+            f'            FILTER(ALL(Issue_touchpoint_Dict), Issue_touchpoint_Dict[issue_type_3] = "{safe_issue_type}")\n'
             "        )\n"
             "    ),\n"
             '    ROW("Period", "L7D_prev",\n'
             '        "Pct_Issues", CALCULATE([Switch_%_Affected_D&G],\n'
             f"            _datePrev{seg_filters_prefix},\n"
             "            TREATAS({1}, Issue_touchpoint_Dict[explanatory_drivers]),\n"
-            f'            FILTER(ALL(Issue_touchpoint_Dict), Issue_touchpoint_Dict[issue_type_3] = "{safe_display}")\n'
+            f'            FILTER(ALL(Issue_touchpoint_Dict), Issue_touchpoint_Dict[issue_type_3] = "{safe_issue_type}")\n'
             "        )\n"
             "    )\n"
             ")\n"
@@ -1795,11 +2052,13 @@ class PBIDataCollector:
 
             if df.empty:
                 self.logger.warning(
-                    f"⚠️ No issues data for touchpoint '{touchpoint_display_name}' on '{node_path}'"
+                    f"⚠️ No issues data (empty DataFrame) for touchpoint '{touchpoint_display_name}' on '{node_path}'"
                 )
                 return None
 
             df = self._safe_clean_columns(df)
+            self.logger.info(f"🔍 issues_pct columns for '{node_path}': {list(df.columns)}, rows: {len(df)}")
+            self.logger.info(f"🔍 issues_pct data:\n{df.to_string()}")
 
             def _to_float(val) -> Optional[float]:
                 try:

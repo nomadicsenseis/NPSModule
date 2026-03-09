@@ -29,6 +29,10 @@ MODEL_ARNS_BY_ENV = {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/01q61xjcup73",
         "prod": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv"
     },
+    LLMType.CLAUDE_OPUS_4_6.value: {
+        "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/dfsaqs9f3a5v",
+        "prod": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/dfsaqs9f3a5v"
+    },
 }
 
 
@@ -130,7 +134,8 @@ class AWSLLM(LLM):
             LLMType.CLAUDE_3_7_SONNET.value,
             LLMType.CLAUDE_OPUS_4_5.value,
             LLMType.CLAUDE_HAIKU_4_5.value,
-            LLMType.CLAUDE_SONNET_4_5.value
+            LLMType.CLAUDE_SONNET_4_5.value,
+            LLMType.CLAUDE_OPUS_4_6.value
         ]:
             return "anthropic"
         elif self.llm_type.value in [
@@ -192,6 +197,8 @@ class AWSLLM(LLM):
             self.model_id = self._get_model_arn_by_env(LLMType.CLAUDE_SONNET_4_5.value)
         elif self.llm_type.value == LLMType.GPT_OSS_120B.value:
             self.model_id = self._get_model_arn_by_env(LLMType.GPT_OSS_120B.value)
+        elif self.llm_type.value == LLMType.CLAUDE_OPUS_4_6.value:
+            self.model_id = self._get_model_arn_by_env(LLMType.CLAUDE_OPUS_4_6.value)
             
         else:
             raise ValueError(f"Invalid model: {self.llm_type}")

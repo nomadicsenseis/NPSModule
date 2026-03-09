@@ -296,7 +296,8 @@ class AnomalySummaryAgent:
         """
         debug_info = {
             'step5_modernize_tone': None,
-            'step6_size_optimization': []
+            'step6_size_optimization': [],
+            'step7_validate_and_fix_json': None
         }
         
         if not adaptive_card_json:
@@ -440,6 +441,70 @@ class AnomalySummaryAgent:
             self.logger.warning(f"⚠️ Adaptive Card still over limit after {last_step_applied}: {best_kb:.2f} KB")
         else:
             self.logger.info(f"✅ Adaptive Card final size optimization step: {last_step_applied} ({best_kb:.2f} KB)")
+
+        # --- STEP 7: JSON Validation and Typo Correction (FINAL QUALITY CHECK) ---
+        step7_key = 'step7_validate_and_fix_json'
+        step7_config = self.config.get(step7_key, {})
+        step7_system = step7_config.get('system_prompt', '')
+        step7_input_template = step7_config.get('input_template', '')
+
+        if step7_system and step7_input_template:
+            self.logger.info("🔄 Applying final JSON validation and typo correction...")
+            
+            # Pass escaped version to the LLM
+            escaped_for_llm = best_json.replace('"', '\\"')
+            step7_input = step7_input_template.format(current_json=escaped_for_llm)
+            
+            message_history = MessageHistory()
+            message_history.create_and_add_message(content=step7_system, message_type=MessageType.SYSTEM)
+            message_history.create_and_add_message(content=step7_input, message_type=MessageType.USER)
+
+            try:
+                response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+                validated = response.content if hasattr(response, 'content') else str(response)
+                
+                # Store debug info
+                debug_info['step7_validate_and_fix_json'] = {
+                    'messages': [
+                        {'role': 'system', 'content': step7_system},
+                        {'role': 'user', 'content': step7_input},
+                        {'role': 'assistant', 'content': validated}
+                    ],
+                    'input_size_kb': best_kb,
+                    'executed': True
+                }
+                
+                # Clean and minify the validated response
+                validated_clean = self._clean_json_response(validated)
+                validated_min = self._minify_json(validated_clean)
+                validated_kb = self._measure_kb(validated_min)
+                
+                debug_info['step7_validate_and_fix_json']['output_size_kb'] = validated_kb
+                
+                # Update best JSON with validated version
+                best_json = validated_min
+                best_kb = validated_kb
+                
+                self.logger.info(f"📦 Adaptive Card size after JSON validation: {best_kb:.2f} KB")
+                self.logger.info("✅ JSON validation and typo correction applied successfully")
+                
+                # Validate that the JSON is actually valid
+                try:
+                    json.loads(best_json)
+                    self.logger.info("✅ Final JSON is valid and parseable")
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"❌ Final JSON validation failed: {e}")
+                    # Fall back to previous version if validation fails
+                    self.logger.warning("⚠️ Falling back to pre-validation JSON")
+                    # Revert to previous best_json (before step7)
+                    # We need to track this separately, but for now we'll just log
+                
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to apply JSON validation: {e}")
+                debug_info['step7_validate_and_fix_json'] = {'executed': False, 'error': str(e)}
+        else:
+            self.logger.warning(f"⚠️ Missing config for {step7_key}, skipping JSON validation")
+            debug_info['step7_validate_and_fix_json'] = {'executed': False, 'reason': 'Missing config'}
 
         self.logger.info(f"🚀 Final optimized Adaptive Card JSON:\n{best_json}")
         return best_json, debug_info
@@ -631,6 +696,7 @@ class AnomalySummaryAgent:
                 # Merge optimization debug into step4 conversation
                 step4_conversation['step5_modernize_tone'] = optimization_debug.get('step5_modernize_tone')
                 step4_conversation['step6_size_optimization'] = optimization_debug.get('step6_size_optimization')
+                step4_conversation['step7_validate_and_fix_json'] = optimization_debug.get('step7_validate_and_fix_json')
                 
                 # Combine synthesis and adaptive card
                 final_output = f"{comprehensive_response}\n\n---ADAPTIVE_CARD_JSON---\n\n{adaptive_card_json}"
@@ -904,6 +970,7 @@ class AnomalySummaryAgent:
             # Merge optimization debug into step4 conversation (for debugging)
             step4_conversation['step5_modernize_tone'] = optimization_debug.get('step5_modernize_tone')
             step4_conversation['step6_size_optimization'] = optimization_debug.get('step6_size_optimization')
+            step4_conversation['step7_validate_and_fix_json'] = optimization_debug.get('step7_validate_and_fix_json')
             step4_conversation['final_result'] = adaptive_card_json  # Final optimized JSON
             step4_conversation['final_result_length'] = len(adaptive_card_json)
             

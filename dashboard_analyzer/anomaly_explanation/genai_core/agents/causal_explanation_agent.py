@@ -404,7 +404,21 @@ class CausalExplanationAgent:
         Returns:
             Tuple of (comparison_start_date, comparison_end_date)
         """
+        self.logger.info(f"🗓️ calculate_dynamic_comparison_dates called:")
+        self.logger.info(f"  Input dates: {start_date.strftime('%Y-%m-%d') if hasattr(start_date, 'strftime') else start_date} → {end_date.strftime('%Y-%m-%d') if hasattr(end_date, 'strftime') else end_date}")
+        self.logger.info(f"  causal_filter: {self.causal_filter}")
+
         if not self.causal_filter or self.causal_filter == "vs Sel. Period":
+            if self.comparison_start_date is None or self.comparison_end_date is None:
+                self.logger.warning(
+                    f"⚠️ causal_filter='vs Sel. Period' but comparison_start_date={self.comparison_start_date} "
+                    f"and/or comparison_end_date={self.comparison_end_date} are None. "
+                    f"No se pueden calcular fechas de comparación."
+                )
+            else:
+                comp_start_str = self.comparison_start_date.strftime('%Y-%m-%d') if hasattr(self.comparison_start_date, 'strftime') else self.comparison_start_date
+                comp_end_str = self.comparison_end_date.strftime('%Y-%m-%d') if hasattr(self.comparison_end_date, 'strftime') else self.comparison_end_date
+                self.logger.info(f"  → Using pre-configured dates: {comp_start_str} → {comp_end_str}")
             return self.comparison_start_date, self.comparison_end_date
         
         # Calculate the period length
@@ -446,7 +460,40 @@ class CausalExplanationAgent:
         self.logger.info(f"  Comparison period: {comp_start.strftime('%Y-%m-%d')} to {comp_end.strftime('%Y-%m-%d')}")
         
         return comp_start, comp_end
-    
+
+    def _validate_analysis_dates(self, start_date, end_date, context: str = "") -> None:
+        """
+        Valida que las fechas de análisis sean coherentes y no futuras.
+        Lanza DateValidationError si la validación falla.
+        """
+        from dashboard_analyzer.data_collection.chatbot_verbatims_collector import DateValidationError
+        today = datetime.now().date()
+
+        if isinstance(start_date, str):
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+        else:
+            start = start_date.date() if hasattr(start_date, 'date') else start_date
+
+        if isinstance(end_date, str):
+            end = datetime.strptime(end_date, '%Y-%m-%d').date()
+        else:
+            end = end_date.date() if hasattr(end_date, 'date') else end_date
+
+        if start > end:
+            msg = f"[{context}] start_date ({start_date}) es posterior a end_date ({end_date})"
+            self.logger.error(f"❌ DATE VALIDATION ERROR: {msg}")
+            raise DateValidationError(msg)
+        if start > today:
+            msg = (f"[{context}] start_date ({start_date}) es posterior a hoy ({today}). "
+                   f"Posible error de propagación de fechas.")
+            self.logger.error(f"❌ DATE VALIDATION ERROR: {msg}")
+            raise DateValidationError(msg)
+        if end > today:
+            msg = (f"[{context}] end_date ({end_date}) es posterior a hoy ({today}). "
+                   f"Posible error de propagación de fechas.")
+            self.logger.error(f"❌ DATE VALIDATION ERROR: {msg}")
+            raise DateValidationError(msg)
+
     def _load_prompt_config(self, config_path: str) -> Dict[str, Any]:
         """Load prompt configuration using importlib.resources for package support"""
         try:
@@ -823,6 +870,20 @@ class CausalExplanationAgent:
                         f"🎯 FOCUS: {self.focus_touchpoint}"
                     )
                     analysis_result.append(f"🎯 FOCUS TOUCHPOINT '{self.focus_touchpoint}' found in normal drivers — marked.")
+                    # Also fetch CSAT vs target (different from Sat_diff which is vs causal_filter)
+                    focus_row = await self._collect_focus_touchpoint_data(
+                        node_path,
+                        start_dt if isinstance(start_date, datetime) else datetime.strptime(start_date, '%Y-%m-%d'),
+                        end_dt if isinstance(end_date, datetime) else datetime.strptime(end_date, '%Y-%m-%d'),
+                    )
+                    if focus_row is not None:
+                        analysis_result.append(
+                            f"🎯 FOCUS TOUCHPOINT CSAT (vs target): "
+                            f"CSAT={focus_row.get('csat')}, "
+                            f"Target_diff={focus_row.get('satisfaction_diff')} pts "
+                            f"(⚠️ este diff es vs TARGET, NO vs {self.causal_filter}. "
+                            f"El Sat_diff de arriba es vs {self.causal_filter}.)"
+                        )
                 else:
                     # Query additional data without explanatory_drivers filter
                     focus_row = await self._collect_focus_touchpoint_data(
@@ -1624,6 +1685,10 @@ class CausalExplanationAgent:
         """
         Main investigation method that routes to single or comparative mode based on study_mode
         """
+        # Reset all per-investigation state to prevent leakage between parallel calls
+        self.tracker.reset_tracker()
+        self.collected_data = {}
+
         # Override focus_touchpoint if provided at call time
         if focus_touchpoint is not None:
             self.focus_touchpoint = focus_touchpoint
@@ -1675,33 +1740,57 @@ class CausalExplanationAgent:
             )
 
         # --- FOCUS TOUCHPOINT ENRICHMENT: verbatims + % issues per segment ---
+        # NOTE: enrichment is already collected inside the investigation methods (before synthesis).
+        # This outer block only runs as a fallback if it wasn't collected there (e.g. exception path).
         effective_focus = self.focus_touchpoint
-        if effective_focus:
+        if effective_focus and 'focus_touchpoint_enrichment' not in self.collected_data:
+            # Resolve comparison dates: use stored ones or calculate dynamically
+            enrichment_comp_start = self.comparison_start_date
+            enrichment_comp_end = self.comparison_end_date
+            if (enrichment_comp_start is None or enrichment_comp_end is None) and self.causal_filter and self.causal_filter != "vs Sel. Period":
+                enrichment_comp_start, enrichment_comp_end = self.calculate_dynamic_comparison_dates(start_date_dt, end_date_dt)
+                self.logger.info(f"🔄 Focus enrichment (fallback): dynamically resolved comparison dates: {enrichment_comp_start.strftime('%Y-%m-%d')} → {enrichment_comp_end.strftime('%Y-%m-%d')}")
+
             enrichment = await self._collect_focus_touchpoint_enrichment(
                 node_path=node_path,
                 start_date=start_date_dt,
                 end_date=end_date_dt,
-                comparison_start_date=self.comparison_start_date,
-                comparison_end_date=self.comparison_end_date,
+                comparison_start_date=enrichment_comp_start,
+                comparison_end_date=enrichment_comp_end,
             )
             if enrichment:
+                # Store in collected_data so it reaches _generate_final_synthesis via _build_collected_data_summary
+                self.collected_data['focus_touchpoint_enrichment'] = enrichment
                 result = f"{result}\n\n{enrichment}"
+        elif effective_focus and 'focus_touchpoint_enrichment' in self.collected_data:
+            # Already collected inside investigation method — just append to result string
+            result = f"{result}\n\n{self.collected_data['focus_touchpoint_enrichment']}"
 
         return result
     
     def _get_relevant_nodes_for_segment(self, node_path: str) -> List[str]:
         """
-        Return the list of nodes to cover for focus touchpoint verbatims / % issues,
-        based on the root segment of the current analysis.
+        Return the list of nodes to cover for focus touchpoint verbatims / % issues.
 
-        - Global (or any Global/* path) → [Global, Global_LH, Global_SH]
-        - Global/SH or Global/SH/* → [Global_SH]
-        - Global/LH or Global/LH/* → [Global_LH]
-        - Any other path → [node_path] (best-effort)
+        For child nodes (depth > 2, e.g. Global/SH/Business/IB), use the actual
+        node_path directly — broadening to a parent segment would contaminate results
+        with verbatims from sibling nodes (e.g. Economy SH verbatims bleeding into
+        Business SH IB analysis).
+
+        Only top-level nodes (depth ≤ 2) use the broader parent coverage:
+        - Global (depth 1) → [Global, Global_LH, Global_SH]
+        - Global/SH (depth 2) → [Global_SH]
+        - Global/LH (depth 2) → [Global_LH]
+        - Global/SH/Business/IB (depth 4) → [Global/SH/Business/IB]  ← exact node
         """
         parts = [p.strip() for p in node_path.split("/") if p.strip()]
+        depth = len(parts)
         root = parts[0].lower() if parts else ""
         second = parts[1].lower() if len(parts) > 1 else ""
+
+        # Child nodes (depth > 2): use the exact node to avoid cross-segment contamination
+        if depth > 2:
+            return [node_path]
 
         if root == "global":
             if second == "sh":
@@ -1737,25 +1826,95 @@ class CausalExplanationAgent:
         parts: List[str] = []
         parts.append(f"━━━ 🎯 FOCUS TOUCHPOINT ENRICHMENT: '{effective_focus}' ━━━")
 
-        # ── Verbatims per node ──────────────────────────────────────────────
-        verbatim_query = display_name if display_name else effective_focus
+        # ── Verbatims per node (filtered by topic) ──────────────────────────
         self._focus_verbatims_by_node: Dict[str, str] = {}
 
-        for node in relevant_nodes:
-            try:
-                verbatims_result = await self._verbatims_tool_for_node(
-                    node_path=node,
-                    start_date=start_date.strftime("%Y-%m-%d"),
-                    end_date=end_date.strftime("%Y-%m-%d"),
-                    query=verbatim_query,
-                )
-                self._focus_verbatims_by_node[node] = verbatims_result
-                parts.append(f"\n📝 VERBATIMS [{node}] — query: '{verbatim_query}'")
-                parts.append(verbatims_result)
-            except Exception as e:
-                self.logger.warning(f"⚠️ Could not collect focus verbatims for node '{node}': {e}")
-                self._focus_verbatims_by_node[node] = f"(sin datos — error: {e})"
-                parts.append(f"\n📝 VERBATIMS [{node}]: sin datos disponibles")
+        if display_name:
+            for node in relevant_nodes:
+                try:
+                    # Collect verbatims filtered by topic
+                    df_verbatims = await self.pbi_collector.collect_verbatims_by_topic(
+                        node_path=node,
+                        start_date=start_date,
+                        end_date=end_date,
+                        touchpoint_display_name=display_name,
+                        top_n=10,
+                    )
+                    
+                    if not df_verbatims.empty:
+                        # Format verbatims for display
+                        verbatim_col = next((c for c in df_verbatims.columns if "verbatim" in c.lower() and "sentiment" not in c.lower()), None)
+                        route_col = next((c for c in df_verbatims.columns if "route" in c.lower()), None)
+                        nps_col = next((c for c in df_verbatims.columns if "nps" in c.lower() and "score" in c.lower()), None)
+                        category_col = next((c for c in df_verbatims.columns if "category" in c.lower()), None)
+                        
+                        verbatims_lines = []
+                        verbatims_lines.append(f"Found {len(df_verbatims)} verbatims:")
+                        
+                        for idx, row in df_verbatims.iterrows():
+                            route = row[route_col] if route_col and route_col in row else "N/A"
+                            nps = row[nps_col] if nps_col and nps_col in row else "N/A"
+                            category = row[category_col] if category_col and category_col in row else "N/A"
+                            verbatim = row[verbatim_col] if verbatim_col and verbatim_col in row else "N/A"
+                            
+                            verbatims_lines.append(f"  • Route: {route}, NPS: {nps}, Category: {category}")
+                            verbatims_lines.append(f"    Text: {str(verbatim)[:200]}...")
+                        
+                        verbatims_result = "\n".join(verbatims_lines)
+                        self._focus_verbatims_by_node[node] = verbatims_result
+                        parts.append(f"\n📝 VERBATIMS [{node}] — filtered by topic '{display_name}'")
+                        parts.append(verbatims_result)
+                    else:
+                        self._focus_verbatims_by_node[node] = "(sin datos)"
+                        parts.append(f"\n📝 VERBATIMS [{node}]: sin datos disponibles")
+                        
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Could not collect focus verbatims for node '{node}': {e}")
+                    self._focus_verbatims_by_node[node] = f"(sin datos — error: {e})"
+                    parts.append(f"\n📝 VERBATIMS [{node}]: sin datos disponibles (error: {e})")
+
+        # ── CSAT vs Target per node ─────────────────────────────────────────
+        self._focus_csat_by_node: Dict[str, Dict] = {}
+
+        if display_name:
+            for node in relevant_nodes:
+                try:
+                    csat_result = await self.pbi_collector.collect_focus_touchpoint_csat_vs_target(
+                        node_path=node,
+                        start_date=start_date,
+                        end_date=end_date,
+                        touchpoint_name=display_name,
+                        comparison_filter="vs L7d" if comparison_start_date and comparison_end_date else None,
+                        comparison_start_date=comparison_start_date,
+                        comparison_end_date=comparison_end_date,
+                    )
+                    if csat_result:
+                        self._focus_csat_by_node[node] = csat_result
+                        csat = csat_result.get("csat")
+                        target = csat_result.get("target")
+                        gap = csat_result.get("gap")
+                        satisfaction_diff = csat_result.get("satisfaction_diff")
+                        csat_str = f"{csat:.1f}" if csat is not None else "N/A"
+                        target_str = f"{target:.1f}" if target is not None else "N/A"
+                        gap_str = f"{gap:+.1f}" if gap is not None else "N/A"
+                        sat_diff_str = f"{satisfaction_diff:+.1f}" if satisfaction_diff is not None else "N/A"
+                        
+                        # Include satisfaction_diff only in comparative mode
+                        if satisfaction_diff is not None:
+                            parts.append(
+                                f"\n📊 CSAT vs TARGET [{node}] — '{display_name}': "
+                                f"CSAT={csat_str}, Target={target_str}, Gap={gap_str}, Sat_diff={sat_diff_str}"
+                            )
+                        else:
+                            parts.append(
+                                f"\n📊 CSAT vs TARGET [{node}] — '{display_name}': "
+                                f"CSAT={csat_str}, Target={target_str}, Gap={gap_str}"
+                            )
+                    else:
+                        parts.append(f"\n📊 CSAT vs TARGET [{node}]: sin datos disponibles")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Could not collect CSAT vs target for node '{node}': {e}")
+                    parts.append(f"\n📊 CSAT vs TARGET [{node}]: sin datos disponibles (error: {e})")
 
         # ── % Issues per node (only if display_name mapping exists) ─────────
         self._focus_issues_pct_by_node: Dict[str, Dict] = {}
@@ -1763,6 +1922,22 @@ class CausalExplanationAgent:
         if display_name and comparison_start_date and comparison_end_date:
             for node in relevant_nodes:
                 try:
+                    # Track the DAX query for debugging
+                    cabins_dbg, companies_dbg, hauls_dbg = self.pbi_collector._get_node_filters(node)
+                    issues_query_dbg = self.pbi_collector._get_focus_touchpoint_issues_pct_query(
+                        cabins=cabins_dbg, companies=companies_dbg, hauls=hauls_dbg,
+                        start_date=start_date, end_date=end_date,
+                        comparison_start_date=comparison_start_date,
+                        comparison_end_date=comparison_end_date,
+                        touchpoint_display_name=display_name,
+                    )
+                    self.tracker.add_dax_query(
+                        "focus_issues_pct",
+                        issues_query_dbg,
+                        {"node": node, "touchpoint": display_name},
+                    )
+                    self.logger.info(f"🔍 focus_issues_pct query for '{node}': {issues_query_dbg[:300]}")
+
                     issues_result = await self.pbi_collector.collect_focus_touchpoint_issues_pct(
                         node_path=node,
                         start_date=start_date,
@@ -1998,12 +2173,16 @@ class CausalExplanationAgent:
                 
                 # Store tool context
                 self.tracker.set_tool_context(current_tool, tool_result)
+
+                # Prepend segment anchor so the LLM never loses track of which segment it's analyzing
+                segment_anchor = f"⚠️ SEGMENTO BAJO ANÁLISIS: {node_path} ({self._get_segment_description(node_path)})\n\n"
+                tool_result_with_anchor = segment_anchor + tool_result
                 
                 # AI MESSAGE: Reflection using clean context + tool results
                 reflection_result = await self._get_clean_reflection(
                     system_prompt=system_prompt,
                     tool_name=current_tool,
-                    tool_result=tool_result,
+                    tool_result=tool_result_with_anchor,
                     message_history=message_history
                 )
                 
@@ -2079,6 +2258,22 @@ class CausalExplanationAgent:
                     self.logger.error(f"❌ Investigation cannot continue without agent reflection")
                     break
                 
+            # --- FOCUS TOUCHPOINT ENRICHMENT: collect BEFORE final synthesis ---
+            if self.focus_touchpoint:
+                try:
+                    enrichment = await self._collect_focus_touchpoint_enrichment(
+                        node_path=node_path,
+                        start_date=start_date,
+                        end_date=end_date,
+                        comparison_start_date=None,
+                        comparison_end_date=None,
+                    )
+                    if enrichment:
+                        self.collected_data['focus_touchpoint_enrichment'] = enrichment
+                        self.logger.info("✅ Focus touchpoint enrichment stored in collected_data before single-period synthesis")
+                except Exception as enrich_err:
+                    self.logger.warning(f"⚠️ Could not collect focus touchpoint enrichment (single): {enrich_err}")
+
             # Final synthesis for single period
             try:
                 self.logger.info("🎯 Iniciando síntesis final para análisis de período único...")
@@ -2094,17 +2289,20 @@ class CausalExplanationAgent:
                     baseline_periods=baseline_periods,
                     aggregation_days=aggregation_days
                 )
-                
-                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
-                if conversation_file:
-                    self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
-                
                 self.logger.info("✅ Investigación de período único completada")
                 return final_response
                 
             except Exception as e:
                 self.logger.error(f"❌ Error en síntesis de período único: {type(e).__name__}: {str(e)}")
                 return self._build_single_period_fallback()
+            finally:
+                try:
+                    conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                    if conversation_file:
+                        print(f"🗂️ Conversación guardada: {conversation_file}")
+                        self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
+                except Exception as ex:
+                    self.logger.warning(f"⚠️ No se pudo guardar la conversación (single): {ex}")
             
         except Exception as e:
             self.logger.error(f"❌ Error crítico en investigación de período único: {type(e).__name__}: {e}")
@@ -2322,11 +2520,15 @@ class CausalExplanationAgent:
                 # Store tool context
                 self.tracker.set_tool_context(current_tool, tool_result)
                 
+                # Prepend segment anchor so the LLM never loses track of which segment it's analyzing
+                segment_anchor = f"⚠️ SEGMENTO BAJO ANÁLISIS: {node_path} ({self._get_segment_description(node_path)})\n\n"
+                tool_result_with_anchor = segment_anchor + tool_result
+
                 # AI MESSAGE: Reflection using clean context + tool results
                 reflection_result = await self._get_clean_reflection(
                     system_prompt=system_prompt,
                     tool_name=current_tool,
-                    tool_result=tool_result,
+                    tool_result=tool_result_with_anchor,
                     message_history=message_history
                 )
                 
@@ -2402,6 +2604,27 @@ class CausalExplanationAgent:
             self.logger.error(f"❌ Error crítico en investigación comparativa: {type(e).__name__}: {e}")
             return self._build_collected_data_summary()
             
+        # --- FOCUS TOUCHPOINT ENRICHMENT: collect BEFORE final synthesis so it reaches the prompt ---
+        if self.focus_touchpoint:
+            enrichment_comp_start = comparison_start_date or self.comparison_start_date
+            enrichment_comp_end = comparison_end_date or self.comparison_end_date
+            if (enrichment_comp_start is None or enrichment_comp_end is None) and self.causal_filter and self.causal_filter != "vs Sel. Period":
+                enrichment_comp_start, enrichment_comp_end = self.calculate_dynamic_comparison_dates(start_date, end_date)
+                self.logger.info(f"🔄 Focus enrichment (pre-synthesis): dynamically resolved comparison dates: {enrichment_comp_start.strftime('%Y-%m-%d')} → {enrichment_comp_end.strftime('%Y-%m-%d')}")
+            try:
+                enrichment = await self._collect_focus_touchpoint_enrichment(
+                    node_path=node_path,
+                    start_date=start_date,
+                    end_date=end_date,
+                    comparison_start_date=enrichment_comp_start,
+                    comparison_end_date=enrichment_comp_end,
+                )
+                if enrichment:
+                    self.collected_data['focus_touchpoint_enrichment'] = enrichment
+                    self.logger.info("✅ Focus touchpoint enrichment stored in collected_data before synthesis")
+            except Exception as enrich_err:
+                self.logger.warning(f"⚠️ Could not collect focus touchpoint enrichment: {enrich_err}")
+
         # Final synthesis for comparative analysis
         try:
                 self.logger.info("🎯 Iniciando síntesis final para análisis comparativo...")
@@ -2409,16 +2632,20 @@ class CausalExplanationAgent:
                     message_history, node_path, start_date, end_date, nps_context
                 )
                 
-                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
-                if conversation_file:
-                    self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
-                    
                 self.logger.info("✅ Investigación comparativa completada")
                 return final_response
             
         except Exception as e:
             self.logger.error(f"❌ Error crítico en investigación comparativa: {type(e).__name__}: {e}")
-            return self._build_collected_data_summary()
+            final_response = self._build_collected_data_summary()
+            return final_response
+        finally:
+            try:
+                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                if conversation_file:
+                    self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
+            except Exception as ex:
+                self.logger.warning(f"⚠️ No se pudo guardar la conversación: {ex}")
     
     async def _execute_tool_unified(
         self, 
@@ -2942,7 +3169,7 @@ class CausalExplanationAgent:
         for idx, row in df_subset.iterrows():
             # Support both query aliases and raw names for robustness
             nps = row.get('NPS_Score', row.get('surveys_maritz[nps_all]', row.get('nps_all', 'N/A')))
-            route = row.get('Route', row.get('Route_Master[route]', row.get('route', 'Unknown')))
+            route = str(row.get('Route', row.get('Route_Master[route]', row.get('route', 'Unknown')))).strip().strip("'\"")
             date_val = row.get('Date', row.get('Date_Master[Date]', ''))
             verbatim = row.get('Verbatim', '').strip() if isinstance(row.get('Verbatim'), str) else ""
             
@@ -2982,9 +3209,121 @@ class CausalExplanationAgent:
         
         if not route_col:
             return []
-            
-        return [r for r in df[route_col].dropna().unique().tolist() if r and r != 'Unknown']
+
+        raw_routes = df[route_col].dropna().unique().tolist()
+        cleaned = []
+        for r in raw_routes:
+            r = str(r).strip().strip("'\"")  # strip leading/trailing quotes and whitespace
+            if r and r != 'Unknown' and re.match(r'^[A-Z]{3}-[A-Z]{3}$', r):
+                cleaned.append(r)
+        return cleaned
     
+    async def _get_focus_touchpoint_routes(
+        self,
+        node_path: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        top_n: int = 5
+    ) -> List[str]:
+        """
+        Obtiene las rutas con peores CSATs del focus_touchpoint.
+        En modo comparative: peor CSAT diff (mayor caída).
+        En modo single: peor CSAT absoluto.
+        Retorna lista de rutas IATA (e.g., ["MAD-UIO", "MAD-BOG"]).
+        """
+        if not self.focus_touchpoint:
+            return []
+        try:
+            self.logger.info(f"🔍 Getting focus_touchpoint routes for '{self.focus_touchpoint}'...")
+
+            # Get routes data from PBI
+            df_routes = await self.pbi_collector.collect_routes_for_date_range(
+                node_path=node_path,
+                start_date=start_dt,
+                end_date=end_dt,
+                comparison_filter=self.causal_filter,
+                comparison_start_date=self.comparison_start_date,
+                comparison_end_date=self.comparison_end_date
+            )
+
+            if df_routes is None or df_routes.empty:
+                self.logger.warning(f"⚠️ No routes data available for focus_touchpoint '{self.focus_touchpoint}'")
+                return []
+
+            # Find the column for this touchpoint's CSAT
+            # Mapping from touchpoint name variants to routes DataFrame column names
+            TOUCHPOINT_COLUMN_MAP = {
+                'cabin crew': 'Crew',
+                'crew': 'Crew',
+                'check-in': 'Check_in',
+                'check in': 'Check_in',
+                'boarding': 'Boarding',
+                'aircraft interior': 'Aircraft_interior',
+                'aircraft_interior': 'Aircraft_interior',
+                'wi-fi': 'Wi-Fi',
+                'wifi': 'Wi-Fi',
+                'ife': 'IFE',
+                'f&b': 'F&B',
+                'food & beverage': 'F&B',
+                'food and beverage': 'F&B',
+                'arrivals': 'Arrivals',
+                'connections': 'Connections',
+                'lounge': 'Lounge',
+            }
+
+            tp_key = self.focus_touchpoint.lower().strip()
+            base_col = TOUCHPOINT_COLUMN_MAP.get(tp_key)
+
+            # Fallback: try substring match if not in map
+            if not base_col:
+                tp_lower = tp_key.replace(' ', '_')
+                for col in df_routes.columns:
+                    if tp_lower in col.lower() and 'diff' not in col.lower():
+                        base_col = col
+                        break
+
+            diff_col = f"{base_col}_diff" if base_col and f"{base_col}_diff" in df_routes.columns else None
+            abs_col = base_col if base_col and base_col in df_routes.columns else None
+
+            # Choose sort column based on study_mode
+            if self.study_mode == "comparative" and diff_col:
+                sort_col = diff_col
+                ascending = True  # worst diff (most negative) first
+            elif abs_col:
+                sort_col = abs_col
+                ascending = True  # worst absolute CSAT first
+            else:
+                self.logger.warning(
+                    f"⚠️ No CSAT column found for touchpoint '{self.focus_touchpoint}' in routes data. "
+                    f"Columns: {list(df_routes.columns)}"
+                )
+                return []
+
+            # Get route column name
+            route_col = None
+            for col in df_routes.columns:
+                if 'route' in col.lower():
+                    route_col = col
+                    break
+
+            if not route_col:
+                self.logger.warning(f"⚠️ No route column found in routes data")
+                return []
+
+            # Sort and get top N worst routes
+            df_sorted = df_routes.dropna(subset=[sort_col]).sort_values(sort_col, ascending=ascending)
+            top_routes = df_sorted[route_col].head(top_n).tolist()
+
+            self.logger.info(
+                f"✅ Focus touchpoint '{self.focus_touchpoint}' worst routes "
+                f"(sorted by {sort_col}): {top_routes}"
+            )
+            return [r for r in top_routes if r and r != 'Unknown' and re.match(r'^[A-Z]{3}-[A-Z]{3}$', str(r))]
+
+        except Exception as e:
+            self.logger.warning(f"⚠️ _get_focus_touchpoint_routes failed: {e}")
+            return []
+
     async def _verbatims_tool(self, node_path: str, start_date: str, end_date: str, anomaly_type: str = "neutral") -> str:
         """
         Verbatims tool for COMPARATIVE mode
@@ -2999,10 +3338,15 @@ class CausalExplanationAgent:
         Returns:
             Comparative analysis showing what changed between periods
         """
+        from dashboard_analyzer.data_collection.chatbot_verbatims_collector import DateValidationError
         try:
             self.logger.info(f"🤖 VERBATIMS_TOOL COMPARATIVE MODE")
-            self.logger.info(f"📅 Target: {start_date} to {end_date}")
-            
+            self.logger.info(f"📅 Input dates — start_date: {start_date}, end_date: {end_date}")
+            self.logger.info(f"🔍 causal_filter: {self.causal_filter}")
+
+            # Validate dates before any query
+            self._validate_analysis_dates(start_date, end_date, context="verbatims_tool comparative")
+
             # Calculate comparison dates
             from datetime import datetime
             start_dt = datetime.strptime(start_date, '%Y-%m-%d') if isinstance(start_date, str) else start_date
@@ -3012,8 +3356,37 @@ class CausalExplanationAgent:
             comparison_start = comparison_start_dt.strftime('%Y-%m-%d')
             comparison_end = comparison_end_dt.strftime('%Y-%m-%d')
             
-            self.logger.info(f"📅 Comparison: {comparison_start} to {comparison_end}")
+            self.logger.info(f"📅 Date flow: analysis [{start_date} → {end_date}] | comparison [{comparison_start} → {comparison_end}] | sending to PBI: target=[{start_date}, {end_date}], comparison=[{comparison_start}, {comparison_end}]")
             
+            # --- Route and touchpoint orchestration ---
+            # Build all_routes: union of identified_routes + focus_touchpoint_routes
+            focus_tp_routes = []
+            if self.focus_touchpoint:
+                focus_tp_routes = await self._get_focus_touchpoint_routes(node_path, start_dt, end_dt)
+                self.logger.info(f"🎯 Focus touchpoint '{self.focus_touchpoint}' routes: {focus_tp_routes}")
+
+            identified_routes = getattr(self.tracker, 'identified_routes', [])
+            all_routes = list(dict.fromkeys(identified_routes + focus_tp_routes))  # deduplicated, order preserved
+            self.logger.info(f"🗺️ All routes to investigate: {all_routes}")
+
+            # Collect verbatims per route
+            route_verbatims = []  # list of (route, df_positive, df_negative)
+            if all_routes:
+                self.logger.info(f"📍 Collecting verbatims for {len(all_routes)} routes...")
+                for route in all_routes:
+                    self.logger.info(f"  → Route {route}: collecting positive and negative verbatims")
+                    df_pos = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="positive", route_filter=route)
+                    df_neg = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="negative", route_filter=route)
+                    route_verbatims.append((route, df_pos, df_neg))
+
+            # Collect verbatims filtered by focus_touchpoint
+            tp_verbatims = None  # (df_positive, df_negative) or None
+            if self.focus_touchpoint:
+                self.logger.info(f"🎯 Collecting verbatims filtered by touchpoint '{self.focus_touchpoint}'...")
+                df_tp_pos = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="positive", touchpoint_filter=self.focus_touchpoint)
+                df_tp_neg = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="negative", touchpoint_filter=self.focus_touchpoint)
+                tp_verbatims = (df_tp_pos, df_tp_neg)
+
             # Extract filters from node_path
             filters = self._get_chatbot_filters_from_node_path(node_path)
             
@@ -3059,7 +3432,11 @@ class CausalExplanationAgent:
                 target_end=end_date,
                 comparison_start=comparison_start,
                 comparison_end=comparison_end,
-                anomaly_type=anomaly_type
+                anomaly_type=anomaly_type,
+                route_verbatims=route_verbatims,
+                tp_verbatims=tp_verbatims,
+                all_routes=all_routes,
+                focus_tp_routes=focus_tp_routes
             )
             
             if result:
@@ -3069,6 +3446,9 @@ class CausalExplanationAgent:
             else:
                 return f"📝 No verbatims data available for {node_path} in the specified periods"
                 
+        except DateValidationError as e:
+            self.logger.error(f"❌ DATE VALIDATION FAILED in comparative verbatims: {e}")
+            return f"ERROR: Fechas inválidas en verbatims_tool (comparative) — {str(e)}"
         except Exception as e:
             self.logger.error(f"❌ Error in comparative verbatims analysis: {e}")
             return f"ERROR in verbatims analysis: {str(e)}"
@@ -3087,10 +3467,47 @@ class CausalExplanationAgent:
         Returns:
             Analysis of the single period
         """
+        from dashboard_analyzer.data_collection.chatbot_verbatims_collector import DateValidationError
         try:
             self.logger.info(f"🤖 VERBATIMS_TOOL SINGLE PERIOD MODE ({anomaly_type})")
-            self.logger.info(f"📅 Period: {start_date} to {end_date}")
-            
+            self.logger.info(f"📅 Input dates — start_date: {start_date}, end_date: {end_date}")
+            self.logger.info(f"🔍 causal_filter: {self.causal_filter}")
+
+            # Validate dates before any query
+            self._validate_analysis_dates(start_date, end_date, context="verbatims_tool single_period")
+
+            from datetime import datetime
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d') if isinstance(start_date, str) else start_date
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d') if isinstance(end_date, str) else end_date
+
+            self.logger.info(f"📅 Date flow: analysis [{start_date} → {end_date}] | sending to PBI: [{start_date}, {end_date}]")
+
+            # --- Route and touchpoint orchestration ---
+            focus_tp_routes = []
+            if self.focus_touchpoint:
+                focus_tp_routes = await self._get_focus_touchpoint_routes(node_path, start_dt, end_dt)
+                self.logger.info(f"🎯 Focus touchpoint '{self.focus_touchpoint}' routes: {focus_tp_routes}")
+
+            identified_routes = getattr(self.tracker, 'identified_routes', [])
+            all_routes = list(dict.fromkeys(identified_routes + focus_tp_routes))
+            self.logger.info(f"🗺️ All routes to investigate: {all_routes}")
+
+            route_verbatims = []
+            if all_routes:
+                self.logger.info(f"📍 Collecting verbatims for {len(all_routes)} routes...")
+                for route in all_routes:
+                    self.logger.info(f"  → Route {route}: collecting positive and negative verbatims")
+                    df_pos = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="positive", route_filter=route)
+                    df_neg = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="negative", route_filter=route)
+                    route_verbatims.append((route, df_pos, df_neg))
+
+            tp_verbatims = None
+            if self.focus_touchpoint:
+                self.logger.info(f"🎯 Collecting verbatims filtered by touchpoint '{self.focus_touchpoint}'...")
+                df_tp_pos = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="positive", touchpoint_filter=self.focus_touchpoint)
+                df_tp_neg = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="negative", touchpoint_filter=self.focus_touchpoint)
+                tp_verbatims = (df_tp_pos, df_tp_neg)
+
             # Extract filters from node_path
             filters = self._get_chatbot_filters_from_node_path(node_path)
             
@@ -3132,7 +3549,11 @@ class CausalExplanationAgent:
                 node_path=node_path,
                 start_date=start_date,
                 end_date=end_date,
-                anomaly_type=anomaly_type
+                anomaly_type=anomaly_type,
+                route_verbatims=route_verbatims,
+                tp_verbatims=tp_verbatims,
+                all_routes=all_routes,
+                focus_tp_routes=focus_tp_routes
             )
             
             if result:
@@ -3142,6 +3563,9 @@ class CausalExplanationAgent:
             else:
                 return f"📝 No verbatims data available for {node_path} in {start_date} to {end_date}"
                 
+        except DateValidationError as e:
+            self.logger.error(f"❌ DATE VALIDATION FAILED in single period verbatims: {e}")
+            return f"ERROR: Fechas inválidas en verbatims_tool (single_period) — {str(e)}"
         except Exception as e:
             self.logger.error(f"❌ Error in single period verbatims analysis: {e}")
             return f"ERROR in verbatims analysis: {str(e)}"
@@ -3295,12 +3719,20 @@ class CausalExplanationAgent:
         target_end: str,
         comparison_start: str,
         comparison_end: str,
-        anomaly_type: str = "neutral"
+        anomaly_type: str = "neutral",
+        route_verbatims=None,
+        tp_verbatims=None,
+        all_routes=None,
+        focus_tp_routes=None
     ) -> str:
         """Analyze verbatims using PBI for TWO periods and compare (SMART MODE)"""
         try:
             from datetime import datetime
             
+            route_verbatims = route_verbatims or []
+            all_routes = all_routes or []
+            focus_tp_routes = focus_tp_routes or []
+
             self.logger.info(f"📊 Collecting SMART verbatims from PBI for target period ({anomaly_type})...")
             
             # Get target period verbatims
@@ -3370,8 +3802,18 @@ class CausalExplanationAgent:
             comparison_text = self._format_smart_verbatims(df_comparison)
             
             segment_desc = self._get_segment_description(node_path)
+
+            # Audit header
+            date_source = 'pre-configured' if self.causal_filter == 'vs Sel. Period' else 'dynamic'
+            audit_line = (
+                f"🔍 AUDITORÍA: target=[{target_start} → {target_end}] | "
+                f"comparison=[{comparison_start} → {comparison_end}] | "
+                f"causal_filter={self.causal_filter} | date_source={date_source}"
+            )
             
             result = f"""📊 ANÁLISIS COMPARATIVO DE VERBATIMS (SMART - {anomaly_type.upper()})
+
+{audit_line}
 
 🎯 SEGMENTO: {segment_desc}
 
@@ -3380,13 +3822,58 @@ Se muestran los comentarios más relevantes (Top 30 por longitud) filtrados por 
 {target_text}
 
 📅 PERÍODO DE COMPARACIÓN ({comparison_start} a {comparison_end}):
-{comparison_text}
+{comparison_text}"""
+
+            # Per-route sections
+            if route_verbatims:
+                result += "\n\n🗺️ VERBATIMS POR RUTA:"
+                for route, df_pos, df_neg in route_verbatims:
+                    pos_text = self._format_smart_verbatims(df_pos) if df_pos is not None and not df_pos.empty else "Sin comentarios positivos."
+                    neg_text = self._format_smart_verbatims(df_neg) if df_neg is not None and not df_neg.empty else "Sin comentarios negativos."
+                    result += f"\n\n  📍 Ruta {route}:\n  ✅ Positivos:\n{pos_text}\n  ❌ Negativos:\n{neg_text}"
+
+            # Focus touchpoint section
+            if tp_verbatims is not None and self.focus_touchpoint:
+                df_tp_pos, df_tp_neg = tp_verbatims
+                tp_pos_text = self._format_smart_verbatims(df_tp_pos) if df_tp_pos is not None and not df_tp_pos.empty else "Sin comentarios positivos."
+                tp_neg_text = self._format_smart_verbatims(df_tp_neg) if df_tp_neg is not None and not df_tp_neg.empty else "Sin comentarios negativos."
+                result += (
+                    f"\n\n🎯 VERBATIMS FOCUS TOUCHPOINT — {self.focus_touchpoint}:\n"
+                    f"  ✅ Positivos:\n{tp_pos_text}\n"
+                    f"  ❌ Negativos:\n{tp_neg_text}"
+                )
+                if focus_tp_routes:
+                    result += f"\n  🛫 Rutas con peor CSAT en '{self.focus_touchpoint}': {', '.join(focus_tp_routes)}"
+
+            result += f"""
 
 🔄 INSTRUCCIÓN PARA EL AGENTE:
 Analiza los comentarios del período analizado para encontrar patrones repetitivos.
 Busca coincidencias con las rutas extraídas: {', '.join(target_routes)}
-Compara si estos temas aparecían en el período anterior.
-"""
+Compara si estos temas aparecían en el período anterior."""
+
+            if self.focus_touchpoint:
+                result += f"\nPrioriza el análisis del touchpoint '{self.focus_touchpoint}' y sus rutas más afectadas: {', '.join(focus_tp_routes)}."
+
+            # Store traceability data
+            self.collected_data['verbatims_conversation'] = {
+                'mode': 'comparative',
+                'source': 'pbi',
+                'target_period': f"{target_start} to {target_end}",
+                'comparison_period': f"{comparison_start} to {comparison_end}",
+                # Traceability fields
+                'target_start': target_start,
+                'target_end': target_end,
+                'comparison_start': comparison_start,
+                'comparison_end': comparison_end,
+                'date_source': date_source,
+                'causal_filter': self.causal_filter,
+                # Filter fields
+                'routes_investigated': all_routes,
+                'focus_touchpoint_routes': focus_tp_routes,
+                'touchpoint_filter': self.focus_touchpoint,
+            }
+
             return result
             
         except Exception as e:
@@ -3477,11 +3964,19 @@ Compara si estos temas aparecían en el período anterior.
         node_path: str,
         start_date: str,
         end_date: str,
-        anomaly_type: str = "neutral"
+        anomaly_type: str = "neutral",
+        route_verbatims=None,
+        tp_verbatims=None,
+        all_routes=None,
+        focus_tp_routes=None
     ) -> str:
         """Analyze verbatims using PBI for a single period (SMART MODE)"""
         try:
             from datetime import datetime
+
+            route_verbatims = route_verbatims or []
+            all_routes = all_routes or []
+            focus_tp_routes = focus_tp_routes or []
             
             self.logger.info(f"📊 Collecting SMART verbatims from PBI ({anomaly_type})...")
             
@@ -3525,19 +4020,71 @@ Compara si estos temas aparecían en el período anterior.
             text = self._format_smart_verbatims(df)
             
             segment_desc = self._get_segment_description(node_path)
+
+            # Audit header
+            date_source = 'pre-configured' if self.causal_filter == 'vs Sel. Period' else 'dynamic'
+            audit_line = (
+                f"🔍 AUDITORÍA: target=[{start_date} → {end_date}] | "
+                f"causal_filter={self.causal_filter} | date_source={date_source}"
+            )
             
             result = f"""📊 ANÁLISIS DE VERBATIMS (SMART - {anomaly_type.upper()})
+
+{audit_line}
 
 🎯 SEGMENTO: {segment_desc}
 📅 PERÍODO: {start_date} a {end_date}
 
 COMENTARIOS RELEVANTES (Top 30, {anomaly_type}):
-{text}
+{text}"""
+
+            # Per-route sections
+            if route_verbatims:
+                result += "\n\n🗺️ VERBATIMS POR RUTA:"
+                for route, df_pos, df_neg in route_verbatims:
+                    pos_text = self._format_smart_verbatims(df_pos) if df_pos is not None and not df_pos.empty else "Sin comentarios positivos."
+                    neg_text = self._format_smart_verbatims(df_neg) if df_neg is not None and not df_neg.empty else "Sin comentarios negativos."
+                    result += f"\n\n  📍 Ruta {route}:\n  ✅ Positivos:\n{pos_text}\n  ❌ Negativos:\n{neg_text}"
+
+            # Focus touchpoint section
+            if tp_verbatims is not None and self.focus_touchpoint:
+                df_tp_pos, df_tp_neg = tp_verbatims
+                tp_pos_text = self._format_smart_verbatims(df_tp_pos) if df_tp_pos is not None and not df_tp_pos.empty else "Sin comentarios positivos."
+                tp_neg_text = self._format_smart_verbatims(df_tp_neg) if df_tp_neg is not None and not df_tp_neg.empty else "Sin comentarios negativos."
+                result += (
+                    f"\n\n🎯 VERBATIMS FOCUS TOUCHPOINT — {self.focus_touchpoint}:\n"
+                    f"  ✅ Positivos:\n{tp_pos_text}\n"
+                    f"  ❌ Negativos:\n{tp_neg_text}"
+                )
+                if focus_tp_routes:
+                    result += f"\n  🛫 Rutas con peor CSAT en '{self.focus_touchpoint}': {', '.join(focus_tp_routes)}"
+
+            result += f"""
 
 🔄 INSTRUCCIÓN PARA EL AGENTE:
-Analiza los problemas recurrentes y su relación con las rutas: {', '.join(target_routes)}
-"""
-            
+Analiza los problemas recurrentes y su relación con las rutas: {', '.join(target_routes)}"""
+
+            if self.focus_touchpoint:
+                result += f"\nPrioriza el análisis del touchpoint '{self.focus_touchpoint}' y sus rutas más afectadas: {', '.join(focus_tp_routes)}."
+
+            # Store traceability data
+            self.collected_data['verbatims_conversation'] = {
+                'mode': 'single',
+                'source': 'pbi',
+                'target_period': f"{start_date} to {end_date}",
+                # Traceability fields
+                'target_start': start_date if isinstance(start_date, str) else start_date.strftime('%Y-%m-%d'),
+                'target_end': end_date if isinstance(end_date, str) else end_date.strftime('%Y-%m-%d'),
+                'comparison_start': None,
+                'comparison_end': None,
+                'date_source': date_source,
+                'causal_filter': self.causal_filter,
+                # Filter fields
+                'routes_investigated': all_routes,
+                'focus_touchpoint_routes': focus_tp_routes,
+                'touchpoint_filter': self.focus_touchpoint,
+            }
+
             return result
             
         except Exception as e:
@@ -5648,8 +6195,22 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
         
         if request_size > MAX_REQUEST_SIZE:
             self.logger.warning(f"⚠️ Final request very large ({request_size} chars) - truncating data summary")
-            # Truncate data summary but preserve as much as possible
-            truncated_summary = data_summary[:MAX_TRUNCATED_SIZE] + "\n\n[... DATA TRUNCATED DUE TO SIZE ...]"
+            # Extract enrichment section BEFORE truncating so it always survives
+            enrichment_section = ""
+            enrichment_marker = "\n🎯 **FOCUS TOUCHPOINT ENRICHMENT DATA:**"
+            if enrichment_marker in data_summary:
+                enrichment_idx = data_summary.index(enrichment_marker)
+                enrichment_section = data_summary[enrichment_idx:]
+                data_summary_without_enrichment = data_summary[:enrichment_idx]
+            else:
+                data_summary_without_enrichment = data_summary
+
+            truncated_summary = data_summary_without_enrichment[:MAX_TRUNCATED_SIZE] + "\n\n[... DATA TRUNCATED DUE TO SIZE ...]"
+            # Always re-append enrichment after truncation so it reaches the LLM
+            if enrichment_section:
+                truncated_summary += f"\n{enrichment_section}"
+                self.logger.info(f"✅ Focus touchpoint enrichment preserved after truncation ({len(enrichment_section)} chars)")
+
             enhanced_final_request = f"""
 {self.config.get('final_synthesis_prompt', 'Genera un informe causal consolidado basado en los datos recolectados.')}
 
@@ -5882,6 +6443,12 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
             else:
                 profile_summary = str(profile_data)
             summary_parts.append(f"   {profile_summary}")
+        
+        # Focus Touchpoint Enrichment Data (verbatims + % issues)
+        if 'focus_touchpoint_enrichment' in self.collected_data:
+            enrichment_data = self.collected_data['focus_touchpoint_enrichment']
+            summary_parts.append(f"\n🎯 **FOCUS TOUCHPOINT ENRICHMENT DATA:**")
+            summary_parts.append(enrichment_data)
         
         if not summary_parts:
             return "❌ No se recolectaron datos durante la investigación"
@@ -7799,11 +8366,19 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
 
 
     def _get_system_prompt(self, mode: str = "comparative") -> str:
-        """Get system prompt for specified mode"""
+        """Get system prompt for specified mode, injecting focus_touchpoint block if active"""
         if mode == "single":
-            return self.config.get('single_prompts', {}).get('system_prompt', '')
+            prompt = self.config.get('single_prompts', {}).get('system_prompt', '')
         else:
-            return self.config.get('comparative_prompts', {}).get('system_prompt', '')
+            prompt = self.config.get('comparative_prompts', {}).get('system_prompt', '')
+
+        # Inject focus_touchpoint section if active
+        if self.focus_touchpoint:
+            focus_block = self.config.get('focus_touchpoint_prompt', '')
+            if focus_block:
+                prompt = prompt + "\n\n" + focus_block.replace('{focus_touchpoint}', self.focus_touchpoint)
+
+        return prompt
     
     def _get_input_template(self, mode: str = "comparative") -> str:
         """Get input template for specified mode"""

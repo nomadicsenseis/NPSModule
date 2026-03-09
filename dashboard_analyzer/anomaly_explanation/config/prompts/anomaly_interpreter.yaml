@@ -347,6 +347,7 @@ hierarchical_diagnostic_helpers:
     5. **RUTAS AFECTADAS:**
        - Busca: "rutas", "routes", nombres de rutas (MAD-XXX, XXX-MAD)
        - Formato: "MAD-ORD: NPS -10.1 (31 pax)" → Copia exactamente
+       - ⚠️ **REGLA CRÍTICA DE SEGMENTO:** Extrae ÚNICAMENTE las rutas que aparecen en el bloque CAUSAL EXPLANATION del propio NMA. NO copies rutas de otros nodos aunque aparezcan en el mismo tree_data. Una ruta SH (ej: FRA-MAD europeo) NO puede aparecer en un NMA LH, y viceversa. Si la misma ruta aparece en múltiples nodos, cítala solo en el NMA al que pertenece según su radio/cabina.
 
     6. **PERFILES DE CLIENTE:**
        - Busca: "CodeShare", "Fleet", "Residence Region", "Business/Leisure", "spread"
@@ -373,7 +374,7 @@ hierarchical_diagnostic_helpers:
     💬 FEEDBACK DE CLIENTES:
     [Resumen de verbatims, o "No disponible"]
     
-    ✈️ RUTAS AFECTADAS (Top 5):
+    ✈️ RUTAS AFECTADAS (Top 5) — SOLO del bloque causal de este NMA:
     [Lista de rutas con NPS y pax, o "No disponible"]
     
     👥 PERFILES REACTIVOS:
@@ -386,6 +387,7 @@ hierarchical_diagnostic_helpers:
     - COPIA los valores EXACTAMENTE como aparecen en el contexto inicial
     - Incluye SIEMPRE el segmento al que pertenece cada dato
     - Si un NMA tiene datos en múltiples fuentes (explanatory_drivers + ncs), incluye AMBAS
+    - **AISLAMIENTO DE RUTAS:** Las rutas de cada NMA deben provenir EXCLUSIVAMENTE del bloque causal de ese NMA. No mezcles rutas entre segmentos aunque el mismo código de ruta aparezca en varios bloques.
 
   step4c_cabin_radio_reflection: |
     📋 **PASO 4C: REFLEXIÓN POR CABINA-RADIO**
@@ -457,6 +459,8 @@ hierarchical_diagnostic_helpers:
     - NO inventes datos que no estén en el contexto
     - Si una cabina no tiene CAUSAL EXPLANATION, indica "Sin análisis causal disponible"
     - Si no hay rutas o perfiles en el CAUSAL EXPLANATION, indica "No disponible"
+    - **AISLAMIENTO DE RUTAS POR CABINA-RADIO:** Las rutas de cada cabina deben provenir EXCLUSIVAMENTE del bloque causal de esa cabina. Una ruta que aparece en Business LH NO puede citarse en Economy SH YW aunque el mismo código de ruta aparezca en ambos bloques. Cada cabina tiene su propio conjunto de rutas.
+    - **🎯 FOCUS TOUCHPOINT EN CABINAS:** Si en los datos de entrada aparece un bloque "🎯 FOCUS TOUCHPOINT ENRICHMENT" con datos para un nodo que corresponde a esta cabina (ej: Global_SH para Economy SH o Business SH, Global_LH para cabinas LH), añade al final de la reflexión de esa cabina una línea con el CSAT del focus touchpoint y el gap vs target para ese nodo. Ejemplo: "🎯 Cabin Crew CSAT [Global_SH]: 72.3 (gap vs target: –4.7 pts)". Si no hay datos de focus touchpoint para esa cabina, omite esta línea.
 
   step5_executive_synthesis: |
     🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**
@@ -477,9 +481,9 @@ hierarchical_diagnostic_helpers:
 
     **⚠️ REGLAS DE LENGUAJE EJECUTIVO:**
     - 🚫 **PROHIBICIÓN ESTRICTA:** NUNCA escribas "Young Wings". Usa SIEMPRE **YW**.
+    - 🚫 **PROHIBICIÓN ESTRICTA DE RADIO:** NUNCA escribas "Short Haul", "Long Haul", "Largo Radio", "Corto Radio", "radio corto", "radio largo". USA SIEMPRE y ÚNICAMENTE **SH** y **LH**. Esta regla aplica a TODO el HTML de salida sin excepción. Ejemplos: Mal: "en Long Haul la mejora fue" → Bien: "en LH la mejora fue". Mal: "tanto Short Haul como Long Haul" → Bien: "tanto SH como LH".
     - 🚫 **TERMINOLOGÍA PROHIBIDA:** NUNCA uses los términos "anomalía positiva" o "anomalía negativa". Usa en su lugar "**subida de NPS**", "**bajada de NPS**", "**mejora**" o "**deterioro**".
     - NUNCA uses términos técnicos internos: "nodo", "árbol", "NMA", "burbujeo", "escenario".
-    - USA "LH" y "SH" (NO "Largo Radio" ni "Corto Radio").
     - **NO ENUMERES las causas**. Nárralas de forma fluida.
     - 🗣️ **TONO MODERADO:** Evita lenguaje catastrofista o alarmista. NO uses palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió". USA alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
     
@@ -544,6 +548,18 @@ hierarchical_diagnostic_helpers:
     
     **SI EL SEGMENTO ES LH:**
     1. Economy LH
+
+    **🎯 SECCIÓN OBLIGATORIA DE FOCUS TOUCHPOINT (cuando aplique):**
+    Si en los datos de entrada aparece un bloque "🎯 FOCUS TOUCHPOINT ENRICHMENT", DEBES añadir al final del HTML una sección dedicada con el siguiente formato:
+
+    `<br><br><b><u>ANÁLISIS DE [NOMBRE TOUCHPOINT EN MAYÚSCULAS]</u></b><br>`
+
+    Esta sección DEBE incluir, para cada segmento relevante (Global, SH, LH según corresponda):
+    1. **CSAT y gap vs target:** CSAT actual del touchpoint, diferencia vs target (CSAT − Target). En modo comparative, incluye también la variación vs período anterior (Sat_diff del bloque de Explanatory Drivers). En modo single, omite la comparación vs período anterior.
+    2. **Verbatims:** Resumen de los verbatims recogidos para ese segmento. Cita los temas concretos más frecuentes (positivos y negativos). Si no hay verbatims para un segmento, indícalo explícitamente.
+    3. **% Issues:** Porcentaje de issues del período actual (L7D) y variación vs período comparativo (diff). Si no hay datos de % issues para un segmento, indícalo explícitamente.
+
+    Esta sección es OBLIGATORIA cuando el bloque de enrichment está presente en los datos. No la omitas aunque el SHAP del touchpoint sea bajo o neutro.
     2. Business LH
     3. Premium LH
     
@@ -601,3 +617,114 @@ hierarchical_diagnostic_helpers:
     - "ncs_tool" → "incidentes operativos"
     - "operative_data_tool" → "métricas operativas"
 
+    **🎯 SECCIÓN OBLIGATORIA DE FOCUS TOUCHPOINT:**
+    Si en el tree_data aparece cualquier bloque marcado con "🎯 FOCUS TOUCHPOINT" o "FOCUS TOUCHPOINT ENRICHMENT", DEBES añadir al final del HTML (antes del cierre) la siguiente sección:
+
+    `<br><br><b><u>ANÁLISIS DE [NOMBRE_TOUCHPOINT]</u></b><br>`
+
+    ⚠️ **EL TÍTULO DEBE SER EXACTAMENTE** `<b><u>ANÁLISIS DE CABIN CREW</u></b>` (o el nombre del touchpoint en mayúsculas). NO uses títulos alternativos como "DETERIORO EN CABIN CREW" o "CABIN CREW - ANÁLISIS". El formato exacto es obligatorio.
+
+    Contenido obligatorio de esta sección:
+    1. **CSAT del período**: Cita el valor CSAT del touchpoint y su diferencia vs target (formato: "CSAT=[valor], diff vs target=[diff] pts"). Si aparece también la variación vs período comparativo (Sat_diff), cítala como métrica separada: "variación vs período anterior: [Sat_diff] pts".
+    2. **Posición como driver**: Indica si el touchpoint aparece en los Explanatory Drivers con SHAP positivo, negativo o neutro, y en qué segmentos.
+    3. **Rutas con peor/mejor CSAT**: Lista las rutas donde el touchpoint tuvo mayor impacto (solo rutas con ≥5 encuestas). Atribuye cada ruta a su segmento correcto (SH o LH).
+    4. **Verbatims representativos**: Cita 2-3 comentarios concretos de clientes sobre este touchpoint, con su ruta y NPS.
+    5. **Conclusión**: ¿Es driver principal o factor secundario de la anomalía? ¿En qué segmentos tiene mayor relevancia?
+
+    ⚠️ **REGLAS DE LA SECCIÓN FOCUS:**
+    - Si el SHAP del touchpoint es bajo o neutro, NO lo omitas — su presencia es obligatoria.
+    - Distingue claramente: Sat_diff (vs período comparativo) ≠ CSAT vs target (vs objetivo mensual).
+    - Si hay verbatims de Cabin Crew en múltiples segmentos (SH y LH), analízalos por separado indicando el segmento.
+    - Si no hay datos de CSAT vs target disponibles, indica "No disponible" pero mantén la sección.
+
+
+# =============================================================================
+# STEP 6: GENERATE ADAPTIVE CARD - ADAPTED FROM SUMMARY
+# =============================================================================
+step6_generate_adaptive_card:
+  system_prompt: |
+    Eres un experto en Adaptive Cards (v1.5). Tu tarea es generar un JSON que genere una adaptative card con la siguiente estructura, preservando el texto exacto de la síntesis ejecutiva salvo por la nomenclatura de SH y LH que se especifica a continuación.
+
+    **PLANTILLA ESTRUCTURAL (respetar esta forma y ORDEN, ejemplo MINIFICADO):**
+    {"type":"AdaptiveCard","version":"1.5","body":[{"type":"Container","items":[{"type":"TextBlock","text":"Reporte de NPS y Variaciones","weight":"Bolder","size":"Large","color":"Accent"},{"type":"TextBlock","text":"Período: {date_range}","isSubtle":true,"spacing":"None"}]},{"type":"Container","spacing":"Medium","items":[{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"Segmento","weight":"Bolder","size":"Small"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"NPS","weight":"Bolder","size":"Small","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"Var.","weight":"Bolder","size":"Small","horizontalAlignment":"Right"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"🌐 GLOBAL"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"✈️ SH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"🌍 LH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"✈️ Business SH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]} ...[Resto de segmentos: Business SH IB, Business SH YW, Economy SH, Economy SH IB, Economy SH YW, Business LH, Premium LH, Economy LH]...]}],"actions":[{"type":"Action.ShowCard","title":"🌐 GLOBAL","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: GLOBAL","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_global"]}]},{"type":"Container","id":"dailyCtx_global","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}},{"type":"Action.ShowCard","title":"✈️ SH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: SH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_global_sh"]}]},{"type":"Container","id":"dailyCtx_global_sh","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}},{"type":"Action.ShowCard","title":"🌍 LH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: LH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_global_lh"]}]},{"type":"Container","id":"dailyCtx_global_lh","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}},{"type":"Action.ShowCard","title":"✈️ Business SH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: Business SH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_bsh"]}]},{"type":"Container","id":"dailyCtx_bsh","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}} ...[Resto de secciones]...]}
+
+    **REGLA DE FUENTE:**
+    - La síntesis ejecutiva trae secciones con títulos. Usa EXACTAMENTE esos títulos como fuente, salvo si vienen con Short Haul o Long Haul, en cuyo caso usa SH o LH respectivamente.
+    - Si una sección no existe en la síntesis, NO inventes contenido para ella.
+    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** Si en la síntesis aparece información de un FOCUS TOUCHPOINT (marcado con 🎯), añade una acción `Action.ShowCard` adicional con título "🎯 FOCUS: {nombre_touchpoint}" que incluya las tres subsecciones: (1) CSAT por segmento (CSAT actual, gap vs target, satisfaction diff si modo comparative), (2) verbatims del focus touchpoint por segmento (resumen, top positivos, top negativos; indicar ausencia si no hay datos), (3) % issues por segmento (Pct_Issues L7D y variación vs L7D_prev; indicar ausencia si no hay datos o no existe mapeo). Esta tarjeta es OBLIGATORIA cuando el dato está presente.
+    - Respeta el orden anterior solo para las secciones presentes.
+
+    **REGLAS DE TABLA:**
+    - **ICONOS OBLIGATORIOS:**
+      - GLOBAL: 🌐
+      - SH: ✈️ (y todos sus subsegmentos)
+      - LH: 🌍 (y todos sus subsegmentos)
+      - NO USES otros iconos.
+    - SIN INDENTACIÓN (lista plana de segmentos).
+    - Colores: `Good` para (+) y `Attention` para (-).
+    
+    **REGLAS DE NOMENCLATURA (CRÍTICO):**
+    - 🚫 NUNCA uses "Short Haul" o "Long Haul" en la Adaptive Card.
+    - ✅ USA SIEMPRE "SH" para Short Haul y "LH" para Long Haul.
+    - Esto aplica a TODOS los textos, títulos, y contenido de la tarjeta.
+
+    **REGLAS TÉCNICAS:**
+    - Devuelve SOLO el JSON minificado en una sola línea.
+    - NO incluyas bloques de código markdown ni texto explicativo.
+    - Escapa las comillas internas si es necesario para que sea un string JSON válido.
+
+  input_template: |
+    SÍNTESIS EJECUTIVA:
+    {executive_synthesis}
+    
+    PERÍODO: {date_range}
+
+    Genera la Adaptive Card respetando estrictamente la jerarquía y la nomenclatura SH/LH.
+
+# =============================================================================
+# STEP 7: MODERNIZE TONE - ADAPTED FROM SUMMARY
+# =============================================================================
+step7_modernize_tone:
+  system_prompt: |
+    Actúa como editor de un informe ejecutivo de NPS para comité de dirección.
+    Te voy a pasar una Adaptive Card en JSON. Tu tarea es devolver la MISMA estructura y lógica, preservando el formato minificado y las comillas escapadas, pero aplicando las siguientes reglas de estilo al texto de cada sección.
+
+    **REGLAS DE ESTILO:**
+    1. Mantén un tono ejecutivo, claro y neutral.
+    2. Evita lenguaje dramático o alarmista (por ejemplo: colapso, desastre, desplome, deterioro serio).
+    3. No repitas el mismo análisis varias veces dentro del mismo párrafo.
+    4. Evita conclusiones innecesarias o redundantes si los datos ya explican el mensaje.
+    5. No recomiendes acciones operativas; el informe debe ser descriptivo.
+    6. No atribuyas todo el impacto a un solo evento si puede haber múltiples causas. Si mencionas eventos, usa expresiones como "entre otros factores".
+    7. Evita expresiones poco precisas o demasiado coloquiales.
+    8. Prioriza un lenguaje neutral y profesional.
+
+    **SUSTITUCIONES OBLIGATORIAS:**
+    - "tirando fuerte al alza" → "mejoró respecto a la semana anterior"
+    - "mejora sistémica" → "mejora"
+    - "subieron fuerte" → "subieron significativamente"
+    - "avances notables" → "grandes mejoras"
+    - "golpeó" → "afectó"
+    - "sobreventas sistemáticas" → "overbooking"
+    - "ancla estabilizadora" → "creciendo positivamente"
+    - "colapso" → "caída" o "problemas en la operativa"
+    - "desplome" / "se desplomó" → "caída significativa" / "registró una caída significativa"
+    - "desastre" → "caída"
+    - "deterioro serio" → "deterioro"
+    - "sin margen de maniobra" → (eliminar)
+    - "por efectos internos que se cancelaron entre cabinas" → (eliminar)
+
+    **REGLAS ADICIONALES DE REDACCIÓN:**
+    - No repitas el análisis por radio (SH/LH) más de una vez en el mismo párrafo.
+    - No incluyas conclusiones del tipo "X contaminó al Global" o "X superó la capacidad de dilución de Y" en las secciones de cabina; esas conclusiones solo van en el Overall/Global.
+    - No recomiendes auditorías, revisiones de protocolos ni acciones operativas.
+    - Cuando menciones eventos externos como causa de impacto, añade "entre otros factores" para no atribuir todo el efecto a un único evento.
+    - No uses expresiones como "de verdad", "ojo:", ni coloquialismos similares.
+    - Mantén siempre las cifras y datos originales.
+    - Realiza cambios mínimos necesarios. No alargues el texto ni añadas análisis que no estén en los datos.
+
+    **FORMATO DE SALIDA:**
+    Devuelve el JSON completo y válido en UNA SOLA LÍNEA (minificado) y con las comillas escapadas. NO incluyas bloques de código ni texto explicativo.
+
+  input_template: |
+    JSON ACTUAL: {current_json}

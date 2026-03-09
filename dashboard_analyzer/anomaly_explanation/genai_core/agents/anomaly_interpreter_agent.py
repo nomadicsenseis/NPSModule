@@ -327,6 +327,87 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         fallback_config = self._get_fallback_config()
         fallback_helpers = fallback_config.get('hierarchical_diagnostic_helpers', {})
         return fallback_helpers.get(step_name, f"Ejecuta el paso de análisis: {step_name}")
+    
+    def _get_config_value(self, keys: List[str]) -> Optional[str]:
+        """Get a value from config using a list of keys (path)"""
+        value = self.config
+        for key in keys:
+            if isinstance(value, dict):
+                value = value.get(key)
+                if value is None:
+                    return None
+            else:
+                return None
+        return value
+    
+    async def _save_adaptive_card(self, card_json: str, date: Optional[str], segment: Optional[str]):
+        """Save the adaptive card JSON to a file"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            period_identifier = date if date else timestamp[:8]
+            segment_suffix = f"_{segment.replace('/', '_')}" if segment else ""
+            filename = f"adaptive_card_interpreter_{period_identifier}{segment_suffix}_{timestamp}.json"
+            
+            # Save in current working directory
+            output_path = Path.cwd() / filename
+            
+            # Parse and pretty-print the JSON
+            try:
+                import json
+                import re
+                
+                # Clean the JSON: escape newlines within strings and fix common issues
+                # First, try to parse as-is
+                try:
+                    card_dict = json.loads(card_json)
+                except json.JSONDecodeError as e:
+                    # If parsing fails, try to fix common issues
+                    cleaned_json = card_json
+                    
+                    # Fix unescaped newlines within strings (replace real newlines with \n)
+                    # This is a simple approach - more complex cases might need regex
+                    lines = cleaned_json.split('\n')
+                    in_string = False
+                    escape_next = False
+                    result_lines = []
+                    
+                    for line in lines:
+                        new_line = ""
+                        for char in line:
+                            if char == '"' and not escape_next:
+                                in_string = not in_string
+                            elif char == '\\':
+                                escape_next = True
+                            elif char == '\r':
+                                pass  # Skip carriage returns
+                            elif char == '\n' and in_string:
+                                new_line += '\\n'  # Escape newlines within strings
+                            else:
+                                if char != '\\' or not escape_next:
+                                    escape_next = False
+                                else:
+                                    escape_next = False
+                            new_line += char
+                        
+                        result_lines.append(new_line)
+                    
+                    cleaned_json = '\n'.join(result_lines)
+                    
+                    # Try parsing again
+                    card_dict = json.loads(cleaned_json)
+                
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(card_dict, f, indent=2, ensure_ascii=False)
+                self.logger.info(f"💾 Adaptive Card saved to: {output_path}")
+            except json.JSONDecodeError as e:
+                # If JSON parsing still fails, save as-is for debugging
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(card_json)
+                self.logger.warning(f"⚠️ Adaptive Card saved as raw text (JSON parsing failed): {output_path}")
+                self.logger.warning(f"   Error: {e}")
+                
+        except Exception as e:
+            self.logger.error(f"❌ Failed to save Adaptive Card: {e}")
 
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
@@ -607,6 +688,90 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 
                 self.logger.info(f"💭 AI Response for {step_name}: {step_content[:150]}...")
                 self.logger.info(f"✅ {step_name} completed ({len(step_content)} chars)")
+            
+            # STEP 6: Generate Adaptive Card (NEW)
+            executive_synthesis_content = next((s['content'] for s in step_responses if s['step'] == 'EXECUTIVE_SYNTHESIS'), None)
+            adaptive_card_json = None
+            
+            if executive_synthesis_content:
+                self.logger.info(f"🎨 Generating Adaptive Card from executive synthesis...")
+                
+                # Get step 6 prompt
+                step6_prompt = self._get_config_value(['step6_generate_adaptive_card', 'input_template'])
+                if step6_prompt:
+                    date_range = f"{date}" if date else "Período no especificado"
+                    step6_input = step6_prompt.format(
+                        executive_synthesis=executive_synthesis_content,
+                        date_range=date_range
+                    )
+                    
+                    # Get system prompt for step 6
+                    step6_system = self._get_config_value(['step6_generate_adaptive_card', 'system_prompt'])
+                    if step6_system:
+                        # Create new message history for step 6
+                        step6_history = MessageHistory(logger=self.logger)
+                        step6_history.create_and_add_message(content=step6_system, message_type=MessageType.SYSTEM)
+                        step6_history.create_and_add_message(content=step6_input, message_type=MessageType.USER)
+                        
+                        # Log step 6
+                        self.conversation_tracker.log_message("HELPER_PROMPT", step6_input, {
+                            'step': 'ADAPTIVE_CARD_GENERATION',
+                            'prompt_length': len(step6_input)
+                        })
+                        
+                        step6_response, _, _ = await self.agent.invoke(messages=step6_history.get_messages())
+                        adaptive_card_json = step6_response.content.strip()
+                        
+                        step_responses.append({
+                            'step': 'ADAPTIVE_CARD_GENERATION',
+                            'content': adaptive_card_json
+                        })
+                        
+                        # Log step 6 response
+                        self.conversation_tracker.log_message("STEP_RESPONSE", adaptive_card_json, {
+                            'step': 'ADAPTIVE_CARD_GENERATION',
+                            'response_length': len(adaptive_card_json)
+                        })
+                        
+                        self.logger.info(f"✅ ADAPTIVE_CARD_GENERATION completed ({len(adaptive_card_json)} chars)")
+                        
+                        # STEP 7: Modernize Tone (NEW)
+                        self.logger.info(f"✍️ Modernizing tone of Adaptive Card...")
+                        
+                        step7_prompt = self._get_config_value(['step7_modernize_tone', 'input_template'])
+                        if step7_prompt:
+                            step7_input = step7_prompt.format(current_json=adaptive_card_json)
+                            
+                            step7_system = self._get_config_value(['step7_modernize_tone', 'system_prompt'])
+                            if step7_system:
+                                step7_history = MessageHistory(logger=self.logger)
+                                step7_history.create_and_add_message(content=step7_system, message_type=MessageType.SYSTEM)
+                                step7_history.create_and_add_message(content=step7_input, message_type=MessageType.USER)
+                                
+                                # Log step 7
+                                self.conversation_tracker.log_message("HELPER_PROMPT", step7_input, {
+                                    'step': 'TONE_MODERNIZATION',
+                                    'prompt_length': len(step7_input)
+                                })
+                                
+                                step7_response, _, _ = await self.agent.invoke(messages=step7_history.get_messages())
+                                modernized_card_json = step7_response.content.strip()
+                                
+                                step_responses.append({
+                                    'step': 'TONE_MODERNIZATION',
+                                    'content': modernized_card_json
+                                })
+                                
+                                # Log step 7 response
+                                self.conversation_tracker.log_message("STEP_RESPONSE", modernized_card_json, {
+                                    'step': 'TONE_MODERNIZATION',
+                                    'response_length': len(modernized_card_json)
+                                })
+                                
+                                self.logger.info(f"✅ TONE_MODERNIZATION completed ({len(modernized_card_json)} chars)")
+                                
+                                # Save the modernized adaptive card to a file
+                                await self._save_adaptive_card(modernized_card_json, date, segment)
             
             # Compile final response from all steps
             print("🔍 DEBUG INTERPRETER: Compiling final interpretation...", file=sys.stderr)

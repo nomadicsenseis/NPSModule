@@ -19,7 +19,7 @@ DEFINE
 
     VAR __SmartVerbatims =
         TOPN(
-            30,
+            5,
             CALCULATETABLE(
                 SELECTCOLUMNS(
                     surveys_maritz,
@@ -33,7 +33,7 @@ DEFINE
                 __DS0FilterTable2,
                 __DS0FilterTable3,
                 __DS0FilterTable4,
-                KEEPFILTERS(__NPS_CLASS_FILTER__)
+                KEEPFILTERS(__NPS_CLASS_FILTER__)__OPTIONAL_FILTERS__
             ),
             LEN([Verbatim]), DESC
         )

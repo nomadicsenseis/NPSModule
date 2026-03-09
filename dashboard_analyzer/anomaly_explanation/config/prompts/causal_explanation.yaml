@@ -77,9 +77,10 @@ comparative_prompts:
 
     **Reglas de Terminación** 🏁
     ▸ Máximo 5 iteraciones
-    ▸ Si no hay más herramientas relevantes → termina
-    ▸ Si no hay evidencia clara → termina con hipótesis débil
-    ▸ Si hay evidencia contradictoria → termina con hipótesis múltiple
+    ▸ Termina SOLO después de ejecutar al menos: `explanatory_drivers_tool`, `operative_data_tool`, `ncs_tool` y `verbatims_tool`
+    ▸ Si no hay evidencia clara → termina con hipótesis débil (pero DESPUÉS de ejecutar las herramientas mínimas)
+    ▸ Si hay evidencia contradictoria → NO termines, maneja hipótesis paralelas y continúa con la siguiente herramienta
+    ▸ Las contradicciones entre fuentes son NORMALES (ej: NCS global vs OTP de radio) — no son motivo de parada
 
   input_template: |
     **INVESTIGACIÓN DE ANOMALÍA NPS - MODO COMPARATIVE**
@@ -113,8 +114,14 @@ comparative_prompts:
     **INSTRUCCIONES:**
     1. **Analiza** los resultados de la herramienta
     2. **Evalúa** si se han cumplido los objetivos de esta iteración
-    3. **Decide** si continuar con la siguiente herramienta o terminar la investigación
+    3. **Decide** la siguiente herramienta siguiendo la guía específica incluida abajo
     4. **Justifica** tu decisión basándote en la evidencia obtenida
+
+    ⛔ **REGLA DE MÍNIMO DE HERRAMIENTAS (OBLIGATORIA)**:
+    - NUNCA pongas "TERMINAR" si aún no has ejecutado `verbatims_tool`.
+    - Las contradicciones entre fuentes NO son motivo de parada — son hipótesis paralelas.
+    - Solo puedes poner "TERMINAR" después de haber ejecutado al menos: `explanatory_drivers_tool`, `operative_data_tool`, `ncs_tool` y `verbatims_tool`.
+    - Si la guía específica indica un próximo paso concreto, DEBES seguirlo.
 
     **RESPONDE EXACTAMENTE EN ESTE FORMATO MARKDOWN:**
 
@@ -123,7 +130,7 @@ comparative_prompts:
     ```
 
     ```next_tool
-    [Nombre de la siguiente herramienta a ejecutar, o "TERMINAR" si la investigación está completa]
+    [Nombre de la siguiente herramienta a ejecutar, o "TERMINAR" solo si ya ejecutaste verbatims_tool]
     ```
 
     ⚠️ **CRÍTICO**: Debes usar EXACTAMENTE las comillas triples (```) antes y después de "reflection" y "next_tool". Sin las comillas triples, el sistema no puede procesar tu respuesta.
@@ -231,8 +238,14 @@ single_prompts:
     **INSTRUCCIONES:**
     1. **Analiza** los resultados de la herramienta
     2. **Evalúa** si se han cumplido los objetivos de esta iteración
-    3. **Decide** si continuar con la siguiente herramienta o terminar la investigación
+    3. **Decide** la siguiente herramienta siguiendo la guía específica incluida abajo
     4. **Justifica** tu decisión basándote en la evidencia obtenida
+
+    ⛔ **REGLA DE MÍNIMO DE HERRAMIENTAS (OBLIGATORIA)**:
+    - NUNCA pongas "TERMINAR" si aún no has ejecutado `verbatims_tool`.
+    - Las contradicciones entre fuentes NO son motivo de parada — son hipótesis paralelas.
+    - Solo puedes poner "TERMINAR" después de haber ejecutado al menos: `explanatory_drivers_tool`, `operative_data_tool`, `ncs_tool` y `verbatims_tool`.
+    - Si la guía específica indica un próximo paso concreto, DEBES seguirlo.
 
     **RESPONDE EXACTAMENTE EN ESTE FORMATO MARKDOWN:**
 
@@ -241,7 +254,7 @@ single_prompts:
     ```
 
     ```next_tool
-    [Nombre de la siguiente herramienta a ejecutar, o "TERMINAR" si la investigación está completa]
+    [Nombre de la siguiente herramienta a ejecutar, o "TERMINAR" solo si ya ejecutaste verbatims_tool]
     ```
 
     ⚠️ **CRÍTICO**: Debes usar EXACTAMENTE las comillas triples (```) antes y después de "reflection" y "next_tool". Sin las comillas triples, el sistema no puede procesar tu respuesta.
@@ -457,6 +470,7 @@ tools_prompts:
         2. **Identifica los cambios clave**: ¿Qué diferencias en las quejas de los clientes explican la variación en el NPS?
         3. **Relaciona con drivers SHAP**: ¿Los verbatims confirman los drivers mixtos (operativos + producto) identificados anteriormente?
         4. **Sintetiza**: Resume los 2-3 cambios principales en los verbatims que explican la anomalía de NPS.
+        5. **FOCUS TOUCHPOINT (si activo)**: Si hay verbatims filtrados por el touchpoint de foco (sección "🎯 FOCUS"), analízalos SEPARADAMENTE. ¿Qué temas recurrentes aparecen? ¿Confirman o contradicen los drivers SHAP del touchpoint?
 
         **PRÓXIMO PASO**: Ejecuta `routes_tool` para identificar las rutas específicas afectadas por los problemas operativos y de producto.
 
@@ -500,6 +514,11 @@ tools_prompts:
         **FLUJO MIXTO** - Después de routes_tool
 
         🎯 **ANÁLISIS COMPLETADO**: Se identificaron las rutas específicas afectadas por problemas operativos.
+
+        **ANÁLISIS DE RUTAS REQUERIDO** 📊:
+        - Si hay un FOCUS TOUCHPOINT activo: prioriza las rutas con peor CSAT para ese touchpoint sobre las rutas con peor NPS global.
+        - Marca cualquier ruta con <5 encuestas como "muestra insuficiente" — no la cites como evidencia primaria.
+        - Si NCS devolvió 0 incidentes, NO atribuyas las rutas a NCS. Las rutas provienen de datos de NPS/CSAT, no de incidentes NCS.
 
         **PRÓXIMO PASO**: Ejecuta `customer_profile_tool` para analizar el impacto por perfil de cliente filtrando por las rutas específicas afectadas.
 
@@ -593,4 +612,36 @@ final_synthesis_prompt: |
      - Si se detectaron en el período de COMPARACIÓN: indica que los datos de referencia estaban afectados por estos eventos
      - Si no hubo dark horses: indicar "No se detectaron eventos excepcionales"
   4. **Rutas afectadas** - Rutas con mayor impacto. Resalta aquellas donde coincidan incidentes NCS y quejas en Verbatims.
+     ⚠️ **MUESTRA INSUFICIENTE**: Rutas con <5 encuestas deben marcarse como "muestra insuficiente" y NO citarse como evidencia primaria.
   5. **Reactividad de cliente** - Perfiles más afectados
+  6. **🎯 ANÁLISIS DE FOCUS TOUCHPOINT** (incluir SOLO si hay un touchpoint marcado con 🎯 FOCUS en los datos):
+     - CSAT del período y diferencia vs referencia (en puntos, no %)
+     - Rutas con peor CSAT para este touchpoint (solo rutas con ≥5 encuestas)
+     - Verbatims representativos filtrados por este touchpoint — usa los datos de la sección "🎯 FOCUS TOUCHPOINT ENRICHMENT DATA" en los datos recolectados. Esa sección contiene verbatims específicos del touchpoint y el % de issues. DEBES citarlos explícitamente con ejemplos concretos.
+     - % de issues del touchpoint en el período actual vs período de comparación (si disponible en FOCUS TOUCHPOINT ENRICHMENT DATA)
+     - Conclusión: ¿Es driver principal o factor secundario de la anomalía?
+     ⚠️ Si NCS devolvió 0 incidentes, NO atribuyas rutas a NCS. Las rutas en routes_tool provienen de otra fuente (triangulación de datos), no de incidentes NCS directos.
+
+# =============================================================================
+# FOCUS TOUCHPOINT PROMPT (appended to system prompt when focus_touchpoint is active)
+# =============================================================================
+focus_touchpoint_prompt: |
+  🎯 **FOCUS TOUCHPOINT ACTIVO: {focus_touchpoint}**
+
+  Tienes un touchpoint de foco específico para esta investigación. Esto cambia tu metodología:
+
+  **PRIORIDADES ADICIONALES (en orden):**
+  1. **ANCLA PRINCIPAL**: Trata "{focus_touchpoint}" como un eje de investigación PRIMARIO, al mismo nivel que la anomalía de NPS global.
+  2. **CSAT OBLIGATORIO**: Cuando explanatory_drivers_tool devuelva datos, busca la fila marcada con "🎯 FOCUS: {focus_touchpoint}". Verás DOS métricas distintas — úsalas correctamente y NO las mezcles:
+     - **Sat_diff**: diferencia de satisfacción vs el período comparativo (mismo eje que los otros drivers SHAP).
+     - **CSAT vs target**: CSAT absoluto comparado contra el objetivo (target). Escala diferente — cítalo como "CSAT={valor}, diff vs target={diff} pts".
+  3. **RUTAS PRIORITARIAS**: En routes_tool, prioriza las rutas con peor CSAT para "{focus_touchpoint}" sobre las rutas con peor NPS global. Estas rutas son tu hipótesis principal.
+  4. **VERBATIMS DEDICADOS**: La sección de verbatims filtrados por "{focus_touchpoint}" debe analizarse SEPARADAMENTE del análisis general de verbatims. Identifica los temas recurrentes específicos de este touchpoint.
+  5. **SECCIÓN DEDICADA EN INFORME**: El informe final DEBE incluir una sección "🎯 ANÁLISIS DE {focus_touchpoint}" con: CSAT, rutas peor CSAT (≥5 pax), verbatims representativos, y conclusión sobre si es driver principal o secundario.
+
+  **REGLAS DE MUESTRA:**
+  ▸ Rutas con <5 encuestas: márcalas como "muestra insuficiente" — pueden mencionarse como señal débil pero NO como evidencia primaria.
+  ▸ Rutas con 5-20 encuestas: menciona la limitación estadística.
+
+  **REGLA NCS vs RUTAS:**
+  ▸ Si NCS devuelve 0 incidentes, NO atribuyas las rutas que aparecen en routes_tool a NCS. Las rutas en routes_tool provienen de la triangulación de datos de NPS/CSAT, no de incidentes NCS directos.

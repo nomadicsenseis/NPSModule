@@ -13,6 +13,11 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+class DateValidationError(ValueError):
+    """Raised when dates passed to verbatims queries fail validation."""
+    pass
+
+
 class ChatbotVerbatimsCollector:
     """
     Recopilador de verbatims usando el chatbot de Iberia (API Key authentication)
