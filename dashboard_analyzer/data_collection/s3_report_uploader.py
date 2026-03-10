@@ -346,3 +346,58 @@ class S3ReportUploader:
         except Exception as e:
             self.logger.error(f"❌ Unexpected error uploading mapped info to S3: {str(e)}")
             return None
+    
+    async def upload_adaptive_card(self, card_json: str, filename: str) -> Optional[str]:
+        """
+        Upload interpreter Adaptive Card to S3
+        
+        Args:
+            card_json: The Adaptive Card JSON string
+            filename: The filename to use
+            
+        Returns:
+            S3 key of uploaded file if successful, None if failed
+        """
+        try:
+            # Only upload in production environment
+            if self.environment != "prod":
+                self.logger.info(f"🔧 Local environment: Skipping S3 upload for Adaptive Card")
+                return None
+            
+            # Validate inputs
+            if not card_json or not filename:
+                self.logger.warning("⚠️ Invalid card JSON or filename, skipping S3 upload")
+                return None
+            
+            # Generate S3 key
+            s3_key = f"{self.base_prefix}adaptive_cards/{filename}"
+            
+            # Parse and pretty-print the JSON
+            try:
+                card_dict = json.loads(card_json)
+                json_content = json.dumps(card_dict, indent=2, ensure_ascii=False)
+            except json.JSONDecodeError:
+                # If parsing fails, save as-is
+                json_content = card_json
+            
+            # Upload to S3
+            self.logger.info(f"📤 Uploading Adaptive Card to S3: s3://{self.bucket_name}/{s3_key}")
+            
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=json_content.encode('utf-8'),
+                ContentType='application/json',
+                Metadata={
+                    'upload_timestamp': datetime.now().isoformat(),
+                    'content_type': 'adaptive_card'
+                }
+            )
+            
+            self.logger.info(f"✅ Successfully uploaded Adaptive Card: s3://{self.bucket_name}/{s3_key}")
+            
+            return s3_key
+            
+        except Exception as e:
+            self.logger.error(f"❌ Unexpected error uploading Adaptive Card to S3: {str(e)}")
+            return None

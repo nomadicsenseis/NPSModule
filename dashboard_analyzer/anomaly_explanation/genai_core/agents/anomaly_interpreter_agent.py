@@ -191,6 +191,9 @@ class AnomalyInterpreterAgent:
         self.total_processing_time = 0.0
         self.total_hierarchical_calls = 0
         
+        # Store last generated Adaptive Card for summary agent
+        self.last_adaptive_card = None
+        
         self.logger.info(f"🤖 AnomalyInterpreterAgent initialized with {llm_type.value}")
 
     def _setup_logger(self) -> logging.Logger:
@@ -341,17 +344,23 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         return value
     
     async def _save_adaptive_card(self, card_json: str, date: Optional[str], segment: Optional[str]):
-        """Save the adaptive card JSON to a file"""
+        """Save the adaptive card JSON to a file in the conversations folder and upload to S3 in prod"""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             period_identifier = date if date else timestamp[:8]
             segment_suffix = f"_{segment.replace('/', '_')}" if segment else ""
-            filename = f"adaptive_card_interpreter_{period_identifier}{segment_suffix}_{timestamp}.json"
             
-            # Save in current working directory
-            output_path = Path.cwd() / filename
+            # Save in the same directory as conversations
+            base_dir = Path.cwd() / get_agent_conversations_folder() / 'anomaly_interpreter'
+            base_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Use specific naming: "resument_interpreter_{date}_{timestamp}.json"
+            filename = f"resument_interpreter_{period_identifier}_{timestamp}.json"
+            
+            output_path = base_dir / filename
             
             # Parse and pretty-print the JSON
+            card_dict = None
             try:
                 import json
                 import re
@@ -361,6 +370,65 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 try:
                     card_dict = json.loads(card_json)
                 except json.JSONDecodeError as e:
+                    # If parsing fails, try to fix common issues
+                    cleaned_json = card_json
+                    
+                    # Fix unescaped newlines within strings (replace real newlines with \n)
+                    # This is a simple approach - more complex cases might need regex
+                    lines = cleaned_json.split('\n')
+                    in_string = False
+                    escape_next = False
+                    result_lines = []
+                    
+                    for line in lines:
+                        new_line = ""
+                        for char in line:
+                            if char == '"' and not escape_next:
+                                in_string = not in_string
+                            elif char == '\\':
+                                escape_next = True
+                            elif char == '\r':
+                                pass  # Skip carriage returns
+                            elif char == '\n' and in_string:
+                                new_line += '\\n'  # Escape newlines within strings
+                            else:
+                                if char != '\\' or not escape_next:
+                                    escape_next = False
+                                else:
+                                    escape_next = False
+                            new_line += char
+                        
+                        result_lines.append(new_line)
+                    
+                    cleaned_json = '\n'.join(result_lines)
+                    
+                    # Try parsing again
+                    card_dict = json.loads(cleaned_json)
+                
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(card_dict, f, indent=2, ensure_ascii=False)
+                self.logger.info(f"💾 Adaptive Card saved to: {output_path}")
+            except json.JSONDecodeError as e:
+                # If JSON parsing still fails, save as-is for debugging
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(card_json)
+                self.logger.warning(f"⚠️ Adaptive Card saved as raw text (JSON parsing failed): {output_path}")
+                self.logger.warning(f"   Error: {e}")
+            
+            # Upload to S3 in production
+            if self.environment == "prod" and card_dict:
+                try:
+                    s3_key = await self.s3_uploader.upload_adaptive_card(
+                        json.dumps(card_dict, ensure_ascii=False),
+                        filename
+                    )
+                    if s3_key:
+                        self.logger.info(f"📤 Adaptive Card uploaded to S3: {s3_key}")
+                except Exception as s3_error:
+                    self.logger.warning(f"⚠️ Failed to upload Adaptive Card to S3: {s3_error}")
+                
+        except Exception as e:
+            self.logger.error(f"❌ Failed to save Adaptive Card: {e}")
                     # If parsing fails, try to fix common issues
                     cleaned_json = card_json
                     
@@ -786,6 +854,9 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                                 
                                 # Save the modernized adaptive card to a file
                                 await self._save_adaptive_card(modernized_card_json, date, segment)
+                                
+                                # Also store in attribute for summary agent
+                                self.last_adaptive_card = modernized_card_json
             
             # Compile final response from all steps
             print("🔍 DEBUG INTERPRETER: Compiling final interpretation...", file=sys.stderr)

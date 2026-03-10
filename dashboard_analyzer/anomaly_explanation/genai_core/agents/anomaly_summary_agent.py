@@ -569,6 +569,172 @@ class AnomalySummaryAgent:
             self.logger.error(f"❌ Error generating summary report: {str(e)}")
             return f"❌ Error generating summary: {str(e)}"
     
+    async def generate_summary_from_adaptive_cards(
+        self, 
+        adaptive_cards_data: List[Dict[str, Any]]
+    ) -> str:
+        """
+        Generate summary from Adaptive Cards JSON data.
+        
+        Args:
+            adaptive_cards_data: List of dictionaries with Adaptive Card JSON data
+                                Each dict should have: 'adaptive_card_json', 'period_type', 'date_range'
+        
+        Returns:
+            Executive summary string
+        """
+        try:
+            if not adaptive_cards_data:
+                return "⚠️ No Adaptive Card data provided for summary generation"
+            
+            # Parse all Adaptive Cards
+            parsed_cards = []
+            for card_data in adaptive_cards_data:
+                card_json = card_data.get('adaptive_card_json', '')
+                if card_json:
+                    parsed = self._parse_adaptive_card_json(card_json)
+                    parsed_cards.append(parsed)
+            
+            # Separate weekly and daily cards
+            weekly_card = None
+            daily_cards = []
+            
+            for card in parsed_cards:
+                if card['period_type'] == 'weekly':
+                    weekly_card = card
+                elif card['period_type'] == 'daily':
+                    daily_cards.append(card)
+            
+            if not weekly_card:
+                return "⚠️ No weekly analysis found in Adaptive Cards"
+            
+            # Organize data for summary
+            summary_data = self._organize_data_for_summary(weekly_card, daily_cards)
+            
+            # Generate summary using the organized data
+            return await self._generate_summary_from_organized_data(summary_data)
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error generating summary from Adaptive Cards: {str(e)}")
+            return f"❌ Error generating summary from Adaptive Cards: {str(e)}"
+    
+    def _organize_data_for_summary(
+        self, 
+        weekly_card: Dict[str, Any], 
+        daily_cards: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Organize parsed Adaptive Card data for summary generation.
+        
+        Returns:
+            Dictionary organized by segment with weekly and daily analyses
+        """
+        organized_data = {
+            'weekly_date_range': weekly_card['date_range'],
+            'segments': {}
+        }
+        
+        # Initialize structure for all segments from weekly card
+        for segment_name, segment_data in weekly_card['segments'].items():
+            organized_data['segments'][segment_name] = {
+                'weekly_analysis': segment_data['analysis'],
+                'weekly_nps': segment_data['nps'],
+                'weekly_variation': segment_data['variation'],
+                'daily_analyses': []  # Will be filled from daily cards
+            }
+        
+        # Add daily analyses for each segment
+        for daily_card in daily_cards:
+            daily_date = daily_card['date_range']
+            for segment_name, segment_data in daily_card['segments'].items():
+                if segment_name in organized_data['segments']:
+                    organized_data['segments'][segment_name]['daily_analyses'].append({
+                        'date': daily_date,
+                        'analysis': segment_data['analysis'],
+                        'nps': segment_data['nps'],
+                        'variation': segment_data['variation']
+                    })
+        
+        return organized_data
+    
+    async def _generate_summary_from_organized_data(
+        self, 
+        organized_data: Dict[str, Any]
+    ) -> str:
+        """
+        Generate summary from organized data structure.
+        
+        This is a simplified version that uses the existing summary prompts
+        but with structured data instead of text parsing.
+        """
+        try:
+            # Get prompts from configuration
+            system_prompt = self.config.get('system_prompt', '')
+            input_template = self.config.get('input_template', '')
+            
+            # Format the organized data for the prompt
+            formatted_analysis = self._format_organized_data_for_prompt(organized_data)
+            
+            # Format the input with the analysis data
+            num_days = sum(len(segment['daily_analyses']) for segment in organized_data['segments'].values()) // len(organized_data['segments'])
+            formatted_input = input_template.format(
+                num_periods=num_days + 1,  # +1 for weekly
+                formatted_analysis=formatted_analysis
+            )
+            
+            # Create message history for the summary generation
+            message_history = MessageHistory()
+            message_history.create_and_add_message(
+                content=system_prompt,
+                message_type=MessageType.SYSTEM
+            )
+            message_history.create_and_add_message(
+                content=formatted_input,
+                message_type=MessageType.USER
+            )
+            
+            # Generate the summary using the agent
+            response, structured_response, tool_calls = await self.agent.invoke(messages=message_history.get_messages())
+            summary_response = response.content if hasattr(response, 'content') else str(response)
+            
+            if summary_response:
+                self.logger.info(f"✅ Generated summary report from Adaptive Cards")
+                return summary_response
+            else:
+                return "⚠️ Failed to generate summary report"
+                
+        except Exception as e:
+            self.logger.error(f"❌ Error in summary generation: {str(e)}")
+            return f"❌ Error in summary generation: {str(e)}"
+    
+    def _format_organized_data_for_prompt(self, organized_data: Dict[str, Any]) -> str:
+        """
+        Format organized data into text for the summary prompt.
+        
+        This converts the structured data back to text format that the existing
+        prompts can understand, but in a much cleaner way than before.
+        """
+        formatted_parts = []
+        
+        # Weekly analysis section
+        formatted_parts.append(f"📊 **ANÁLISIS SEMANAL** ({organized_data['weekly_date_range']}):")
+        
+        for segment_name, segment_data in organized_data['segments'].items():
+            formatted_parts.append(f"\n**{segment_name}**:")
+            formatted_parts.append(f"NPS: {segment_data['weekly_nps']}, Variación: {segment_data['weekly_variation']}")
+            formatted_parts.append(f"Análisis: {segment_data['weekly_analysis']}")
+            
+            # Daily analyses for this segment
+            if segment_data['daily_analyses']:
+                formatted_parts.append(f"\n  📅 **Análisis Diarios para {segment_name}**:")
+                for daily in segment_data['daily_analyses']:
+                    formatted_parts.append(f"  - {daily['date']}: NPS {daily['nps']}, Var {daily['variation']}")
+                    # Include first 200 chars of analysis
+                    analysis_preview = daily['analysis'][:200] + "..." if len(daily['analysis']) > 200 else daily['analysis']
+                    formatted_parts.append(f"    {analysis_preview}")
+        
+        return "\n".join(formatted_parts)
+    
     async def generate_comprehensive_summary(
         self, 
         weekly_comparative_analysis: str, 
@@ -1296,33 +1462,91 @@ class AnomalySummaryAgent:
         Devuelve los patrones de sección según el segmento seleccionado.
         Esto permite parsear dinámicamente TODAS las agregaciones bajo el segmento.
         
+        Mejorado para incluir múltiples formatos y patrones más flexibles.
+        
         Args:
             segment: El segmento raíz del análisis
             
         Returns:
             Lista de tuplas (nombre_sección, patrón_regex)
         """
-        # Patrones base para cada tipo de sección
-        # Nota: Los patrones soportan múltiples formatos:
-        #   - "BUSINESS SH IB" (sin separador)
-        #   - "BUSINESS SH - IB" (con guión)
-        #   - "BUSINESS SH/IB" (con barra)
+        # Patrones base mejorados para cada tipo de sección
+        # Ahora soporta múltiples formatos:
+        # 1. Formato HTML: <b><u>SECTION_NAME: título</u></b>
+        # 2. Formato Markdown: **SECTION_NAME: título**
+        # 3. Formato simple: SECTION_NAME: título
+        # 4. Formato con emojis: 📊 SECTION_NAME: título
+        
         all_section_patterns = {
+            # GLOBAL - múltiples formatos
             'GLOBAL': r'(?:📈|📋)?\s*(?:\*\*|<b>)?SÍNTESIS EJECUTIVA|Durante la semana',
-            'SH': r'(?:<b>)?(?:<u>)?\s*(?:SHORT HAUL|SH):\s*[A-ZÁÉÍÓÚÑ]',
-            'LH': r'(?:<b>)?(?:<u>)?\s*(?:LONG HAUL|LH):\s*[A-ZÁÉÍÓÚÑ]',
-            'ECONOMY SH': r'(?:<b>)?(?:<u>)?\s*ECONOMY SH:\s*[A-ZÁÉÍÓÚÑ]',
-            'BUSINESS SH': r'(?:<b>)?(?:<u>)?\s*BUSINESS SH:\s*[A-ZÁÉÍÓÚÑ]',
-            # Patrones con soporte para guión, barra o espacio entre cabina y compañía
-            'ECONOMY SH IB': r'(?:<b>)?(?:<u>)?\s*(?:ECONOMY SH\s*[-/]?\s*IB|IB \(Economy SH\)):\s*[A-ZÁÉÍÓÚÑ]',
-            'ECONOMY SH YW': r'(?:<b>)?(?:<u>)?\s*(?:ECONOMY SH\s*[-/]?\s*YW|YW \(Economy SH\)):\s*[A-ZÁÉÍÓÚÑ]',
-            'BUSINESS SH IB': r'(?:<b>)?(?:<u>)?\s*(?:BUSINESS SH\s*[-/]?\s*IB|IB \(Business SH\)):\s*[A-ZÁÉÍÓÚÑ]',
-            'BUSINESS SH YW': r'(?:<b>)?(?:<u>)?\s*(?:BUSINESS SH\s*[-/]?\s*YW|YW \(Business SH\)):\s*[A-ZÁÉÍÓÚÑ]',
-            'ECONOMY LH': r'(?:<b>)?(?:<u>)?\s*ECONOMY LH:\s*[A-ZÁÉÍÓÚÑ]',
-            'BUSINESS LH': r'(?:<b>)?(?:<u>)?\s*BUSINESS LH:\s*[A-ZÁÉÍÓÚÑ]',
-            'PREMIUM LH': r'(?:<b>)?(?:<u>)?\s*PREMIUM LH:\s*[A-ZÁÉÍÓÚÑ]',
-            'IB': r'(?:<b>)?(?:<u>)?\s*IB:\s*[A-ZÁÉÍÓÚÑ]',
-            'YW': r'(?:<b>)?(?:<u>)?\s*YW:\s*[A-ZÁÉÍÓÚÑ]',
+            'GLOBAL': r'\*\*SÍNTESIS EJECUTIVA\*\*',
+            'GLOBAL': r'##\s*📋\s*SÍNTESIS EJECUTIVA',
+            
+            # SH - múltiples formatos
+            'SH': r'(?:<b>)?(?:<u>)?\s*(?:SHORT HAUL|SH)[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'SH': r'\*\*(?:SHORT HAUL|SH)[^:]*:\*\*',
+            'SH': r'(?:SHORT HAUL|SH)[^:]*:',
+            
+            # LH - múltiples formatos
+            'LH': r'(?:<b>)?(?:<u>)?\s*(?:LONG HAUL|LH)[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'LH': r'\*\*(?:LONG HAUL|LH)[^:]*:\*\*',
+            'LH': r'(?:LONG HAUL|LH)[^:]*:',
+            
+            # ECONOMY SH - múltiples formatos
+            'ECONOMY SH': r'(?:<b>)?(?:<u>)?\s*ECONOMY SH[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'ECONOMY SH': r'\*\*ECONOMY SH[^:]*:\*\*',
+            'ECONOMY SH': r'ECONOMY SH[^:]*:',
+            
+            # BUSINESS SH - múltiples formatos
+            'BUSINESS SH': r'(?:<b>)?(?:<u>)?\s*BUSINESS SH[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'BUSINESS SH': r'\*\*BUSINESS SH[^:]*:\*\*',
+            'BUSINESS SH': r'BUSINESS SH[^:]*:',
+            
+            # ECONOMY SH IB - múltiples formatos
+            'ECONOMY SH IB': r'(?:<b>)?(?:<u>)?\s*(?:ECONOMY SH\s*[-/]?\s*IB|IB \(Economy SH\))[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'ECONOMY SH IB': r'\*\*(?:ECONOMY SH\s*[-/]?\s*IB|IB \(Economy SH\))[^:]*:\*\*',
+            'ECONOMY SH IB': r'(?:ECONOMY SH\s*[-/]?\s*IB|IB \(Economy SH\))[^:]*:',
+            
+            # ECONOMY SH YW - múltiples formatos
+            'ECONOMY SH YW': r'(?:<b>)?(?:<u>)?\s*(?:ECONOMY SH\s*[-/]?\s*YW|YW \(Economy SH\))[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'ECONOMY SH YW': r'\*\*(?:ECONOMY SH\s*[-/]?\s*YW|YW \(Economy SH\))[^:]*:\*\*',
+            'ECONOMY SH YW': r'(?:ECONOMY SH\s*[-/]?\s*YW|YW \(Economy SH\))[^:]*:',
+            
+            # BUSINESS SH IB - múltiples formatos
+            'BUSINESS SH IB': r'(?:<b>)?(?:<u>)?\s*(?:BUSINESS SH\s*[-/]?\s*IB|IB \(Business SH\))[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'BUSINESS SH IB': r'\*\*(?:BUSINESS SH\s*[-/]?\s*IB|IB \(Business SH\))[^:]*:\*\*',
+            'BUSINESS SH IB': r'(?:BUSINESS SH\s*[-/]?\s*IB|IB \(Business SH\))[^:]*:',
+            
+            # BUSINESS SH YW - múltiples formatos
+            'BUSINESS SH YW': r'(?:<b>)?(?:<u>)?\s*(?:BUSINESS SH\s*[-/]?\s*YW|YW \(Business SH\))[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'BUSINESS SH YW': r'\*\*(?:BUSINESS SH\s*[-/]?\s*YW|YW \(Business SH\))[^:]*:\*\*',
+            'BUSINESS SH YW': r'(?:BUSINESS SH\s*[-/]?\s*YW|YW \(Business SH\))[^:]*:',
+            
+            # ECONOMY LH - múltiples formatos
+            'ECONOMY LH': r'(?:<b>)?(?:<u>)?\s*ECONOMY LH[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'ECONOMY LH': r'\*\*ECONOMY LH[^:]*:\*\*',
+            'ECONOMY LH': r'ECONOMY LH[^:]*:',
+            
+            # BUSINESS LH - múltiples formatos
+            'BUSINESS LH': r'(?:<b>)?(?:<u>)?\s*BUSINESS LH[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'BUSINESS LH': r'\*\*BUSINESS LH[^:]*:\*\*',
+            'BUSINESS LH': r'BUSINESS LH[^:]*:',
+            
+            # PREMIUM LH - múltiples formatos
+            'PREMIUM LH': r'(?:<b>)?(?:<u>)?\s*PREMIUM LH[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'PREMIUM LH': r'\*\*PREMIUM LH[^:]*:\*\*',
+            'PREMIUM LH': r'PREMIUM LH[^:]*:',
+            
+            # IB - múltiples formatos
+            'IB': r'(?:<b>)?(?:<u>)?\s*IB[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'IB': r'\*\*IB[^:]*:\*\*',
+            'IB': r'IB[^:]*:',
+            
+            # YW - múltiples formatos
+            'YW': r'(?:<b>)?(?:<u>)?\s*YW[^:]*:\s*[A-ZÁÉÍÓÚÑ]',
+            'YW': r'\*\*YW[^:]*:\*\*',
+            'YW': r'YW[^:]*:',
         }
         
         # Definir qué secciones aplican según el segmento
@@ -1342,30 +1566,42 @@ class AnomalySummaryAgent:
         
         # Normalizar el nombre del segmento
         segment_normalized = segment
-        if segment in ['Global/SH', 'Short Haul']:
+        if segment in ['Global/SH', 'Short Haul', 'SH']:
             segment_normalized = 'SH'
-        elif segment in ['Global/LH', 'Long Haul']:
+        elif segment in ['Global/LH', 'Long Haul', 'LH']:
             segment_normalized = 'LH'
-        elif segment in ['Global/SH/Economy']:
+        elif segment in ['Global/SH/Economy', 'Economy/SH']:
             segment_normalized = 'Economy SH'
-        elif segment in ['Global/SH/Business']:
+        elif segment in ['Global/SH/Business', 'Business/SH']:
             segment_normalized = 'Business SH'
-        elif segment in ['Global/LH/Economy']:
+        elif segment in ['Global/LH/Economy', 'Economy/LH']:
             segment_normalized = 'Economy LH'
-        elif segment in ['Global/LH/Business']:
+        elif segment in ['Global/LH/Business', 'Business/LH']:
             segment_normalized = 'Business LH'
-        elif segment in ['Global/LH/Premium']:
+        elif segment in ['Global/LH/Premium', 'Premium/LH']:
             segment_normalized = 'Premium LH'
+        
+        self.logger.info(f"🔍 Normalizando segmento: '{segment}' → '{segment_normalized}'")
         
         # Obtener las secciones aplicables
         applicable_sections = segment_sections.get(segment_normalized, ['GLOBAL'])
+        self.logger.info(f"📊 Secciones aplicables para '{segment_normalized}': {applicable_sections}")
         
-        # Construir los patrones
+        # Construir los patrones (tomar solo el primer patrón para cada sección para evitar duplicados)
         patterns = []
-        for section in applicable_sections:
-            if section in all_section_patterns:
-                patterns.append((section, all_section_patterns[section]))
+        seen_sections = set()
         
+        for section in applicable_sections:
+            if section not in seen_sections:
+                # Tomar el primer patrón disponible para esta sección
+                for pattern_key, pattern_value in all_section_patterns.items():
+                    if pattern_key == section:
+                        patterns.append((section, pattern_value))
+                        seen_sections.add(section)
+                        self.logger.debug(f"   📝 Añadido patrón para '{section}': {pattern_value[:50]}...")
+                        break
+        
+        self.logger.info(f"📊 Total de patrones generados: {len(patterns)}")
         return patterns
 
     def _parse_weekly_sections(self, weekly_analysis: str, segment: str = 'Global') -> Dict[str, str]:
@@ -1381,10 +1617,14 @@ class AnomalySummaryAgent:
         """
         import re
         
+        self.logger.info(f"🔍 Parseando secciones del análisis semanal para segmento '{segment}'")
+        self.logger.info(f"📄 Longitud del análisis semanal: {len(weekly_analysis)} caracteres")
+        
         sections = {}
         
         # Obtener patrones dinámicos según el segmento
         section_patterns = self._get_section_patterns_for_segment(segment)
+        self.logger.info(f"📊 Patrones de sección para '{segment}': {len(section_patterns)} patrones")
         
         # Find all section headers and their positions
         section_positions = []
@@ -1392,9 +1632,11 @@ class AnomalySummaryAgent:
             matches = list(re.finditer(pattern, weekly_analysis, re.IGNORECASE))
             for match in matches:
                 section_positions.append((match.start(), section_name, match.group()))
+                self.logger.debug(f"   📍 Encontrada sección '{section_name}' en posición {match.start()} con patrón: {pattern[:50]}...")
         
         # Sort by position
         section_positions.sort(key=lambda x: x[0])
+        self.logger.info(f"📊 Total de posiciones de sección encontradas: {len(section_positions)}")
         
         # Safety net: Check if there is text before the first section that should be GLOBAL/root
         if section_positions and section_positions[0][0] > 0:
@@ -1403,16 +1645,21 @@ class AnomalySummaryAgent:
             root_section = section_patterns[0][0] if section_patterns else 'GLOBAL'
             if len(intro_text) > 50 and section_positions[0][1] != root_section:
                 sections[root_section] = intro_text
-                self.logger.info(f"   ⚠️ Recovered {len(intro_text)} chars of intro text as {root_section} section")
+                self.logger.info(f"   ⚠️ Recuperados {len(intro_text)} caracteres de texto introductorio como sección {root_section}")
         
         # Extract content for each section
-        for i, (pos, section_name, _) in enumerate(section_positions):
+        for i, (pos, section_name, header_text) in enumerate(section_positions):
+            self.logger.debug(f"   🔄 Procesando sección '{section_name}' en posición {pos}")
+            
             # Special handling for GLOBAL: extract until DETALLE POR AGREGACIÓN or first detail header
             if section_name == 'GLOBAL':
-                # Find end: DETALLE POR AGREGACIÓN or first <b><u>SECTION: header
+                # Find end: DETALLE POR AGREGACIÓN or first detailed section header
                 end_patterns = [
                     r'<b><u>DETALLE POR AGREGACIÓN</u></b>',
                     r'<b><u>(?:SH|SHORT HAUL|LH|LONG HAUL|BUSINESS|ECONOMY|PREMIUM)[^<]*:</u></b>',
+                    r'\*\*(?:SH|SHORT HAUL|LH|LONG HAUL|BUSINESS|ECONOMY|PREMIUM)[^:]*:\*\*',
+                    r'##\s*📊\s*DIAGNÓSTICO',
+                    r'##\s*📊\s*DETALLE',
                 ]
                 
                 end_pos = len(weekly_analysis)
@@ -1422,27 +1669,43 @@ class AnomalySummaryAgent:
                         candidate_end = pos + match.start()
                         if candidate_end < end_pos:
                             end_pos = candidate_end
+                            self.logger.debug(f"   📍 Fin de sección GLOBAL encontrado con patrón: {pattern[:30]}...")
                 
                 content = weekly_analysis[pos:end_pos].strip()
+                self.logger.debug(f"   ✅ Sección GLOBAL extraída: {len(content)} caracteres")
             else:
                 # Standard handling: find end of this section (start of next section or end of text)
                 if i + 1 < len(section_positions):
                     end_pos = section_positions[i + 1][0]
+                    next_section = section_positions[i + 1][1]
+                    self.logger.debug(f"   📍 Fin en siguiente sección '{next_section}' en posición {end_pos}")
                 else:
                     end_pos = len(weekly_analysis)
+                    self.logger.debug(f"   📍 Fin al final del texto (posición {end_pos})")
                 
                 content = weekly_analysis[pos:end_pos].strip()
+                self.logger.debug(f"   ✅ Sección '{section_name}' extraída: {len(content)} caracteres")
             
             # Only keep if we don't already have this section (avoid duplicates)
             if section_name not in sections:
                 sections[section_name] = content
+                self.logger.info(f"   ✅ Sección '{section_name}' añadida: {len(content)} caracteres")
+            else:
+                self.logger.warning(f"   ⚠️ Sección duplicada '{section_name}' ignorada")
         
         # If no sections found, use the whole text as root section
         if not sections:
             root_section = section_patterns[0][0] if section_patterns else 'GLOBAL'
             sections[root_section] = weekly_analysis
+            self.logger.warning(f"⚠️ No se encontraron secciones, usando todo el texto como '{root_section}'")
         
-        self.logger.info(f"📊 Parsed sections for segment '{segment}': {list(sections.keys())}")
+        self.logger.info(f"📊 Secciones parseadas para segmento '{segment}': {list(sections.keys())}")
+        self.logger.info(f"📊 Total de secciones: {len(sections)}")
+        
+        # Log tamaño de cada sección
+        for section_name, content in sections.items():
+            self.logger.debug(f"   📏 Sección '{section_name}': {len(content)} caracteres")
+        
         return sections
     
     def _filter_daily_for_section(self, daily_analyses: str, section_name: str) -> str:
@@ -1451,30 +1714,98 @@ class AnomalySummaryAgent:
         
         Cada día contiene un informe completo con todas las secciones. Esta función
         extrae solo la sección específica de cada día para reducir el contexto.
+        
+        Mejorado para manejar múltiples formatos de secciones y añadir logging detallado.
         """
         import re
         
-        # Patrones para encontrar el HEADER de cada sección
-        # Formato: <b><u>SECTION_NAME: título</u></b>
-        # GLOBAL puede no tener <b> si fue extraído por _extract_executive_synthesis_from_daily
+        # Patrones mejorados para encontrar el HEADER de cada sección
+        # Ahora soporta múltiples formatos:
+        # 1. Formato HTML: <b><u>SECTION_NAME: título</u></b>
+        # 2. Formato Markdown: **SECTION_NAME: título**
+        # 3. Formato simple: SECTION_NAME: título
+        # 4. Formato con emojis: 📊 SECTION_NAME: título
+        
         all_section_patterns = [
+            # GLOBAL - múltiples formatos
             ('GLOBAL', r'(?:<b>)?SÍNTESIS EJECUTIVA(?:</b>)?'),
+            ('GLOBAL', r'\*\*SÍNTESIS EJECUTIVA\*\*'),
+            ('GLOBAL', r'SÍNTESIS EJECUTIVA'),
+            
+            # SH - múltiples formatos
             ('SH', r'<b><u>SHORT HAUL[^<]*</u></b>'),
+            ('SH', r'\*\*SHORT HAUL[^:]*:\*\*'),
+            ('SH', r'SHORT HAUL[^:]*:'),
+            ('SH', r'<b><u>SH[^<]*</u></b>'),
+            ('SH', r'\*\*SH[^:]*:\*\*'),
+            ('SH', r'SH[^:]*:'),
+            
+            # LH - múltiples formatos
             ('LH', r'<b><u>LONG HAUL[^<]*</u></b>'),
+            ('LH', r'\*\*LONG HAUL[^:]*:\*\*'),
+            ('LH', r'LONG HAUL[^:]*:'),
+            ('LH', r'<b><u>LH[^<]*</u></b>'),
+            ('LH', r'\*\*LH[^:]*:\*\*'),
+            ('LH', r'LH[^:]*:'),
+            
+            # BUSINESS SH - múltiples formatos
             ('BUSINESS SH', r'<b><u>BUSINESS SH(?!\s*[-/]?\s*(?:IB|YW))[^<]*</u></b>'),
+            ('BUSINESS SH', r'\*\*BUSINESS SH(?!\s*[-/]?\s*(?:IB|YW))[^:]*:\*\*'),
+            ('BUSINESS SH', r'BUSINESS SH(?!\s*[-/]?\s*(?:IB|YW))[^:]*:'),
+            
+            # BUSINESS SH IB - múltiples formatos
             ('BUSINESS SH IB', r'<b><u>BUSINESS SH\s*[-/]?\s*IB[^<]*</u></b>'),
+            ('BUSINESS SH IB', r'\*\*BUSINESS SH\s*[-/]?\s*IB[^:]*:\*\*'),
+            ('BUSINESS SH IB', r'BUSINESS SH\s*[-/]?\s*IB[^:]*:'),
+            ('BUSINESS SH IB', r'IB \(Business SH\)[^:]*:'),
+            
+            # BUSINESS SH YW - múltiples formatos
             ('BUSINESS SH YW', r'<b><u>BUSINESS SH\s*[-/]?\s*YW[^<]*</u></b>'),
+            ('BUSINESS SH YW', r'\*\*BUSINESS SH\s*[-/]?\s*YW[^:]*:\*\*'),
+            ('BUSINESS SH YW', r'BUSINESS SH\s*[-/]?\s*YW[^:]*:'),
+            ('BUSINESS SH YW', r'YW \(Business SH\)[^:]*:'),
+            
+            # ECONOMY SH - múltiples formatos
             ('ECONOMY SH', r'<b><u>ECONOMY SH(?!\s*[-/]?\s*(?:IB|YW))[^<]*</u></b>'),
+            ('ECONOMY SH', r'\*\*ECONOMY SH(?!\s*[-/]?\s*(?:IB|YW))[^:]*:\*\*'),
+            ('ECONOMY SH', r'ECONOMY SH(?!\s*[-/]?\s*(?:IB|YW))[^:]*:'),
+            
+            # ECONOMY SH IB - múltiples formatos
             ('ECONOMY SH IB', r'<b><u>ECONOMY SH\s*[-/]?\s*IB[^<]*</u></b>'),
+            ('ECONOMY SH IB', r'\*\*ECONOMY SH\s*[-/]?\s*IB[^:]*:\*\*'),
+            ('ECONOMY SH IB', r'ECONOMY SH\s*[-/]?\s*IB[^:]*:'),
+            ('ECONOMY SH IB', r'IB \(Economy SH\)[^:]*:'),
+            
+            # ECONOMY SH YW - múltiples formatos
             ('ECONOMY SH YW', r'<b><u>ECONOMY SH\s*[-/]?\s*YW[^<]*</u></b>'),
+            ('ECONOMY SH YW', r'\*\*ECONOMY SH\s*[-/]?\s*YW[^:]*:\*\*'),
+            ('ECONOMY SH YW', r'ECONOMY SH\s*[-/]?\s*YW[^:]*:'),
+            ('ECONOMY SH YW', r'YW \(Economy SH\)[^:]*:'),
+            
+            # BUSINESS LH - múltiples formatos
             ('BUSINESS LH', r'<b><u>BUSINESS LH[^<]*</u></b>'),
+            ('BUSINESS LH', r'\*\*BUSINESS LH[^:]*:\*\*'),
+            ('BUSINESS LH', r'BUSINESS LH[^:]*:'),
+            
+            # PREMIUM LH - múltiples formatos
             ('PREMIUM LH', r'<b><u>PREMIUM LH[^<]*</u></b>'),
+            ('PREMIUM LH', r'\*\*PREMIUM LH[^:]*:\*\*'),
+            ('PREMIUM LH', r'PREMIUM LH[^:]*:'),
+            
+            # ECONOMY LH - múltiples formatos
             ('ECONOMY LH', r'<b><u>ECONOMY LH[^<]*</u></b>'),
+            ('ECONOMY LH', r'\*\*ECONOMY LH[^:]*:\*\*'),
+            ('ECONOMY LH', r'ECONOMY LH[^:]*:'),
         ]
+        
+        self.logger.info(f"🔍 Buscando sección '{section_name}' en análisis diarios...")
+        self.logger.info(f"📄 Longitud total de análisis diarios: {len(daily_analyses)} caracteres")
         
         # Split por días primero (📅 marca cada día)
         day_pattern = r'(📅\s*\d{4}-\d{2}-\d{2})'
         day_parts = re.split(day_pattern, daily_analyses)
+        
+        self.logger.info(f"📅 Encontrados {len(day_parts)} partes al dividir por días")
         
         # Reconstruir días
         daily_entries = []
@@ -1488,19 +1819,43 @@ class AnomalySummaryAgent:
             else:
                 i += 1
         
+        self.logger.info(f"📊 Reconstruidos {len(daily_entries)} días completos")
+        
         # Extraer la sección específica de cada día
         extracted_sections = []
+        days_with_section = 0
+        days_without_section = 0
+        
         for date, content in daily_entries:
             section_content = self._extract_section_from_text(content, section_name, all_section_patterns)
             if section_content and len(section_content) > 50:
                 extracted_sections.append(f"{date}:\n{section_content}")
+                days_with_section += 1
+                self.logger.info(f"✅ Encontrada sección '{section_name}' en {date} ({len(section_content)} caracteres)")
+            else:
+                days_without_section += 1
+                if section_content:
+                    self.logger.info(f"⚠️ Sección '{section_name}' en {date} demasiado corta: {len(section_content)} caracteres")
+                else:
+                    self.logger.info(f"❌ No se encontró sección '{section_name}' en {date}")
+        
+        self.logger.info(f"📊 Resumen: {days_with_section} días con sección, {days_without_section} días sin sección")
         
         if extracted_sections:
             result = f"**Análisis de {section_name} ({len(extracted_sections)} días):**\n\n"
             result += "\n\n---\n\n".join(extracted_sections)
+            self.logger.info(f"✅ Sección '{section_name}' procesada exitosamente: {len(extracted_sections)} días extraídos")
             return result
         else:
-            return f"**No se encontró la sección {section_name} en los análisis diarios.**"
+            self.logger.warning(f"⚠️ No se encontró la sección '{section_name}' en ningún análisis diario")
+            
+            # Fallback: intentar extraer contenido basado en palabras clave
+            fallback_content = self._extract_fallback_content(daily_analyses, section_name)
+            if fallback_content:
+                self.logger.info(f"🔄 Usando fallback para sección '{section_name}': {len(fallback_content)} caracteres")
+                return f"**Análisis de {section_name} (extraído por fallback):**\n\n{fallback_content}"
+            else:
+                return f"**No se encontró la sección {section_name} en los análisis diarios.**"
     
     def _extract_section_from_text(self, text: str, target_section: str, all_patterns: list) -> str:
         """
@@ -1508,22 +1863,58 @@ class AnomalySummaryAgent:
         
         Special handling for GLOBAL: extracts from SÍNTESIS EJECUTIVA until 
         DETALLE POR AGREGACIÓN or the first <b><u>...: header in the detail section.
+        
+        Mejorado para manejar múltiples formatos y añadir logging.
         """
         import re
         
+        self.logger.debug(f"🔍 Extrayendo sección '{target_section}' de texto de {len(text)} caracteres")
+        
         # Special handling for GLOBAL section
         if target_section == 'GLOBAL':
-            # Find SÍNTESIS EJECUTIVA start
-            synthesis_match = re.search(r'(?:<b>)?SÍNTESIS EJECUTIVA(?:</b>)?', text, re.IGNORECASE)
-            if not synthesis_match:
+            # Find SÍNTESIS EJECUTIVA start - múltiples formatos
+            synthesis_patterns = [
+                r'(?:<b>)?SÍNTESIS EJECUTIVA(?:</b>)?',
+                r'\*\*SÍNTESIS EJECUTIVA\*\*',
+                r'SÍNTESIS EJECUTIVA',
+                r'##\s*📋\s*SÍNTESIS EJECUTIVA',
+            ]
+            
+            start_pos = None
+            for pattern in synthesis_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    start_pos = match.start()
+                    self.logger.debug(f"   📍 Encontrado inicio de síntesis con patrón: {pattern[:30]}...")
+                    break
+            
+            if start_pos is None:
+                self.logger.debug("   ⚠️ No se encontró SÍNTESIS EJECUTIVA, intentando encontrar introducción")
+                # Fallback: buscar cualquier texto al inicio antes de la primera sección detallada
+                detail_patterns = [
+                    r'<b><u>DETALLE POR AGREGACIÓN</u></b>',
+                    r'<b><u>(?:SH|SHORT HAUL|LH|LONG HAUL|BUSINESS|ECONOMY|PREMIUM)[^<]*:</u></b>',
+                    r'\*\*(?:SH|SHORT HAUL|LH|LONG HAUL|BUSINESS|ECONOMY|PREMIUM)[^:]*:\*\*',
+                ]
+                
+                for pattern in detail_patterns:
+                    match = re.search(pattern, text, re.IGNORECASE)
+                    if match:
+                        start_pos = 0
+                        end_pos = match.start()
+                        section_text = text[start_pos:end_pos].strip()
+                        if len(section_text) > 50:
+                            self.logger.debug(f"   🔄 Usando fallback para GLOBAL: {len(section_text)} caracteres")
+                            return section_text
                 return ""
             
-            start_pos = synthesis_match.start()
-            
-            # Find end: DETALLE POR AGREGACIÓN or first <b><u>SECTION: header
+            # Find end: DETALLE POR AGREGACIÓN or first detailed section header
             end_patterns = [
                 r'<b><u>DETALLE POR AGREGACIÓN</u></b>',
                 r'<b><u>(?:SH|SHORT HAUL|LH|LONG HAUL|BUSINESS|ECONOMY|PREMIUM)[^<]*:</u></b>',
+                r'\*\*(?:SH|SHORT HAUL|LH|LONG HAUL|BUSINESS|ECONOMY|PREMIUM)[^:]*:\*\*',
+                r'##\s*📊\s*DIAGNÓSTICO',
+                r'##\s*📊\s*DETALLE',
             ]
             
             end_pos = len(text)
@@ -1533,8 +1924,10 @@ class AnomalySummaryAgent:
                     candidate_end = start_pos + match.start()
                     if candidate_end < end_pos:
                         end_pos = candidate_end
+                        self.logger.debug(f"   📍 Encontrado fin con patrón: {pattern[:30]}...")
             
             section_text = text[start_pos:end_pos].strip()
+            self.logger.debug(f"   ✅ Extraída sección GLOBAL: {len(section_text)} caracteres")
             return section_text
         
         # Standard handling for other sections
@@ -1547,18 +1940,94 @@ class AnomalySummaryAgent:
         # Ordenar por posición
         positions.sort(key=lambda x: x[0])
         
+        self.logger.debug(f"   📊 Encontradas {len(positions)} posiciones de sección en el texto")
+        
         # Encontrar la sección objetivo y extraer hasta la siguiente
         for i, (start_pos, name, header_end) in enumerate(positions):
             if name == target_section:
+                self.logger.debug(f"   🎯 Encontrada sección objetivo '{target_section}' en posición {start_pos}")
+                
                 # El contenido va desde el inicio del header hasta el inicio del siguiente header
                 if i + 1 < len(positions):
                     end_pos = positions[i + 1][0]
+                    next_section = positions[i + 1][1]
+                    self.logger.debug(f"   📍 Fin en siguiente sección '{next_section}' en posición {end_pos}")
                 else:
                     end_pos = len(text)
+                    self.logger.debug(f"   📍 Fin al final del texto (posición {end_pos})")
                 
                 section_text = text[start_pos:end_pos].strip()
+                self.logger.debug(f"   ✅ Extraída sección '{target_section}': {len(section_text)} caracteres")
                 return section_text
         
+        self.logger.debug(f"   ❌ No se encontró la sección '{target_section}' en el texto")
+        return ""
+    
+    def _extract_fallback_content(self, daily_analyses: str, section_name: str) -> str:
+        """
+        Fallback method to extract content when regular patterns don't work.
+        Uses keyword-based extraction for common section types.
+        """
+        import re
+        
+        self.logger.info(f"🔄 Usando fallback para extraer contenido de sección '{section_name}'")
+        
+        # Mapeo de palabras clave para cada sección
+        section_keywords = {
+            'GLOBAL': ['global', 'overall', 'resumen', 'síntesis', 'ejecutiva'],
+            'SH': ['short haul', 'sh', 'radio corto'],
+            'LH': ['long haul', 'lh', 'radio largo'],
+            'BUSINESS SH': ['business sh', 'business short haul'],
+            'ECONOMY SH': ['economy sh', 'economy short haul'],
+            'BUSINESS LH': ['business lh', 'business long haul'],
+            'ECONOMY LH': ['economy lh', 'economy long haul'],
+            'PREMIUM LH': ['premium lh', 'premium long haul'],
+        }
+        
+        # Obtener palabras clave para la sección
+        keywords = section_keywords.get(section_name, [section_name.lower()])
+        
+        # Split por días
+        day_pattern = r'(📅\s*\d{4}-\d{2}-\d{2})'
+        day_parts = re.split(day_pattern, daily_analyses)
+        
+        extracted_content = []
+        
+        # Procesar cada día
+        i = 0
+        while i < len(day_parts):
+            if re.match(r'📅\s*\d{4}-\d{2}-\d{2}', day_parts[i] if i < len(day_parts) else ''):
+                date = day_parts[i]
+                content = day_parts[i + 1] if i + 1 < len(day_parts) else ''
+                
+                # Buscar contenido relacionado con las palabras clave
+                relevant_lines = []
+                lines = content.split('\n')
+                
+                for line in lines:
+                    line_lower = line.lower()
+                    # Verificar si la línea contiene alguna palabra clave
+                    if any(keyword in line_lower for keyword in keywords):
+                        relevant_lines.append(line)
+                    # También capturar líneas siguientes que puedan ser parte del análisis
+                    elif relevant_lines and len(relevant_lines) < 10:  # Limitar a 10 líneas
+                        relevant_lines.append(line)
+                
+                if relevant_lines:
+                    day_content = f"{date}:\n" + '\n'.join(relevant_lines)
+                    extracted_content.append(day_content)
+                    self.logger.debug(f"   ✅ Encontrado contenido para '{section_name}' en {date}: {len(relevant_lines)} líneas")
+                
+                i += 2
+            else:
+                i += 1
+        
+        if extracted_content:
+            result = "\n\n---\n\n".join(extracted_content)
+            self.logger.info(f"✅ Fallback exitoso para '{section_name}': {len(extracted_content)} días extraídos")
+            return result
+        
+        self.logger.warning(f"❌ Fallback también falló para sección '{section_name}'")
         return ""
     
     def _get_parent_section(self, section_name: str) -> str:
@@ -1649,6 +2118,135 @@ PERÍODO {period} ({date_range}):
                 examples.append(f"• Segmento {match[0]}: NPS {match[1]}")
         
         return '\n'.join(examples) if examples else '• No se encontraron ejemplos específicos cuantificables'
+    
+    def _parse_adaptive_card_json(self, adaptive_card_json: str) -> Dict[str, Any]:
+        """
+        Parse Adaptive Card JSON from interpreter to extract structured data.
+        
+        Args:
+            adaptive_card_json: JSON string of Adaptive Card
+            
+        Returns:
+            Dictionary with parsed data:
+            {
+                "period_type": "weekly" | "daily",
+                "date_range": "5-11 dic 2024",
+                "segments": {
+                    "GLOBAL": {
+                        "nps": "45.2",
+                        "variation": "+3.2",
+                        "analysis": "Texto completo del análisis..."
+                    },
+                    "SH": {
+                        "nps": "38.7", 
+                        "variation": "+9.7",
+                        "analysis": "Texto completo del análisis..."
+                    },
+                    ...
+                }
+            }
+        """
+        import json
+        import re
+        
+        try:
+            # Parse JSON
+            card_data = json.loads(adaptive_card_json)
+            
+            # Extract date range from header
+            date_range = "Unknown"
+            if 'body' in card_data and len(card_data['body']) > 0:
+                for item in card_data['body'][0].get('items', []):
+                    if item.get('type') == 'TextBlock' and 'Período:' in item.get('text', ''):
+                        date_range = item['text'].replace('Período: ', '').strip()
+            
+            # Determine period type based on date range format
+            period_type = "daily" if re.match(r'\d{1,2}-\w{3}', date_range) else "weekly"
+            
+            # Parse table data (NPS and variation values)
+            segments_data = {}
+            
+            # First, extract NPS and variation from table
+            if 'body' in card_data and len(card_data['body']) > 1:
+                table_container = card_data['body'][1]
+                if 'items' in table_container:
+                    for item in table_container['items']:
+                        if item.get('type') == 'ColumnSet' and 'columns' in item:
+                            # Check if this is a data row (not header)
+                            columns = item['columns']
+                            if len(columns) >= 3:
+                                # Extract segment name from first column
+                                segment_name_item = columns[0].get('items', [{}])[0]
+                                if segment_name_item.get('type') == 'TextBlock':
+                                    segment_name = segment_name_item.get('text', '').strip()
+                                    # Remove icon for key
+                                    segment_key = segment_name.replace('🌐 ', '').replace('✈️ ', '').replace('🌍 ', '').strip()
+                                    
+                                    # Extract NPS from second column
+                                    nps_item = columns[1].get('items', [{}])[0]
+                                    nps_value = nps_item.get('text', '') if nps_item.get('type') == 'TextBlock' else ''
+                                    
+                                    # Extract variation from third column
+                                    var_item = columns[2].get('items', [{}])[0]
+                                    var_value = var_item.get('text', '') if var_item.get('type') == 'TextBlock' else ''
+                                    
+                                    if segment_key and segment_key != 'Segmento':  # Skip header row
+                                        segments_data[segment_key] = {
+                                            'nps': nps_value,
+                                            'variation': var_value,
+                                            'analysis': ''  # Will be filled from actions
+                                        }
+            
+            # Parse analysis text from actions
+            if 'actions' in card_data:
+                for action in card_data['actions']:
+                    if action.get('type') == 'Action.ShowCard' and 'card' in action:
+                        card = action['card']
+                        title = action.get('title', '').strip()
+                        # Remove icon for matching
+                        segment_key = title.replace('🌐 ', '').replace('✈️ ', '').replace('🌍 ', '').strip()
+                        
+                        # Extract analysis text from card body
+                        analysis_text = ''
+                        if 'body' in card:
+                            for body_item in card['body']:
+                                if body_item.get('type') == 'TextBlock' and body_item.get('text', ''):
+                                    text = body_item['text']
+                                    # Skip title lines
+                                    if not text.startswith('Análisis:'):
+                                        analysis_text += text + '\n\n'
+                        
+                        # Update segment data with analysis
+                        if segment_key in segments_data:
+                            segments_data[segment_key]['analysis'] = analysis_text.strip()
+                        else:
+                            # If segment not in table, add it
+                            segments_data[segment_key] = {
+                                'nps': '',
+                                'variation': '',
+                                'analysis': analysis_text.strip()
+                            }
+            
+            return {
+                'period_type': period_type,
+                'date_range': date_range,
+                'segments': segments_data
+            }
+            
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Error parsing Adaptive Card JSON: {e}")
+            return {
+                'period_type': 'unknown',
+                'date_range': 'Unknown',
+                'segments': {}
+            }
+        except Exception as e:
+            self.logger.error(f"Unexpected error parsing Adaptive Card: {e}")
+            return {
+                'period_type': 'unknown',
+                'date_range': 'Unknown',
+                'segments': {}
+            }
     
     def get_performance_metrics(self) -> Dict[str, Any]:
         """Get performance metrics from the agent."""

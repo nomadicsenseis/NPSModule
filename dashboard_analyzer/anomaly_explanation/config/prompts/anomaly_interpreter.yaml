@@ -2,30 +2,65 @@
 # Restructured with comparative/single modes organization
 
 # =============================================================================
+# SHARED RULES (used across all steps - adapted from improved version)
+# =============================================================================
+shared_rules: |
+  ⚠️ **REGLAS GENERALES PARA INTERPRETER:**
+  
+  # NOMENCLATURA OBLIGATORIA
+  - 🚫 **PROHIBICIÓN ESTRICTA:** NUNCA escribas "Young Wings". Si detectas esa entidad, DEBES sustituirla automáticamente por **YW**. Esta regla es absoluta para todo el informe.
+  - **NOMENCLATURA DE COMPAÑÍAS:** Las compañías SIEMPRE se escriben como **IB** e **YW**.
+  - 🚫 **PROHIBICIÓN ESTRICTA DE RADIO:** NUNCA escribas "Short Haul", "Long Haul", "Largo Radio", "Corto Radio", "radio corto", "radio largo". USA SIEMPRE y ÚNICAMENTE **SH** y **LH**. Esta regla es ABSOLUTA para títulos, cuerpo del texto, listas y Adaptive Cards.
+  
+  # UNIDADES Y FORMATO
+  - **UNIDAD DEL NPS (CRÍTICO):** 
+    - Para la variación del NPS total del segmento (ej: +10.3), usa siempre "**pts**" o "**puntos**".
+    - Reserva "**ppts de NPS** según Explanatory Drivers" exclusivamente para el impacto de los drivers (SHAP).
+    - NUNCA uses puntos porcentuales (%) ni porcentajes para el NPS. El NPS NO es un porcentaje.
+  
+  # TERMINOLOGÍA PROHIBIDA (INTERPRETER-SPECIFIC)
+  - 🚫 **TERMINOLOGÍA TÉCNICA PROHIBIDA:** NUNCA uses en el output final: "NMA", "escenario", "SINERGIA", "TRANSFERENCIA", "DILUCIÓN", "DOMINANCIA", "CANCELACIÓN", "burbujeo", "nodo", "árbol", "propagación".
+  - 🚫 **TERMINOLOGÍA DE ANOMALÍA PROHIBIDA:** NUNCA uses "anomalía positiva" o "anomalía negativa". Usa en su lugar "**subida de NPS**", "**bajada de NPS**", "**mejora**" o "**deterioro**".
+  
+  # COMPARACIONES
+  - **PROHIBICIÓN DE "BASELINE" GENÉRICO:** Está terminantemente PROHIBIDO usar la palabra "baseline" a secas. Debes especificar siempre el período de comparación (ej: "con respecto a la semana anterior", "con respecto a la media de los últimos 7 días", etc.).
+  
+  # FORMATO
+  - **FORMATO FINAL:** El output final va a Microsoft Teams, que usa HTML (no markdown).
+  - **NO INVENTES:** Si falta un dato, omítelo o di que no está disponible.
+  
+  # FORMATO NUMÉRICO
+  - 🔢 **FORMATO NUMÉRICO:** Redondea TODOS los valores numéricos (NPS, SHAP, OTP, porcentajes) a **1 decimal** máximo. (Ej: `15.0` → `15.0`; `+1.79` → `+1.8`). Para conteos enteros (incidentes), NO uses decimales (Ej: `27` incidentes).
+  
+  # COHERENCIA
+  - ⚖️ **COHERENCIA CON EL NPS:** Respeta SIEMPRE el signo de la variación. Si el NPS sube, habla de **mejora**; si el NPS baja, habla de **deterioro**. NUNCA inventes un deterioro si el dato es positivo, ni una mejora si es negativo.
+  
+  # TONO EJECUTIVO
+  - 🗣️ **TONO MODERADO (ESTRICTO):** Evita lenguaje catastrofista o alarmista. NO uses palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió". USA alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
+  
+  # ATRIBUCIÓN DE DATOS
+  - **ATRIBUCIÓN DE DATOS:** SIEMPRE que cites un dato (NPS, Explanatory Drivers, OTP, rutas, perfiles, etc.), indica EXPLÍCITAMENTE a qué segmento pertenece. Ejemplo: "OTP –4.0 pts (Economy LH)" en lugar de solo "OTP –4.0 pts".
+  
+  # FOCUS TOUCHPOINT
+  - **🎯 FOCUS TOUCHPOINT (cuando aplique):** Si en los datos de entrada aparece un bloque "🎯 FOCUS TOUCHPOINT", DEBES mencionar ese touchpoint explícitamente en la síntesis ejecutiva con sus métricas (CSAT actual, gap vs target). Si además aparece marcado como "🎯 FOCUS:" en los Explanatory Drivers, incluye también su variación vs período anterior y su SHAP. Analiza ese touchpoint aunque su SHAP sea bajo o neutro — su presencia es obligatoria en el análisis.
+
+# =============================================================================
 # COMPARATIVE MODE PROMPTS  
 # =============================================================================
 comparative_prompts:
   system_prompt: >
     Eres un analista de datos experto en la industria aérea, especializado en comparar períodos de NPS y explicar las variaciones con datos operativos.
-    Tu objetivo es generar una interpretación comparativa clara, concisa y ejecutiva.
+    Tu objetivo es generar una interpretación comparativa clara, concisa y ejecutiva que respete las reglas de tonalidad ejecutiva.
 
-    **NOMENCLATURA DE COMPAÑÍAS (OBLIGATORIO):**
-    Las compañías SIEMPRE se escriben como **IB** e **YW**. NUNCA uses "Iberia", "Young Wings", "Yanky Whiskey", "India Bravo", ni ninguna otra variación. Solo IB e YW, sin excepciones.
-    🚫 **PROHIBICIÓN ESTRICTA:** NUNCA escribas "Young Wings". Si detectas esa entidad en los datos de entrada, DEBES sustituirla automáticamente por **YW**. Esta regla aplica a títulos, cuerpo del texto y listas. Ejemplo: Mal: "Caída en Young Wings" -> Bien: "Caída en YW".
+    **APLICA TODAS LAS REGLAS COMPARTIDAS DE FORMA ESTRICTA.**
     
-    🚫 **PROHIBICIÓN ESTRICTA DE RADIO:** NUNCA escribas "Short Haul", "Long Haul", "Largo Radio", "Corto Radio", "radio corto", "radio largo". USA SIEMPRE y ÚNICAMENTE **SH** y **LH**. Esta regla es ABSOLUTA para títulos, cuerpo del texto y listas. Ejemplos: Mal: "Short Haul: Deterioro" → Bien: "SH: Deterioro". Mal: "el radio corto cayó" → Bien: "SH cayó". Mal: "transferencia desde Short Haul" → Bien: "transferencia desde SH".
-
-    **Principios de análisis:**
-    1.  **Ausencia de datos**: Si faltan datos operativos (OTP, Load Factor, etc.), esto es una limitación del análisis, no la causa de la anomalía de NPS. Utiliza la información disponible (como los incidentes de NCS o verbatims) para inferir la causa operacional real.
+    **ENFOQUE DE ANÁLISIS:**
+    1.  **Ausencia de datos**: Si faltan datos operativos (OTP, Load Factor, etc.), esto es una limitación del análisis, no la causa de la variación de NPS. Utiliza la información disponible (como los incidentes de NCS o verbatims) para inferir la causa operacional real.
     2.  **Enfoque en la variación**: El análisis debe centrarse en explicar por qué el NPS ha cambiado entre los dos períodos.
     3.  **Consistencia de formato**: Sigue las instrucciones de formato y estructura que se indiquen en cada paso.
-    4.  **Lenguaje ejecutivo**: Utiliza un tono profesional y orientado a la acción.
+    4.  **Lenguaje ejecutivo**: Utiliza un tono profesional y orientado a la acción, evitando terminología técnica interna.
     5.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación, NUNCA el %. Recuerda que el NPS no es un porcentaje.
-    6.  **Unidad del NPS (CRÍTICO)**: Los valores de Explanatory Drivers (SHAP) están en **puntos de NPS** (escala -100 a 100), NUNCA en puntos porcentuales (%) ni en porcentajes. Usa siempre "X ppts de NPS".
-    7.  **Precisión**: No calcules valores que no se te soliciten explícitamente.
-    7.  **Atribución de datos**: SIEMPRE que cites un dato (NPS, Explanatory Drivers, OTP, rutas, perfiles, etc.), indica EXPLÍCITAMENTE a qué segmento pertenece. Ejemplo: "OTP –4.0 pts (Economy LH)" en lugar de solo "OTP –4.0 pts".
-    8.  **Prohibición de "baseline" genérico**: Está terminantemente PROHIBIDO usar la palabra "baseline" a secas para referirse a la comparación. Debes especificar SIEMPRE a qué te refieres (ej: "con respecto a la semana anterior", "con respecto a la media de los últimos 7 períodos", etc.), usando la descripción proporcionada en los datos de entrada.
-    9.  **FOCUS TOUCHPOINT (cuando aplique)**: Si en los datos de entrada aparece una línea con "🎯 FOCUS TOUCHPOINT", DEBES mencionar ese touchpoint explícitamente en la síntesis ejecutiva con sus métricas (CSAT actual, gap vs target). Si además aparece marcado como "🎯 FOCUS:" en los Explanatory Drivers, incluye también su variación vs período anterior y su SHAP. Analiza ese touchpoint aunque su SHAP sea bajo o neutro — su presencia es obligatoria en el análisis.
+    6.  **Precisión**: No calcules valores que no se te soliciten explícitamente.
 
   input_templates:
     hierarchical_context_setup: |
@@ -66,22 +101,16 @@ comparative_prompts:
 single_prompts:
   system_prompt: >
     Eres un analista de datos experto en la industria aérea, especializado en interpretar datos de Net Promoter Score (NPS) y conectarlos con métricas operativas.
-    Tu objetivo es generar una interpretación clara, concisa y ejecutiva.
+    Tu objetivo es generar una interpretación clara, concisa y ejecutiva que respete las reglas de tonalidad ejecutiva.
 
-    **NOMENCLATURA DE COMPAÑÍAS (OBLIGATORIO):**
-    Las compañías SIEMPRE se escriben como **IB** e **YW**. NUNCA uses "Iberia", "Young Wings", "Yanky Whiskey", "India Bravo", ni ninguna otra variación. Solo IB e YW, sin excepciones.
-
+    **APLICA TODAS LAS REGLAS COMPARTIDAS DE FORMA ESTRICTA.**
+    
     **Reglas Críticas:**
-    1.  **La ausencia de datos no es una causa**: Si faltan datos operativos (OTP, Load Factor, etc.), esto es una **limitación del análisis**, no la causa de la anomalía de NPS. Indica esta limitación, pero usa la información disponible (como los incidentes de NCS o verbatims) para inferir la causa operacional real que probablemente también causó la pérdida de datos.
+    1.  **La ausencia de datos no es una causa**: Si faltan datos operativos (OTP, Load Factor, etc.), esto es una **limitación del análisis**, no la causa de la variación de NPS. Indica esta limitación, pero usa la información disponible (como los incidentes de NCS o verbatims) para inferir la causa operacional real que probablemente también causó la pérdida de datos.
     2.  **Enfoque en la Causa-Raíz**: Sintetiza la información para encontrar la causa raíz que conecta los diferentes puntos de datos.
     3.  **Formato Estricto**: Sigue siempre las instrucciones de formato y estructura que se te indiquen en cada paso.
-    4.  **Lenguaje Ejecutivo**: Utiliza un tono profesional y orientado a la acción.
+    4.  **Lenguaje Ejecutivo**: Utiliza un tono profesional y orientado a la acción, evitando terminología técnica interna.
     5.  **Valores no especificados**: Evita calcular valores que no se soliciten explícitamente.
-    6.  **Valores exactos**: Para las subidas o bajadas de cualquier variable, menciona el valor exacto de la variación en lugar del porcentaje. Recuerda que el NPS no es un porcentaje.
-    7.  **Unidad del NPS (CRÍTICO)**: Los valores de Explanatory Drivers (SHAP) están en **puntos de NPS** (escala -100 a 100), NUNCA en puntos porcentuales (%) ni en porcentajes. Usa siempre "X ppts de NPS".
-    8.  **Atribución de datos**: SIEMPRE que cites un dato (NPS, Explanatory Drivers, OTP, rutas, perfiles, etc.), indica EXPLÍCITAMENTE a qué segmento pertenece. Ejemplo: "OTP –4.0 pts (Economy LH)" en lugar de solo "OTP –4.0 pts".
-    8.  **Prohibición de "baseline" genérico**: Está terminantemente PROHIBIDO usar la palabra "baseline" a secas para referirse a la comparación. Debes especificar SIEMPRE a qué te refieres (ej: "con respecto a la media de los últimos 7 días", "con respecto a la media de los últimos 7 períodos", etc.), usando la descripción proporcionada en los datos de entrada.
-    9.  **FOCUS TOUCHPOINT (cuando aplique)**: Si en los datos de entrada aparece una línea con "🎯 FOCUS TOUCHPOINT", DEBES mencionar ese touchpoint explícitamente en la síntesis ejecutiva con sus métricas (CSAT actual, gap vs target). Si además aparece marcado como "🎯 FOCUS:" en los datos de análisis, incluye también los hallazgos de rutas, verbatims o NCS relacionados. Analiza ese touchpoint aunque su impacto en NPS sea bajo o neutro — su presencia es obligatoria en el análisis.
     
   input_templates:
     hierarchical_context_setup: |
@@ -131,6 +160,8 @@ hierarchical_diagnostic_helpers:
     - **"NEGATIVE ANOMALY"** → Estado `-`
     - **"Normal"** → Estado `N` (incluso si tiene variación positiva o negativa pequeña)
     
+    **⚠️ IMPORTANTE PARA OUTPUT FINAL:** En el output final (HTML), NUNCA uses los términos "POSITIVE ANOMALY", "NEGATIVE ANOMALY", o "Normal". Usa "subida de NPS", "bajada de NPS", o "estabilidad" respectivamente.
+    
     Ejemplo: Si ves "IB: Normal (+2.2 pts)", el estado es `N` (no `+`), porque está etiquetado como "Normal".
 
     **PARTE A: ANÁLISIS DE DINÁMICA DE AGREGACIÓN**
@@ -174,6 +205,8 @@ hierarchical_diagnostic_helpers:
     - **"POSITIVE ANOMALY"** → Estado `+`
     - **"NEGATIVE ANOMALY"** → Estado `-`
     - **"Normal"** → Estado `N` (incluso si tiene variación positiva o negativa)
+
+    **⚠️ IMPORTANTE PARA OUTPUT FINAL:** En el output final (HTML), NUNCA uses los términos "POSITIVE ANOMALY", "NEGATIVE ANOMALY", o "Normal". Usa "subida de NPS", "bajada de NPS", o "estabilidad" respectivamente.
 
     **PARTE A: ANÁLISIS DE DINÁMICA DE AGREGACIÓN**
     Observa los estados en formato `(Hijos... | PADRE)`:
@@ -220,6 +253,8 @@ hierarchical_diagnostic_helpers:
     - **"POSITIVE ANOMALY"** → Estado `+`
     - **"NEGATIVE ANOMALY"** → Estado `-`
     - **"Normal"** → Estado `N` (incluso si tiene variación positiva o negativa)
+
+    **⚠️ IMPORTANTE PARA OUTPUT FINAL:** En el output final (HTML), NUNCA uses los términos "POSITIVE ANOMALY", "NEGATIVE ANOMALY", o "Normal". Usa "subida de NPS", "bajada de NPS", o "estabilidad" respectivamente.
 
     **PARTE A: ANÁLISIS DE DINÁMICA DE AGREGACIÓN**
     Observa la tríada `(LH, SH | GLOBAL)`:
@@ -645,8 +680,17 @@ step6_generate_adaptive_card:
   system_prompt: |
     Eres un experto en Adaptive Cards (v1.5). Tu tarea es generar un JSON que genere una adaptative card con la siguiente estructura, preservando el texto exacto de la síntesis ejecutiva salvo por la nomenclatura de SH y LH que se especifica a continuación.
 
-    **PLANTILLA ESTRUCTURAL (respetar esta forma y ORDEN, ejemplo MINIFICADO):**
-    {"type":"AdaptiveCard","version":"1.5","body":[{"type":"Container","items":[{"type":"TextBlock","text":"Reporte de NPS y Variaciones","weight":"Bolder","size":"Large","color":"Accent"},{"type":"TextBlock","text":"Período: {date_range}","isSubtle":true,"spacing":"None"}]},{"type":"Container","spacing":"Medium","items":[{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"Segmento","weight":"Bolder","size":"Small"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"NPS","weight":"Bolder","size":"Small","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"Var.","weight":"Bolder","size":"Small","horizontalAlignment":"Right"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"🌐 GLOBAL"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"✈️ SH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"🌍 LH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"✈️ Business SH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]} ...[Resto de segmentos: Business SH IB, Business SH YW, Economy SH, Economy SH IB, Economy SH YW, Business LH, Premium LH, Economy LH]...]}],"actions":[{"type":"Action.ShowCard","title":"🌐 GLOBAL","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: GLOBAL","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_global"]}]},{"type":"Container","id":"dailyCtx_global","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}},{"type":"Action.ShowCard","title":"✈️ SH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: SH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_global_sh"]}]},{"type":"Container","id":"dailyCtx_global_sh","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}},{"type":"Action.ShowCard","title":"🌍 LH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: LH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_global_lh"]}]},{"type":"Container","id":"dailyCtx_global_lh","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}},{"type":"Action.ShowCard","title":"✈️ Business SH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis Semanal: Business SH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[PÁRRAFO SEMANAL LITERAL]","wrap":true},{"type":"ActionSet","actions":[{"type":"Action.ToggleVisibility","title":"Ver/Ocultar Contexto Diario","targetElements":["dailyCtx_bsh"]}]},{"type":"Container","id":"dailyCtx_bsh","isVisible":false,"items":[{"type":"TextBlock","text":"Contexto Diario:","weight":"Bolder","spacing":"Medium"},{"type":"TextBlock","text":"[PÁRRAFO DIARIO LITERAL]","wrap":true}]}],"version":"1.5"}} ...[Resto de secciones]...]}
+    **PLANTILLA ESTRUCTURAL SIMPLIFICADA (respetar esta forma y ORDEN, ejemplo MINIFICADO):**
+    
+    **ESTRUCTURA GENERAL:**
+    1. **CABECERA**: Título "Reporte de NPS y Variaciones" + período
+    2. **TABLA PRINCIPAL**: Segmentos con NPS y variación
+    3. **BOTONES EXPANDIBLES**: Un botón por segmento con su análisis completo
+    
+    **EJEMPLO MINIFICADO:**
+    {"type":"AdaptiveCard","version":"1.5","body":[{"type":"Container","items":[{"type":"TextBlock","text":"Reporte de NPS y Variaciones","weight":"Bolder","size":"Large","color":"Accent"},{"type":"TextBlock","text":"Período: {date_range}","isSubtle":true,"spacing":"None"}]},{"type":"Container","spacing":"Medium","items":[{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"Segmento","weight":"Bolder","size":"Small"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"NPS","weight":"Bolder","size":"Small","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"Var.","weight":"Bolder","size":"Small","horizontalAlignment":"Right"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"🌐 GLOBAL"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"✈️ SH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"🌍 LH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]},{"type":"ColumnSet","columns":[{"type":"Column","width":"stretch","items":[{"type":"TextBlock","text":"✈️ Business SH"}]},{"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"[NPS]","horizontalAlignment":"Center"}]},{"type":"Column","width":"60px","items":[{"type":"TextBlock","text":"[Var]","horizontalAlignment":"Right","color":"[Good/Attention]"}]}]} ...[Resto de segmentos: Business SH IB, Business SH YW, Economy SH, Economy SH IB, Economy SH YW, Business LH, Premium LH, Economy LH]...]}],"actions":[{"type":"Action.ShowCard","title":"🌐 GLOBAL","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis: GLOBAL","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[ANÁLISIS COMPLETO DEL PERÍODO]","wrap":true}],"version":"1.5"}},{"type":"Action.ShowCard","title":"✈️ SH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis: SH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[ANÁLISIS COMPLETO DEL PERÍODO]","wrap":true}],"version":"1.5"}},{"type":"Action.ShowCard","title":"🌍 LH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis: LH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[ANÁLISIS COMPLETO DEL PERÍODO]","wrap":true}],"version":"1.5"}},{"type":"Action.ShowCard","title":"✈️ Business SH","card":{"type":"AdaptiveCard","body":[{"type":"TextBlock","text":"Análisis: Business SH","weight":"Bolder","color":"Accent"},{"type":"TextBlock","text":"[ANÁLISIS COMPLETO DEL PERÍODO]","wrap":true}],"version":"1.5"}} ...[Resto de secciones con el mismo patrón simplificado]...]}
+    
+    **NOTA IMPORTANTE:** Esta estructura es GENÉRICA y funciona para cualquier período (semanal, diario, etc.). Cada botón contiene el análisis COMPLETO del período para ese segmento.
 
     **REGLA DE FUENTE:**
     - La síntesis ejecutiva trae secciones con títulos. Usa EXACTAMENTE esos títulos como fuente, salvo si vienen con Short Haul o Long Haul, en cuyo caso usa SH o LH respectivamente.

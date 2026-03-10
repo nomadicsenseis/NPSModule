@@ -130,7 +130,14 @@ async def find_latest_available_date(
     raise ValueError(error_msg)
 
 
-async def generate_consolidated_summary(agent, consolidated_data: List[Dict], date_flight_local: str = None, segment: str = 'Global') -> str:
+async def generate_consolidated_summary(
+    agent, 
+    consolidated_data: List[Dict], 
+    date_flight_local: str = None, 
+    segment: str = 'Global',
+    adaptive_card_weekly: str = None,
+    adaptive_cards_daily: List[str] = None
+) -> str:
     """Generate a consolidated summary from multiple analysis types including weekly comparative and daily single analyses.
     
     Args:
@@ -138,7 +145,60 @@ async def generate_consolidated_summary(agent, consolidated_data: List[Dict], da
         consolidated_data: List of consolidated analysis data
         date_flight_local: Local flight date for context
         segment: The root segment for hierarchical analysis (default: 'Global')
+        adaptive_card_weekly: Optional Adaptive Card JSON for weekly analysis
+        adaptive_cards_daily: Optional list of Adaptive Card JSONs for daily analyses
     """
+    
+    # If Adaptive Cards are provided directly, use the new method
+    if adaptive_card_weekly or adaptive_cards_daily:
+        print("📊 Using Adaptive Card-based summary generation...")
+        
+        # Prepare Adaptive Cards data for summary agent
+        adaptive_cards_data = []
+        
+        # Add weekly Adaptive Card if available
+        if adaptive_card_weekly:
+            # Extract date range from consolidated_data if available
+            date_range = "Unknown"
+            if consolidated_data and isinstance(consolidated_data[0], dict):
+                metadata = consolidated_data[0].get('metadata', {})
+                date_range = metadata.get('analysis_date', 'Unknown')
+            
+            adaptive_cards_data.append({
+                'adaptive_card_json': adaptive_card_weekly,
+                'period_type': 'weekly',
+                'date_range': date_range
+            })
+        
+        # Add daily Adaptive Cards if available
+        if adaptive_cards_daily:
+            daily_data = []
+            if consolidated_data and isinstance(consolidated_data[0], dict):
+                daily_data = consolidated_data[0].get('daily_singles', [])
+            
+            for i, daily_card in enumerate(adaptive_cards_daily):
+                if daily_card:
+                    # Extract date from daily_single_analyses if available
+                    date = daily_data[i].get('date', f'Day {i+1}') if i < len(daily_data) else f'Day {i+1}'
+                    adaptive_cards_data.append({
+                        'adaptive_card_json': daily_card,
+                        'period_type': 'daily',
+                        'date_range': date
+                    })
+        
+        if adaptive_cards_data:
+            try:
+                comprehensive_summary = await asyncio.wait_for(
+                    agent.generate_summary_from_adaptive_cards(adaptive_cards_data),
+                    timeout=3600.0
+                )
+                return comprehensive_summary
+            except Exception as e:
+                print(f"❌ Error in generate_summary_from_adaptive_cards: {e}")
+                import traceback
+                traceback.print_exc()
+                # Fallback to text-based method
+                print("⚠️ Falling back to text-based summary generation...")
     
     # Check if it's the weekly format (with 'weekly_comparative' and 'daily_singles' keys)
     if consolidated_data and isinstance(consolidated_data[0], dict) and 'weekly_comparative' in consolidated_data[0]:

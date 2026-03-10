@@ -1,0 +1,18 @@
+{
+  "weekly_analysis": "\n**SÍNTESIS EJECUTIVA**\nDurante la semana del 20 al 26 de enero 2025, hemos identificado 3 factores clave que explican las variaciones de NPS. El NPS global subió **+3.2 pts** con respecto a la semana anterior.\n\nA nivel diario, el fuerte repunte del **06-dic** (+6.1 pts) explica gran parte de la mejora semanal.\n\n**DETALLE POR AGREGACIÓN**\n\n**SHORT HAUL: Desempeño estable**\nEl radio corto registró un NPS de **36.6** con **+3.4 pts** con respecto a la semana anterior.\n\n**LONG HAUL: Mejora moderada**\nEl radio largo alcanzó **42.1** con **+1.8 pts**.\n\n**ECONOMY SH: Impacto positivo**\nLa cabina Economy de SH obtuvo **35.4** con **+3.5 pts**. Desglose por compañía: **IB** 34.2 con +3.8 pts, **YW** 37.1 con +3.1 pts.\n\n**BUSINESS SH: Presión operativa**\nEn Business de SH, el NPS fue **29.3** con **–10.0 pts** con respecto a la semana anterior, afectado por cancelaciones en rutas domésticas.\n",
+  "daily_analyses": [
+    {
+      "date": "2025-01-20",
+      "analysis": "\n📅 2025-01-20:\n**SÍNTESIS EJECUTIVA**\nDurante el día 20 de enero, el NPS global mostró una mejora de +5.2 pts.\n\n**SHORT HAUL: Mejora moderada**\nEl radio corto registró un NPS de 45.3 con +3.1 pts.\n\n**LONG HAUL: Estabilidad**\nEl radio largo mantuvo un NPS de 38.7 sin cambios significativos.\n\n**ECONOMY SH: Desempeño positivo**\nLa cabina Economy de SH obtuvo 42.1 con +2.8 pts.\n\n**BUSINESS SH: Ligera mejora**\nLa cabina Business de SH alcanzó 48.9 con +1.5 pts.\n",
+      "anomalies": []
+    },
+    {
+      "date": "2025-01-21",
+      "analysis": "\n📅 2025-01-21:\n**SÍNTESIS EJECUTIVA**\nEl día 21 de enero mostró una ligera caída de -2.1 pts en el NPS global.\n\n**SHORT HAUL: Deterioro**\nSH registró 41.8 con -3.5 pts, afectado por problemas de puntualidad.\n\n**LONG HAUL: Mejora**\nLH mejoró a 40.2 con +1.5 pts, gracias a mejor servicio a bordo.\n\n**ECONOMY SH: Caída**\nEconomy SH cayó a 39.7 con -2.4 pts.\n\n**BUSINESS SH: Estable**\nBusiness SH se mantuvo en 48.5 con -0.4 pts.\n",
+      "anomalies": [
+        "SH",
+        "ECONOMY SH"
+      ]
+    }
+  ]
+}
