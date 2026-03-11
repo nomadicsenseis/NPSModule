@@ -429,53 +429,6 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 
         except Exception as e:
             self.logger.error(f"❌ Failed to save Adaptive Card: {e}")
-                    # If parsing fails, try to fix common issues
-                    cleaned_json = card_json
-                    
-                    # Fix unescaped newlines within strings (replace real newlines with \n)
-                    # This is a simple approach - more complex cases might need regex
-                    lines = cleaned_json.split('\n')
-                    in_string = False
-                    escape_next = False
-                    result_lines = []
-                    
-                    for line in lines:
-                        new_line = ""
-                        for char in line:
-                            if char == '"' and not escape_next:
-                                in_string = not in_string
-                            elif char == '\\':
-                                escape_next = True
-                            elif char == '\r':
-                                pass  # Skip carriage returns
-                            elif char == '\n' and in_string:
-                                new_line += '\\n'  # Escape newlines within strings
-                            else:
-                                if char != '\\' or not escape_next:
-                                    escape_next = False
-                                else:
-                                    escape_next = False
-                            new_line += char
-                        
-                        result_lines.append(new_line)
-                    
-                    cleaned_json = '\n'.join(result_lines)
-                    
-                    # Try parsing again
-                    card_dict = json.loads(cleaned_json)
-                
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    json.dump(card_dict, f, indent=2, ensure_ascii=False)
-                self.logger.info(f"💾 Adaptive Card saved to: {output_path}")
-            except json.JSONDecodeError as e:
-                # If JSON parsing still fails, save as-is for debugging
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(card_json)
-                self.logger.warning(f"⚠️ Adaptive Card saved as raw text (JSON parsing failed): {output_path}")
-                self.logger.warning(f"   Error: {e}")
-                
-        except Exception as e:
-            self.logger.error(f"❌ Failed to save Adaptive Card: {e}")
 
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
