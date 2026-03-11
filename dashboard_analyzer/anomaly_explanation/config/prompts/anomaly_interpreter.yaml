@@ -772,3 +772,96 @@ step7_modernize_tone:
 
   input_template: |
     JSON ACTUAL: {current_json}
+
+# =============================================================================
+# STEP 8: OPTIMIZE ADAPTIVE CARD SIZE (PROGRESSIVE REDUCTION)
+# =============================================================================
+# Proceso de reducción progresiva para Adaptive Cards grandes:
+#
+# JERARQUÍA DE IMPORTANCIA (de mayor a menor):
+# - Nivel 1: GLOBAL, SH, LH (segmentos principales)
+# - Nivel 2: Business SH, Economy SH (cabina-radio)
+# - Nivel 3: Business SH IB, Business SH YW, Economy SH IB, Economy SH YW (cabina-radio-compañía)
+# - Nivel 4: Business LH, Premium LH, Economy LH (cabina LH, sin desglose por compañía)
+#
+# PASOS DE REDUCCIÓN:
+# 8a: Resumir análisis de compañías (IB/YW) en SH
+# 8b: Resumir análisis de cabinas LH (Premium, Business, Economy)
+# 8c: Resumir análisis de cabinas SH (Business, Economy)
+# =============================================================================
+
+step8a_trim_company_details:
+  system_prompt: |
+    Te voy a pasar una Adaptive Card en JSON que excede el límite de 24 KB.
+    Tu tarea es REDUCIR el contenido de las secciones de COMPAÑÍA (IB/YW) manteniendo solo lo esencial.
+    
+    **REGLAS CRÍTICAS:**
+    1. Solo modifica las secciones de compañía: Business SH IB, Business SH YW, Economy SH IB, Economy SH YW
+    2. Conserva los datos clave: NPS, variación, y una frase resumen (máximo 50 palabras)
+    3. NO modifiques: GLOBAL, SH, LH, Business SH, Economy SH, Business LH, Premium LH, Economy LH
+    4. Mantén la estructura JSON válida y minificada
+    
+    **EJEMPLO DE REDUCCIÓN:**
+    ANTES: "La cabina Business SH de Iberia registró un NPS de 42.3 con +5.2 pts respecto a la semana anterior, impulsada por mejoras en puntualidad y servicio de cabina, aunque se detectaron incidencias en rutas específicas como MAD-Barcelona con 3 casos de equipaje."
+    DESPUÉS: "Business SH IB: NPS 42.3 (+5.2 pts), mejora en puntualidad y servicio."
+    
+    **OBJETIVO:** Reducir ~10-15% del tamaño total.
+    
+    **FORMATO DE SALIDA:**
+    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
+  input_template: |
+    JSON ACTUAL: {current_json}
+    OBJETIVO: Reducir hasta que pese menos de 24 KB, resumiendo solo las secciones de compañía (IB/YW).
+
+step8b_trim_lh_cabins:
+  system_prompt: |
+    Te voy a pasar una Adaptive Card en JSON que excede el límite de 24 KB.
+    Tu tarea es REDUCIR el contenido de las secciones de CABINA LH (Premium LH, Business LH, Economy LH).
+    
+    **REGLAS CRÍTICAS:**
+    1. Solo modifica las secciones de cabina LH: Premium LH, Business LH, Economy LH
+    2. Conserva los datos clave: NPS, variación, y una frase resumen (máximo 50 palabras)
+    3. NO modifiques: GLOBAL, SH, LH, Business SH, Economy SH, ni las secciones de compañía IB/YW
+    4. Mantén la estructura JSON válida y minificada
+    
+    **OBJETIVO:** Reducir ~10-15% del tamaño total.
+    
+    **FORMATO DE SALIDA:**
+    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
+  input_template: |
+    JSON ACTUAL: {current_json}
+    OBJETIVO: Reducir hasta que pese menos de 24 KB, resumiendo las secciones de cabina LH.
+
+step8c_trim_sh_cabins:
+  system_prompt: |
+    Te voy a pasar una Adaptive Card en JSON que excede el límite de 24 KB.
+    Tu tarea es REDUCIR el contenido de las secciones de CABINA SH (Business SH, Economy SH).
+    
+    **REGLAS CRÍTICAS:**
+    1. Solo modifica las secciones de cabina SH: Business SH, Economy SH
+    2. Conserva los datos clave: NPS, variación, y una frase resumen (máximo 50 palabras)
+    3. NO modifiques: GLOBAL, SH, LH, ni las secciones de compañía IB/YW
+    4. Mantén la estructura JSON válida y minificada
+    
+    **OBJETIVO:** Reducir ~10-15% del tamaño total.
+    
+    **FORMATO DE SALIDA:**
+    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
+  input_template: |
+    JSON ACTUAL: {current_json}
+    OBJETIVO: Reducir hasta que pese menos de 24 KB, resumiendo las secciones de cabina SH.
+
+step8d_validate_and_fix_json:
+  system_prompt: |
+    Te voy a pasar una Adaptive Card en JSON. Tu tarea es VALIDAR que el JSON sea correcto y corregir cualquier error de sintaxis.
+    
+    **REGLAS:**
+    1. Verifica que el JSON sea válido
+    2. Corrige errores de sintaxis si los hay
+    3. Mantén el contenido intacto
+    4. Si el JSON ya es válido, devuélvelo sin cambios
+    
+    **FORMATO DE SALIDA:**
+    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
+  input_template: |
+    JSON ACTUAL: {current_json}

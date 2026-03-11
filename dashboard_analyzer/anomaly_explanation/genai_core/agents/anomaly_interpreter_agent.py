@@ -429,6 +429,137 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 
         except Exception as e:
             self.logger.error(f"❌ Failed to save Adaptive Card: {e}")
+    
+    def _measure_kb(self, payload: str) -> float:
+        """Return UTF-8 payload size in KB."""
+        if payload is None:
+            return 0.0
+        return len(payload.encode('utf-8')) / 1024.0
+    
+    def _clean_json_response(self, text: str) -> str:
+        """Extract JSON from LLM response - simple and direct."""
+        if not text:
+            return "{}"
+        
+        cleaned = text.strip()
+        
+        # Extract from markdown code blocks if present
+        if "```" in cleaned:
+            parts = cleaned.split("```")
+            for part in parts[1:]:  # Skip first part (before first ```)
+                content = part.split("```")[0] if "```" in part else part
+                # Remove language identifier if present
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+                if content.startswith("{"):
+                    cleaned = content
+                    break
+        
+        # Find first '{' and last '}'
+        start = cleaned.find('{')
+        end = cleaned.rfind('}')
+        if start != -1 and end != -1 and end > start:
+            cleaned = cleaned[start:end+1]
+            
+        return cleaned
+    
+    def _minify_json(self, json_payload: str) -> str:
+        """Minify JSON string if possible to reduce size."""
+        if not json_payload:
+            return json_payload
+        
+        cleaned = self._clean_json_response(json_payload)
+        try:
+            parsed = json.loads(cleaned)
+            return json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
+        except Exception:
+            # If parsing fails, just return the cleaned text as a last resort
+            return cleaned.strip()
+    
+    async def _optimize_adaptive_card_size(self, adaptive_card_json: str) -> str:
+        """
+        Optimize Adaptive Card size through progressive reduction.
+        
+        Target size: 24 KB
+        Reduction order:
+        1. Minify JSON
+        2. Trim company details (IB/YW)
+        3. Trim LH cabins
+        4. Trim SH cabins
+        5. Validate and fix JSON
+        """
+        TARGET_KB = 24
+        
+        # Step 1: Minify JSON
+        best_json = self._minify_json(adaptive_card_json)
+        current_kb = self._measure_kb(best_json)
+        self.logger.info(f"📦 Adaptive Card size after minification: {current_kb:.2f} KB")
+        
+        if current_kb <= TARGET_KB:
+            self.logger.info(f"✅ Adaptive Card already fits ({current_kb:.2f} KB)")
+            return best_json
+        
+        # Steps for progressive reduction
+        reduction_steps = [
+            'step8a_trim_company_details',
+            'step8b_trim_lh_cabins', 
+            'step8c_trim_sh_cabins',
+            'step8d_validate_and_fix_json'
+        ]
+        
+        last_step_applied = "minify_only"
+        best_kb = current_kb
+        
+        for step_key in reduction_steps:
+            step_config = self._get_config_value([step_key, 'system_prompt'])
+            step_input_template = self._get_config_value([step_key, 'input_template'])
+            
+            if not step_config or not step_input_template:
+                self.logger.warning(f"⚠️ Missing config for {step_key}, skipping")
+                continue
+            
+            self.logger.info(f"🔄 Applying optimization step: {step_key}...")
+            
+            # Pass escaped version to the LLM
+            escaped_for_llm = best_json.replace('"', '\\"')
+            
+            message_history = MessageHistory(logger=self.logger)
+            message_history.create_and_add_message(
+                content=step_config.format(target_kb=TARGET_KB),
+                message_type=MessageType.SYSTEM
+            )
+            message_history.create_and_add_message(
+                content=step_input_template.format(current_json=escaped_for_llm, target_kb=TARGET_KB),
+                message_type=MessageType.USER
+            )
+            
+            response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+            optimized = response.content if hasattr(response, 'content') else str(response)
+            
+            # Clean and minify the optimized response
+            optimized_clean = self._clean_json_response(optimized)
+            optimized_min = self._minify_json(optimized_clean)
+            size_kb = self._measure_kb(optimized_min)
+            
+            self.logger.info(f"📦 Adaptive Card size after {step_key}: {size_kb:.2f} KB")
+            
+            if size_kb < best_kb:
+                best_json = optimized_min
+                best_kb = size_kb
+                last_step_applied = step_key
+            
+            if size_kb <= TARGET_KB:
+                self.logger.info(f"✅ Adaptive Card fits after {step_key} ({size_kb:.2f} KB)")
+                break
+        
+        if best_kb > TARGET_KB:
+            self.logger.warning(f"⚠️ Adaptive Card still over limit after {last_step_applied}: {best_kb:.2f} KB")
+        else:
+            self.logger.info(f"✅ Adaptive Card final size optimization step: {last_step_applied} ({best_kb:.2f} KB)")
+        
+        self.logger.info(f"🚀 Final Adaptive Card JSON:\n{best_json}")
+        return best_json
 
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
@@ -805,11 +936,15 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                                 
                                 self.logger.info(f"✅ TONE_MODERNIZATION completed ({len(modernized_card_json)} chars)")
                                 
-                                # Save the modernized adaptive card to a file
-                                await self._save_adaptive_card(modernized_card_json, date, segment)
+                                # STEP 8: Optimize Adaptive Card size if needed
+                                self.logger.info(f"📦 Optimizing Adaptive Card size...")
+                                optimized_card_json = await self._optimize_adaptive_card_size(modernized_card_json)
+                                
+                                # Save the optimized adaptive card to a file
+                                await self._save_adaptive_card(optimized_card_json, date, segment)
                                 
                                 # Also store in attribute for summary agent
-                                self.last_adaptive_card = modernized_card_json
+                                self.last_adaptive_card = optimized_card_json
             
             # Compile final response from all steps
             print("🔍 DEBUG INTERPRETER: Compiling final interpretation...", file=sys.stderr)
