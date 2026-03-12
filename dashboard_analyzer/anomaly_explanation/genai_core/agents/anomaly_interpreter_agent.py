@@ -940,11 +940,11 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                                 self.logger.info(f"📦 Optimizing Adaptive Card size...")
                                 optimized_card_json = await self._optimize_adaptive_card_size(modernized_card_json)
                                 
-                                # Save the optimized adaptive card to a file
+                                # Save the optimized adaptive card to a file (reduced version for storage)
                                 await self._save_adaptive_card(optimized_card_json, date, segment)
                                 
-                                # Also store in attribute for summary agent
-                                self.last_adaptive_card = optimized_card_json
+                                # Store UNREDUCED version for summary agent
+                                self.last_adaptive_card = modernized_card_json
             
             # Compile final response from all steps
             print("🔍 DEBUG INTERPRETER: Compiling final interpretation...", file=sys.stderr)
