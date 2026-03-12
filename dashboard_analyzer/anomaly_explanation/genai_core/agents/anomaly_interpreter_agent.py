@@ -555,8 +555,62 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         
         if best_kb > TARGET_KB:
             self.logger.warning(f"⚠️ Adaptive Card still over limit after {last_step_applied}: {best_kb:.2f} KB")
+            self.logger.info(f"🔧 Applying aggressive fallback truncation...")
+            
+            # AGGRESSIVE FALLBACK: Truncate content in each section
+            try:
+                import json
+                parsed = json.loads(best_json)
+                
+                # Target: reduce each text field to ~50% of current size
+                def truncate_text(text, max_chars=None):
+                    if not text or not isinstance(text, str):
+                        return text
+                    # If max_chars not specified, target ~200 chars per field
+                    if max_chars is None:
+                        max_chars = 200
+                    if len(text) <= max_chars:
+                        return text
+                    # Truncate at last sentence or comma
+                    truncated = text[:max_chars]
+                    last_period = truncated.rfind('.')
+                    last_comma = truncated.rfind(',')
+                    cut_point = max(last_period, last_comma)
+                    if cut_point > max_chars * 0.5:
+                        return text[:cut_point + 1]
+                    return truncated + "..."
+                
+                # Truncate all text fields in the Adaptive Card
+                for container in parsed.get('body', []):
+                    if container.get('type') == 'Container':
+                        for item in container.get('items', []):
+                            if 'text' in item and isinstance(item['text'], str):
+                                item['text'] = truncate_text(item['text'])
+                            if 'items' in item:
+                                for subitem in item['items']:
+                                    if 'text' in subitem and isinstance(subitem['text'], str):
+                                        subitem['text'] = truncate_text(subitem['text'])
+                
+                # Truncate action titles and content
+                for action in parsed.get('actions', []):
+                    if 'title' in action and isinstance(action['title'], str):
+                        action['title'] = truncate_text(action['title'], 100)
+                    if 'card' in action and 'body' in action['card']:
+                        for body_item in action['card']['body']:
+                            if 'text' in body_item and isinstance(body_item['text'], str):
+                                body_item['text'] = truncate_text(body_item['text'])
+                
+                best_json = json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
+                best_kb = self._measure_kb(best_json)
+                self.logger.info(f"📦 Adaptive Card size after aggressive truncation: {best_kb:.2f} KB")
+                
+            except Exception as e:
+                self.logger.error(f"❌ Fallback truncation failed: {e}")
+        
+        if best_kb > TARGET_KB:
+            self.logger.warning(f"⚠️ Adaptive Card still over limit: {best_kb:.2f} KB (target: {TARGET_KB} KB)")
         else:
-            self.logger.info(f"✅ Adaptive Card final size optimization step: {last_step_applied} ({best_kb:.2f} KB)")
+            self.logger.info(f"✅ Adaptive Card final size: {best_kb:.2f} KB")
         
         self.logger.info(f"🚀 Final Adaptive Card JSON:\n{best_json}")
         return best_json

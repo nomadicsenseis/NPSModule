@@ -793,7 +793,7 @@ step7_modernize_tone:
 step8a_trim_company_details:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de 24 KB.
-    Tu tarea es REDUCIR el contenido de las secciones de COMPAÑÍA (IB/YW) manteniendo solo lo esencial.
+    Tu tarea es REDUCIR el contenido de las secciones de COMPAÑÍA (IB/YW) manteniendo solo lo esencial, aplicando formato HTML limpio y legible para Teams.
     
     **REGLAS CRÍTICAS:**
     1. Solo modifica las secciones de compañía: Business SH IB, Business SH YW, Economy SH IB, Economy SH YW
@@ -801,11 +801,17 @@ step8a_trim_company_details:
     3. NO modifiques: GLOBAL, SH, LH, Business SH, Economy SH, Business LH, Premium LH, Economy LH
     4. Mantén la estructura JSON válida y minificada
     
-    **EJEMPLO DE REDUCCIÓN:**
-    ANTES: "La cabina Business SH de Iberia registró un NPS de 42.3 con +5.2 pts respecto a la semana anterior, impulsada por mejoras en puntualidad y servicio de cabina, aunque se detectaron incidencias en rutas específicas como MAD-Barcelona con 3 casos de equipaje."
-    DESPUÉS: "Business SH IB: NPS 42.3 (+5.2 pts), mejora en puntualidad y servicio."
+    **FORMATO HTML APLICABLE (Teams-compatible):**
+    - Usa <b>...</b> para negritas en datos clave: NPS, variaciones, rutas
+    - Usa <i>...</i> sparingly para énfasis menor (causas secundarias)
+    - Separa elementos con <br> cuando haya lista de factores
+    - Mantén coherencia narrativa: no fragmentes el texto en listas sueltas
     
-    **OBJETIVO:** Reducir ~10-15% del tamaño total.
+    **EJEMPLO DE REDUCCIÓN CON FORMATO:**
+    ANTES: "La cabina Business SH de Iberia registró un NPS de 42.3 con +5.2 pts respecto a la semana anterior, impulsada por mejoras en puntualidad y servicio de cabina, aunque se detectaron incidencias en rutas específicas como MAD-Barcelona con 3 casos de equipaje."
+    DESPUÉS: "<b>Business SH IB:</b> NPS 42.3 (<b>+5.2 pts</b>), mejora en puntualidad y servicio."
+    
+    **OBJETIVO:** Reducir ~10-15% del tamaño total manteniendo legibilidad.
     
     **FORMATO DE SALIDA:**
     JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
@@ -816,15 +822,25 @@ step8a_trim_company_details:
 step8b_trim_lh_cabins:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de 24 KB.
-    Tu tarea es REDUCIR el contenido de las secciones de CABINA LH (Premium LH, Business LH, Economy LH).
+    Tu tarea es REDUCIR el contenido de las secciones de CABINA LH (Premium LH, Business LH, Economy LH), aplicando formato HTML limpio y legible para Teams.
     
     **REGLAS CRÍTICAS:**
     1. Solo modifica las secciones de cabina LH: Premium LH, Business LH, Economy LH
-    2. Conserva los datos clave: NPS, variación, y una frase resumen (máximo 50 palabras)
+    2. Conserva los datos clave: NPS, variación, causas principales, rutas críticas (máximo 50 palabras por sección)
     3. NO modifiques: GLOBAL, SH, LH, Business SH, Economy SH, ni las secciones de compañía IB/YW
     4. Mantén la estructura JSON válida y minificada
     
-    **OBJETIVO:** Reducir ~10-15% del tamaño total.
+    **FORMATO HTML APLICABLE (Teams-compatible):**
+    - Usa <b>...</b> para negritas en datos clave: NPS, variaciones, nombres de rutas
+    - Usa <i>...</i> sparingly para énfasis menor (causas secundarias, matices)
+    - Separa elementos con <br> cuando haya lista de factores relacionados
+    - Mantén coherencia narrativa: el texto debe leerse fluidamente, no como lista de bullets
+    
+    **EJEMPLO DE REDUCCIÓN CON FORMATO:**
+    ANTES: "La cabina Economy LH registró un NPS de 18.2 con una caída de 8.4 pts respecto a la semana anterior, afectada principalmente por problemas de puntualidad en rutas transatlánticas como MAD-JFK y MAD-SFO, con un impacto significativo en el perfil de pasajeros de código compartido."
+    DESPUÉS: "<b>Economy LH:</b> NPS 18.2 (<b>–8.4 pts</b>), caída por puntualidad en rutas transatlánticas <b>MAD-JFK</b>, <b>MAD-SFO</b>. Afecta especialmente a pasajeros <i>código compartido</i>."
+    
+    **OBJETIVO:** Reducir ~10-15% del tamaño total manteniendo legibilidad y estructura narrativa.
     
     **FORMATO DE SALIDA:**
     JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
@@ -835,15 +851,25 @@ step8b_trim_lh_cabins:
 step8c_trim_sh_cabins:
   system_prompt: |
     Te voy a pasar una Adaptive Card en JSON que excede el límite de 24 KB.
-    Tu tarea es REDUCIR el contenido de las secciones de CABINA SH (Business SH, Economy SH).
+    Tu tarea es REDUCIR el contenido de las secciones de CABINA SH (Business SH, Economy SH), aplicando formato HTML limpio y legible para Teams.
     
     **REGLAS CRÍTICAS:**
     1. Solo modifica las secciones de cabina SH: Business SH, Economy SH
-    2. Conserva los datos clave: NPS, variación, y una frase resumen (máximo 50 palabras)
+    2. Conserva los datos clave: NPS, variación, causas principales, rutas críticas (máximo 50 palabras por sección)
     3. NO modifiques: GLOBAL, SH, LH, ni las secciones de compañía IB/YW
     4. Mantén la estructura JSON válida y minificada
     
-    **OBJETIVO:** Reducir ~10-15% del tamaño total.
+    **FORMATO HTML APLICABLE (Teams-compatible):**
+    - Usa <b>...</b> para negritas en datos clave: NPS, variaciones, nombres de compañías (IB/YW), rutas
+    - Usa <i>...</i> sparingly para énfasis menor (causas secundarias, matices)
+    - Separa elementos con <br> cuando haya lista de factores relacionados
+    - Mantén coherencia narrativa: el texto debe leerse fluidamente, no como lista de bullets
+    
+    **EJEMPLO DE REDUCCIÓN CON FORMATO:**
+    ANTES: "La cabina Economy SH registró un NPS de 24.5 con una caída de 6.2 pts respecto a la semana anterior, afectada principalmente por problemas de puntualidad y servicio de cabina en las rutas europeas, con un impacto más pronunciado en Iberia que en Young Wings según los datos de ambas compañías."
+    DESPUÉS: "<b>Economy SH:</b> NPS 24.5 (<b>–6.2 pts</b>), caída por puntualidad y servicio en rutas europeas. Mayor impacto en <b>IB</b> que en <b>YW</b>."
+    
+    **OBJETIVO:** Reducir ~10-15% del tamaño total manteniendo legibilidad y estructura narrativa.
     
     **FORMATO DE SALIDA:**
     JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
