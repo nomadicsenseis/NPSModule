@@ -615,6 +615,88 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         self.logger.info(f"🚀 Final Adaptive Card JSON:\n{best_json}")
         return best_json
 
+    async def _force_truncate_adaptive_card(self, adaptive_card_json: str) -> str:
+        """
+        Force truncate Adaptive Card to fit under 24KB limit.
+        This is a last resort when LLM-based optimization fails.
+        """
+        import json
+        
+        self.logger.warning(f"🔧 Force truncating Adaptive Card...")
+        
+        try:
+            parsed = json.loads(adaptive_card_json)
+            
+            # Aggressive truncation: reduce all text fields to ~150 chars
+            def hard_truncate(text, max_chars=150):
+                if not text or not isinstance(text, str):
+                    return text
+                if len(text) <= max_chars:
+                    return text
+                # Find last sentence boundary
+                truncated = text[:max_chars]
+                last_period = truncated.rfind('.')
+                last_comma = truncated.rfind(',')
+                cut_point = max(last_period, last_comma)
+                if cut_point > max_chars * 0.4:
+                    return text[:cut_point + 1]
+                return truncated + "..."
+            
+            # Truncate all text fields recursively
+            def truncate_all(obj):
+                if isinstance(obj, dict):
+                    for key, value in obj.items():
+                        if key == 'text' and isinstance(value, str):
+                            obj[key] = hard_truncate(value, 150)
+                        elif key == 'title' and isinstance(value, str):
+                            obj[key] = hard_truncate(value, 80)
+                        else:
+                            truncate_all(value)
+                elif isinstance(obj, list):
+                    for item in obj:
+                        truncate_all(item)
+            
+            truncate_all(parsed)
+            
+            result = json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
+            final_kb = self._measure_kb(result)
+            self.logger.warning(f"📦 Adaptive Card size after force truncation: {final_kb:.2f} KB")
+            
+            # If still over limit, make it even more aggressive
+            if final_kb > 24:
+                self.logger.warning(f"⚠️ Still over limit, applying ultra-aggressive truncation")
+                # Ultra-aggressive: reduce to 100 chars
+                def hard_truncate_ultra(text, max_chars=100):
+                    if not text or not isinstance(text, str):
+                        return text
+                    if len(text) <= max_chars:
+                        return text
+                    return text[:max_chars] + "..."
+                
+                def truncate_all_ultra(obj):
+                    if isinstance(obj, dict):
+                        for key, value in obj.items():
+                            if key == 'text' and isinstance(value, str):
+                                obj[key] = hard_truncate_ultra(value, 100)
+                            elif key == 'title' and isinstance(value, str):
+                                obj[key] = hard_truncate_ultra(value, 60)
+                            else:
+                                truncate_all_ultra(value)
+                    elif isinstance(obj, list):
+                        for item in obj:
+                            truncate_all_ultra(item)
+                
+                truncate_all_ultra(parsed)
+                result = json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
+                self.logger.warning(f"📦 Adaptive Card size after ultra-aggressive truncation: {self._measure_kb(result):.2f} KB")
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"❌ Force truncation failed: {e}")
+            # Last resort: just return first 20KB of the string
+            return adaptive_card_json[:int(20 * 1024)]
+
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
         # OpenAI models
@@ -992,7 +1074,19 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                                 
                                 # STEP 8: Optimize Adaptive Card size if needed
                                 self.logger.info(f"📦 Optimizing Adaptive Card size...")
-                                optimized_card_json = await self._optimize_adaptive_card_size(modernized_card_json)
+                                self.logger.info(f"📊 Input size before optimization: {self._measure_kb(modernized_card_json):.2f} KB")
+                                
+                                try:
+                                    optimized_card_json = await self._optimize_adaptive_card_size(modernized_card_json)
+                                    self.logger.info(f"📊 Output size after optimization: {self._measure_kb(optimized_card_json):.2f} KB")
+                                except Exception as opt_error:
+                                    self.logger.error(f"❌ Optimization failed: {opt_error}, using minified version")
+                                    optimized_card_json = self._minify_json(modernized_card_json)
+                                
+                                # Force truncate if still over limit (safety net)
+                                if self._measure_kb(optimized_card_json) > 24:
+                                    self.logger.warning(f"⚠️ Optimization didn't reduce enough, applying force truncation")
+                                    optimized_card_json = await self._force_truncate_adaptive_card(optimized_card_json)
                                 
                                 # Save the optimized adaptive card to a file (reduced version for storage)
                                 await self._save_adaptive_card(optimized_card_json, date, segment)

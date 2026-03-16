@@ -1750,45 +1750,59 @@ EVALUATE
     ) -> str:
         """Build DAX query for focus touchpoint CSAT vs target.
 
-        Uses SUMMARIZECOLUMNS with FILTER(ALL(...)) for date/cabin/haul filters
-        and [Monthly_Satisfaction] + [Target_Satisfaction_filtered] measures.
-        Filters by filtered_name = touchpoint_name.
+        Uses TREATAS for segment filters and FILTER(KEEPFILTERS(VALUES(...)))
+        for dates, matching the pattern from Exp. Drivers / Rutas queries
+        so that [Monthly_Satisfaction] and [Target_Satisfaction_filtered]
+        correctly respond to cabin/haul/company filter context.
         """
-        # Normalise dates to datetime if they are strings
         if isinstance(start_date, str):
             start_date = datetime.strptime(start_date, "%Y-%m-%d")
         if isinstance(end_date, str):
             end_date = datetime.strptime(end_date, "%Y-%m-%d")
 
-        # Build filter strings
         start_date_str = f"{start_date.year}, {start_date.month}, {start_date.day}"
         end_date_str = f"{end_date.year}, {end_date.month}, {end_date.day}"
 
-        # Escape double quotes in touchpoint name for DAX safety
         safe_touchpoint = touchpoint_name.replace('"', '""')
 
-        # Build FILTER(ALL(...)) expressions for each dimension
-        cabin_values = " || ".join([f"Cabin_Master[Cabin_Show] = \"{c}\"" for c in cabins])
-        haul_values = " || ".join([f"Haul_Master[Haul_Aggr] = \"{h}\"" for h in hauls])
-        company_values = " || ".join([f"Company_Master[Company] = \"{c}\"" for c in companies])
+        def to_dax_set(items):
+            return "{" + ", ".join([f'"{i}"' for i in items]) + "}"
+
+        cabin_set = to_dax_set(cabins)
+        company_set = to_dax_set(companies)
+        haul_set = to_dax_set(hauls)
+
+        comp_filter = comparison_filter or "vs L7d"
 
         query = (
-            "EVALUATE\n"
-            "VAR _start = DATE(" + start_date_str + ")\n"
-            "VAR _end   = DATE(" + end_date_str + ")\n"
-            "VAR _tabla =\n"
-            "    SUMMARIZECOLUMNS(\n"
-            "        TouchPoint_Master[filtered_name],\n"
-            "        TREATAS({1}, TouchPoint_Master[explanatory_drivers]),\n"
-            f"        FILTER(ALL(Date_Master), Date_Master[Date] >= _start && Date_Master[Date] <= _end),\n"
-            f"        FILTER(ALL(Cabin_Master), {cabin_values}),\n"
-            f"        FILTER(ALL(Haul_Master), {haul_values}),\n"
-            f"        FILTER(ALL(Company_Master), {company_values}),\n"
-            f"        FILTER(ALL(TouchPoint_Master), TouchPoint_Master[filtered_name] = \"{safe_touchpoint}\"),\n"
-            '        "CSAT", [Monthly_Satisfaction],\n'
-            '        "Target_CSAT", [Target_Satisfaction_filtered]\n'
-            "    )\n"
-            "RETURN _tabla\n"
+            "DEFINE\n"
+            f"    VAR __DS0FilterTable  = TREATAS({cabin_set}, 'Cabin_Master'[Cabin_Show])\n"
+            f"    VAR __DS0FilterTable2 = TREATAS({company_set}, 'Company_Master'[Company])\n"
+            f"    VAR __DS0FilterTable3 = TREATAS({haul_set}, 'Haul_Master'[Haul_Aggr])\n"
+            "    VAR __DS0FilterTable4 =\n"
+            "        FILTER(\n"
+            "            KEEPFILTERS(VALUES('Date_Master'[Date])),\n"
+            "            AND(\n"
+            f"                'Date_Master'[Date] >= DATE({start_date_str}),\n"
+            f"                'Date_Master'[Date] <= DATE({end_date_str})\n"
+            "            ))\n"
+            "    VAR __DS0FilterTable5 = TREATAS({1}, 'TouchPoint_Master'[explanatory_drivers])\n"
+            f"    VAR __DS0FilterTable6 = TREATAS({{\"{safe_touchpoint}\"}}, 'TouchPoint_Master'[filtered_name])\n"
+            f"    VAR __DS0FilterTable7 = TREATAS({{\"{comp_filter}\"}}, 'Filtro_Comparativa'[Filtro_Comparativa])\n"
+            "    VAR __DS0Core =\n"
+            "        SUMMARIZECOLUMNS(\n"
+            "            'TouchPoint_Master'[filtered_name],\n"
+            "            __DS0FilterTable,\n"
+            "            __DS0FilterTable2,\n"
+            "            __DS0FilterTable3,\n"
+            "            __DS0FilterTable4,\n"
+            "            __DS0FilterTable5,\n"
+            "            __DS0FilterTable6,\n"
+            "            __DS0FilterTable7,\n"
+            '            "CSAT", [Monthly_Satisfaction],\n'
+            '            "Target_CSAT", [Target_Satisfaction_filtered]\n'
+            "        )\n"
+            "EVALUATE __DS0Core\n"
         )
 
         return query
@@ -1863,40 +1877,51 @@ EVALUATE
             csat = _to_float(row.get("CSAT"))
             target = _to_float(row.get("Target_CSAT"))
             
-            # Calculate Satisfaction diff (CSAT vs comparison period) - only in comparative mode
             satisfaction_diff = None
             if comparison_filter and comparison_start_date and comparison_end_date:
-                # Build filter strings for comparison query (same as in _get_focus_touchpoint_csat_query)
-                cabin_values = " || ".join([f"Cabin_Master[Cabin_Show] = \"{c}\"" for c in cabins])
-                haul_values = " || ".join([f"Haul_Master[Haul_Aggr] = \"{h}\"" for h in hauls])
-                company_values = " || ".join([f"Company_Master[Company] = \"{c}\"" for c in companies])
                 safe_touchpoint = touchpoint_name.replace('"', '""')
-                
-                # Build query for comparison period
+
                 csd = comparison_start_date if isinstance(comparison_start_date, datetime) else datetime.strptime(comparison_start_date, '%Y-%m-%d')
                 ced = comparison_end_date if isinstance(comparison_end_date, datetime) else datetime.strptime(comparison_end_date, '%Y-%m-%d')
-                
-                comparison_start_str = f"{csd.year}, {csd.month}, {csd.day}"
-                comparison_end_str = f"{ced.year}, {ced.month}, {ced.day}"
-                
+
+                comp_start_str = f"{csd.year}, {csd.month}, {csd.day}"
+                comp_end_str = f"{ced.year}, {ced.month}, {ced.day}"
+
+                def to_dax_set(items):
+                    return "{" + ", ".join([f'"{i}"' for i in items]) + "}"
+
+                cabin_set = to_dax_set(cabins)
+                company_set = to_dax_set(companies)
+                haul_set = to_dax_set(hauls)
+
                 comparison_query = (
-                    "EVALUATE\n"
-                    "VAR _start = DATE(" + comparison_start_str + ")\n"
-                    "VAR _end   = DATE(" + comparison_end_str + ")\n"
-                    "VAR _tabla =\n"
-                    "    SUMMARIZECOLUMNS(\n"
-                    "        TouchPoint_Master[filtered_name],\n"
-                    "        TREATAS({1}, TouchPoint_Master[explanatory_drivers]),\n"
-                    f"        FILTER(ALL(Date_Master), Date_Master[Date] >= _start && Date_Master[Date] <= _end),\n"
-                    f"        FILTER(ALL(Cabin_Master), {cabin_values}),\n"
-                    f"        FILTER(ALL(Haul_Master), {haul_values}),\n"
-                    f"        FILTER(ALL(Company_Master), {company_values}),\n"
-                    f"        FILTER(ALL(TouchPoint_Master), TouchPoint_Master[filtered_name] = \"{safe_touchpoint}\"),\n"
-                    '        "CSAT", [Monthly_Satisfaction]\n'
-                    "    )\n"
-                    "RETURN _tabla\n"
+                    "DEFINE\n"
+                    f"    VAR __DS0FilterTable  = TREATAS({cabin_set}, 'Cabin_Master'[Cabin_Show])\n"
+                    f"    VAR __DS0FilterTable2 = TREATAS({company_set}, 'Company_Master'[Company])\n"
+                    f"    VAR __DS0FilterTable3 = TREATAS({haul_set}, 'Haul_Master'[Haul_Aggr])\n"
+                    "    VAR __DS0FilterTable4 =\n"
+                    "        FILTER(\n"
+                    "            KEEPFILTERS(VALUES('Date_Master'[Date])),\n"
+                    "            AND(\n"
+                    f"                'Date_Master'[Date] >= DATE({comp_start_str}),\n"
+                    f"                'Date_Master'[Date] <= DATE({comp_end_str})\n"
+                    "            ))\n"
+                    "    VAR __DS0FilterTable5 = TREATAS({1}, 'TouchPoint_Master'[explanatory_drivers])\n"
+                    f"    VAR __DS0FilterTable6 = TREATAS({{\"{safe_touchpoint}\"}}, 'TouchPoint_Master'[filtered_name])\n"
+                    "    VAR __DS0Core =\n"
+                    "        SUMMARIZECOLUMNS(\n"
+                    "            'TouchPoint_Master'[filtered_name],\n"
+                    "            __DS0FilterTable,\n"
+                    "            __DS0FilterTable2,\n"
+                    "            __DS0FilterTable3,\n"
+                    "            __DS0FilterTable4,\n"
+                    "            __DS0FilterTable5,\n"
+                    "            __DS0FilterTable6,\n"
+                    '            "CSAT", [Monthly_Satisfaction]\n'
+                    "        )\n"
+                    "EVALUATE __DS0Core\n"
                 )
-                
+
                 try:
                     df_comparison = await self._execute_query_async(comparison_query)
                     if not df_comparison.empty:
