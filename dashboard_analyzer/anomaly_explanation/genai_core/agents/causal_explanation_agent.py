@@ -2300,18 +2300,18 @@ class CausalExplanationAgent:
             except Exception as e:
                 self.logger.error(f"❌ Error en síntesis de período único: {type(e).__name__}: {str(e)}")
                 return self._build_single_period_fallback()
-            finally:
-                try:
-                    conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
-                    if conversation_file:
-                        print(f"🗂️ Conversación guardada: {conversation_file}")
-                        self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
-                except Exception as ex:
-                    self.logger.warning(f"⚠️ No se pudo guardar la conversación (single): {ex}")
             
         except Exception as e:
             self.logger.error(f"❌ Error crítico en investigación de período único: {type(e).__name__}: {e}")
             return self._build_single_period_fallback()
+        finally:
+            try:
+                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                if conversation_file:
+                    print(f"🗂️ Conversación guardada: {conversation_file}")
+                    self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
+            except Exception as ex:
+                self.logger.warning(f"⚠️ No se pudo guardar la conversación (single): {ex}")
     
     async def _investigate_anomaly_with_comparison(
         self,
@@ -2607,6 +2607,10 @@ class CausalExplanationAgent:
 
         except Exception as e:
             self.logger.error(f"❌ Error crítico en investigación comparativa: {type(e).__name__}: {e}")
+            try:
+                await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+            except Exception:
+                pass
             return self._build_collected_data_summary()
             
         # --- FOCUS TOUCHPOINT ENRICHMENT: collect BEFORE final synthesis so it reaches the prompt ---
