@@ -7,6 +7,9 @@ import logging
 from botocore.exceptions import ClientError, NoCredentialsError
 
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_agent_conversations_folder
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.output_paths import (
+    get_s3_report_key, get_s3_logging_key, resolve_report_group,
+)
 
 
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.aws_session import get_aws_session
@@ -347,57 +350,57 @@ class S3ReportUploader:
             self.logger.error(f"❌ Unexpected error uploading mapped info to S3: {str(e)}")
             return None
     
-    async def upload_adaptive_card(self, card_json: str, filename: str) -> Optional[str]:
-        """
-        Upload interpreter Adaptive Card to S3
-        
-        Args:
-            card_json: The Adaptive Card JSON string
-            filename: The filename to use
-            
-        Returns:
-            S3 key of uploaded file if successful, None if failed
+    async def upload_adaptive_card(
+        self,
+        card_json: str,
+        filename: str,
+        report_group: str = "General",
+        period_range: Optional[str] = None,
+        agent_type: str = "interpreter",
+    ) -> Optional[str]:
+        """Upload an Adaptive Card to S3 using the new directory structure.
+
+        Falls back to legacy path ``adaptive_cards/{filename}`` when
+        *period_range* is not provided (backward-compatible).
         """
         try:
-            # Only upload in production environment
             if self.environment != "prod":
-                self.logger.info(f"🔧 Local environment: Skipping S3 upload for Adaptive Card")
+                self.logger.info("🔧 Local environment: Skipping S3 upload for Adaptive Card")
                 return None
-            
-            # Validate inputs
+
             if not card_json or not filename:
                 self.logger.warning("⚠️ Invalid card JSON or filename, skipping S3 upload")
                 return None
-            
-            # Generate S3 key
-            s3_key = f"{self.base_prefix}adaptive_cards/{filename}"
-            
-            # Parse and pretty-print the JSON
+
+            if period_range:
+                s3_key = get_s3_report_key(self.base_prefix, report_group, agent_type, period_range)
+            else:
+                s3_key = f"{self.base_prefix}adaptive_cards/{filename}"
+
+            # Always store minified
             try:
                 card_dict = json.loads(card_json)
-                json_content = json.dumps(card_dict, indent=2, ensure_ascii=False)
+                json_content = json.dumps(card_dict, ensure_ascii=False, separators=(",", ":"))
             except json.JSONDecodeError:
-                # If parsing fails, save as-is
                 json_content = card_json
-            
-            # Upload to S3
+
             self.logger.info(f"📤 Uploading Adaptive Card to S3: s3://{self.bucket_name}/{s3_key}")
-            
+
             self.s3_client.put_object(
                 Bucket=self.bucket_name,
                 Key=s3_key,
-                Body=json_content.encode('utf-8'),
-                ContentType='application/json',
+                Body=json_content.encode("utf-8"),
+                ContentType="application/json",
                 Metadata={
-                    'upload_timestamp': datetime.now().isoformat(),
-                    'content_type': 'adaptive_card'
-                }
+                    "upload_timestamp": datetime.now().isoformat(),
+                    "content_type": "adaptive_card",
+                    "report_group": report_group,
+                },
             )
-            
+
             self.logger.info(f"✅ Successfully uploaded Adaptive Card: s3://{self.bucket_name}/{s3_key}")
-            
             return s3_key
-            
+
         except Exception as e:
             self.logger.error(f"❌ Unexpected error uploading Adaptive Card to S3: {str(e)}")
             return None

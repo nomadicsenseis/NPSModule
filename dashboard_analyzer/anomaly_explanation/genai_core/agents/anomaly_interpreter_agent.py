@@ -22,6 +22,11 @@ from ..agents.agent import Agent
 from ..llms.openai_llm import OpenAiLLM
 from ..llms.aws_llm import AWSLLM
 from ..utils.enums import LLMType, MessageType, AgentName, get_agent_conversations_folder
+from ..utils.output_paths import (
+    resolve_report_group, format_period_range,
+    get_report_path, get_logging_path, get_s3_report_key,
+    build_execution_metadata, save_minified_json, save_pretty_json,
+)
 from ..message_history import MessageHistory
 
 # Import S3 uploader
@@ -143,17 +148,33 @@ class AnomalyInterpreterAgent:
         config_path: str = "dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
         logger: Optional[logging.Logger] = None,
         study_mode: str = "comparative",
-        environment: str = "prod"
+        environment: str = "prod",
+        anomaly_detection_mode: str = "vslast",
+        causal_filter: Optional[str] = None,
+        comparison_start_date: Optional[str] = None,
+        comparison_end_date: Optional[str] = None,
+        aggregation_days: int = 7,
+        baseline_periods: int = 7,
+        segment: str = "Global",
+        focus_touchpoint: Optional[str] = None,
     ):
         """
         Initialize the Anomaly Interpreter Agent.
-        
+
         Args:
             llm_type: Type of LLM to use (supports OpenAI and AWS Bedrock models)
             config_path: Path to YAML configuration file with prompts
             logger: Optional logger instance
             study_mode: Study mode - "single" or "comparative"
             environment: Environment type ("local" or "prod")
+            anomaly_detection_mode: How anomalies are detected ("vslast", "mean", "target")
+            causal_filter: Comparison filter (e.g. "vs L7d", "vs Sel. Period")
+            comparison_start_date: Start of comparison period (comparative mode)
+            comparison_end_date: End of comparison period (comparative mode)
+            aggregation_days: Days per analysis period
+            baseline_periods: Number of baseline periods
+            segment: Root segment ("Global", etc.)
+            focus_touchpoint: Touchpoint focus (None → "General", "Cabin-Crew", etc.)
         """
         # Use default LLM type if none provided
         if llm_type is None:
@@ -163,6 +184,17 @@ class AnomalyInterpreterAgent:
         self.logger = logger or self._setup_logger()
         self.study_mode = study_mode
         self.environment = environment
+
+        # Execution context for output paths and metadata
+        self.anomaly_detection_mode = anomaly_detection_mode
+        self.causal_filter = causal_filter
+        self.comparison_start_date = comparison_start_date
+        self.comparison_end_date = comparison_end_date
+        self.aggregation_days = aggregation_days
+        self.baseline_periods = baseline_periods
+        self.segment = segment
+        self.focus_touchpoint = focus_touchpoint
+        self.report_group = resolve_report_group(focus_touchpoint)
         
         # Load environment variables from .env in current working directory only if not in prod
         if self.environment != "prod":
@@ -344,89 +376,40 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         return value
     
     async def _save_adaptive_card(self, card_json: str, date: Optional[str], segment: Optional[str]):
-        """Save the adaptive card JSON to a file in the conversations folder and upload to S3 in prod"""
+        """Save the adaptive card JSON as a minified report and upload to S3 in prod."""
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            period_identifier = date if date else timestamp[:8]
-            segment_suffix = f"_{segment.replace('/', '_')}" if segment else ""
-            
-            # Save in the same directory as conversations
-            base_dir = Path.cwd() / get_agent_conversations_folder() / 'anomaly_interpreter'
-            base_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Use specific naming: "resument_interpreter_{date}_{timestamp}.json"
-            filename = f"resument_interpreter_{period_identifier}_{timestamp}.json"
-            
-            output_path = base_dir / filename
-            
-            # Parse and pretty-print the JSON
-            card_dict = None
-            try:
-                import json
-                import re
-                
-                # Clean the JSON: escape newlines within strings and fix common issues
-                # First, try to parse as-is
-                try:
-                    card_dict = json.loads(card_json)
-                except json.JSONDecodeError as e:
-                    # If parsing fails, try to fix common issues
-                    cleaned_json = card_json
-                    
-                    # Fix unescaped newlines within strings (replace real newlines with \n)
-                    # This is a simple approach - more complex cases might need regex
-                    lines = cleaned_json.split('\n')
-                    in_string = False
-                    escape_next = False
-                    result_lines = []
-                    
-                    for line in lines:
-                        new_line = ""
-                        for char in line:
-                            if char == '"' and not escape_next:
-                                in_string = not in_string
-                            elif char == '\\':
-                                escape_next = True
-                            elif char == '\r':
-                                pass  # Skip carriage returns
-                            elif char == '\n' and in_string:
-                                new_line += '\\n'  # Escape newlines within strings
-                            else:
-                                if char != '\\' or not escape_next:
-                                    escape_next = False
-                                else:
-                                    escape_next = False
-                            new_line += char
-                        
-                        result_lines.append(new_line)
-                    
-                    cleaned_json = '\n'.join(result_lines)
-                    
-                    # Try parsing again
-                    card_dict = json.loads(cleaned_json)
-                
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    json.dump(card_dict, f, indent=2, ensure_ascii=False)
-                self.logger.info(f"💾 Adaptive Card saved to: {output_path}")
-            except json.JSONDecodeError as e:
-                # If JSON parsing still fails, save as-is for debugging
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(card_json)
-                self.logger.warning(f"⚠️ Adaptive Card saved as raw text (JSON parsing failed): {output_path}")
-                self.logger.warning(f"   Error: {e}")
-            
+            period_range = format_period_range(date_param=date)
+            output_path = get_report_path(self.report_group, "interpreter", period_range)
+
+            save_minified_json(output_path, card_json)
+            self.logger.info(f"💾 Adaptive Card saved to: {output_path} ({self._measure_kb(card_json):.2f} KB)")
+
             # Upload to S3 in production
-            if self.environment == "prod" and card_dict:
+            if self.environment == "prod":
                 try:
-                    s3_key = await self.s3_uploader.upload_adaptive_card(
-                        json.dumps(card_dict, ensure_ascii=False),
-                        filename
+                    s3_key = get_s3_report_key(
+                        self.s3_uploader.base_prefix, self.report_group, "interpreter", period_range,
                     )
-                    if s3_key:
-                        self.logger.info(f"📤 Adaptive Card uploaded to S3: {s3_key}")
+                    minified = card_json
+                    try:
+                        minified = json.dumps(json.loads(card_json), ensure_ascii=False, separators=(",", ":"))
+                    except json.JSONDecodeError:
+                        pass
+                    self.s3_uploader.s3_client.put_object(
+                        Bucket=self.s3_uploader.bucket_name,
+                        Key=s3_key,
+                        Body=minified.encode("utf-8"),
+                        ContentType="application/json",
+                        Metadata={
+                            "content_type": "adaptive_card",
+                            "report_group": self.report_group,
+                            "period_range": period_range,
+                        },
+                    )
+                    self.logger.info(f"📤 Adaptive Card uploaded to S3: {s3_key}")
                 except Exception as s3_error:
                     self.logger.warning(f"⚠️ Failed to upload Adaptive Card to S3: {s3_error}")
-                
+
         except Exception as e:
             self.logger.error(f"❌ Failed to save Adaptive Card: {e}")
     
@@ -1418,55 +1401,45 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             return "⚠️ **ANÁLISIS PARCIAL** (Error en compilación)"
     
     async def export_hierarchical_conversation(self, date: Optional[str] = None, error: Optional[str] = None) -> str:
-        """Export the hierarchical conversation log to JSON file and S3 (in production)"""
+        """Export the hierarchical conversation log to the logging directory."""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            # Use analysis date if provided, otherwise use current date
-            period_identifier = date if date else timestamp[:8]  # Extract YYYYMMDD from timestamp
-            filename = f"interpreter_{period_identifier}_{timestamp}.json"
-            
-            # Create agent_conversations directory structure in current working directory
-            base_dir = Path.cwd() / get_agent_conversations_folder() / 'anomaly_interpreter'
-            base_dir.mkdir(parents=True, exist_ok=True)
-            
-            full_path = base_dir / filename
-            
+            period_range = format_period_range(date_param=date)
+            filename = f"interpreter_{timestamp}.json"
+
+            full_path = get_logging_path(self.report_group, "interpreter", period_range, filename)
+
             conversation_data = {
-                "metadata": {
-                    "agent_type": "anomaly_interpreter",
-                    "analysis_type": "hierarchical_generation_by_generation",
-                    "export_timestamp": datetime.now().isoformat(),
-                    "analysis_date": date,
-                    "llm_type": self.llm_type.value,
-                    "total_generations": len(set(r['generation'] for r in self.hierarchical_reflections)),
-                    "total_nodes_analyzed": len(self.conversation_tracker.hierarchy_structure),
-                    "error": error
-                },
+                "metadata": build_execution_metadata(
+                    model=self.llm_type.value,
+                    study_mode=self.study_mode,
+                    anomaly_detection_mode=self.anomaly_detection_mode,
+                    causal_filter=self.causal_filter,
+                    comparison_start_date=self.comparison_start_date,
+                    comparison_end_date=self.comparison_end_date,
+                    aggregation_days=self.aggregation_days,
+                    baseline_periods=self.baseline_periods,
+                    segment=self.segment,
+                    focus_touchpoint=self.focus_touchpoint,
+                    agent_type="anomaly_interpreter",
+                    analysis_type="hierarchical_generation_by_generation",
+                    analysis_date=date,
+                    total_generations=len(set(r['generation'] for r in self.hierarchical_reflections)),
+                    total_nodes_analyzed=len(self.conversation_tracker.hierarchy_structure),
+                    error=error,
+                ),
                 "hierarchy_structure": self.conversation_tracker.hierarchy_structure,
                 "hierarchy_summary": self.conversation_tracker.get_hierarchy_summary(),
                 "conversation_log": self.conversation_tracker.conversation_log,
                 "conversation_summary": self.conversation_tracker.get_conversation_summary(),
                 "generation_reflections": self.hierarchical_reflections,
-                "generation_analysis": self.generation_data
+                "generation_analysis": self.generation_data,
             }
-            
-            # Save locally
-            with open(full_path, 'w', encoding='utf-8') as f:
-                json.dump(conversation_data, f, indent=2, ensure_ascii=False)
+
+            save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Hierarchical conversation exported to: {full_path}")
-            
-            # NOTE: S3 upload of interpreter conversations disabled - only final consolidated report is saved
-            # try:
-            #     s3_key = await self.s3_uploader.upload_interpreter_conversation(conversation_data, filename)
-            #     if s3_key:
-            #         self.logger.info(f"📤 Interpreter conversation uploaded to S3: {s3_key}")
-            #     else:
-            #         self.logger.info("🔧 S3 upload skipped (local environment or failed)")
-            # except Exception as e:
-            #     self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
-            
             return str(full_path)
-            
+
         except Exception as e:
             self.logger.error(f"❌ Failed to export hierarchical conversation: {e}")
             return ""

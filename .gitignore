@@ -108,4 +108,6 @@ dashboard_analyzer/tables/
 # Root level runtime artifacts (generated during analysis)
 summary_reports/
 tables/
+output/
 CLAUDE_SONNET_4_5_agent_conversations/
+*_agent_conversations/

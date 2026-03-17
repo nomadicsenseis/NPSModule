@@ -466,7 +466,16 @@ async def run_weekly_comprehensive_analysis(
             summary_agent = AnomalySummaryAgent(
                 llm_type=get_default_llm_type(),
                 logger=summary_logger,
-                environment=environment
+                environment=environment,
+                study_mode="comparative",
+                anomaly_detection_mode="vslast",
+                causal_filter=causal_filter,
+                comparison_start_date=str(comparison_start_date) if comparison_start_date else None,
+                comparison_end_date=str(comparison_end_date) if comparison_end_date else None,
+                aggregation_days=7,
+                baseline_periods=7,
+                segment=segment,
+                focus_touchpoint=focus_touchpoint,
             )
             print("✅ Summary Agent initialized. Generating executive summary...")
             

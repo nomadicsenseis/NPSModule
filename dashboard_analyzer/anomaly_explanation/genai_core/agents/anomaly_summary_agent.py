@@ -21,6 +21,11 @@ from ..agents.agent import Agent
 from ..llms.openai_llm import OpenAiLLM
 from ..llms.aws_llm import AWSLLM
 from ..utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, get_agent_conversations_folder
+from ..utils.output_paths import (
+    resolve_report_group, format_period_range,
+    get_report_path, get_logging_path, get_s3_report_key,
+    build_execution_metadata, save_minified_json, save_pretty_json,
+)
 from ..message_history import MessageHistory
 
 # Import S3 uploader
@@ -47,7 +52,16 @@ class AnomalySummaryAgent:
         llm_type: Optional[LLMType] = None,
         config_path: str = "../../config/prompts/anomaly_summary.yaml",
         logger: Optional[logging.Logger] = None,
-        environment: str = "prod"
+        environment: str = "prod",
+        study_mode: str = "comparative",
+        anomaly_detection_mode: str = "vslast",
+        causal_filter: Optional[str] = None,
+        comparison_start_date: Optional[str] = None,
+        comparison_end_date: Optional[str] = None,
+        aggregation_days: int = 7,
+        baseline_periods: int = 7,
+        segment: str = "Global",
+        focus_touchpoint: Optional[str] = None,
     ):
         """
         Initialize the Anomaly Summary Agent.
@@ -57,6 +71,15 @@ class AnomalySummaryAgent:
             config_path: Path to YAML configuration file with prompts
             logger: Optional logger instance
             environment: Environment type ("local" or "prod")
+            study_mode: "single" or "comparative"
+            anomaly_detection_mode: "vslast", "mean", or "target"
+            causal_filter: Comparison filter (e.g. "vs L7d")
+            comparison_start_date: Start of comparison period
+            comparison_end_date: End of comparison period
+            aggregation_days: Days per analysis period
+            baseline_periods: Number of baseline periods
+            segment: Root segment
+            focus_touchpoint: Touchpoint focus (None → "General")
         """
         # Use default LLM type if none provided
         if llm_type is None:
@@ -66,6 +89,18 @@ class AnomalySummaryAgent:
         self.logger = logger or self._setup_logger()
         self.silent_mode = False
         self.environment = environment
+
+        # Execution context
+        self.study_mode = study_mode
+        self.anomaly_detection_mode = anomaly_detection_mode
+        self.causal_filter = causal_filter
+        self.comparison_start_date = comparison_start_date
+        self.comparison_end_date = comparison_end_date
+        self.aggregation_days = aggregation_days
+        self.baseline_periods = baseline_periods
+        self.segment = segment
+        self.focus_touchpoint = focus_touchpoint
+        self.report_group = resolve_report_group(focus_touchpoint)
         
         # Initialize S3 uploader with environment
         self.s3_uploader = S3ReportUploader(environment=environment)
@@ -1141,6 +1176,40 @@ class AnomalySummaryAgent:
             step4_conversation['final_result_length'] = len(adaptive_card_json)
             
             self.logger.info(f"✅ Step 4 complete: Adaptive Card generated (date_range: {date_range})")
+
+            # Save summary adaptive card as a report
+            try:
+                period_range = format_period_range(date_param=date_flight_local)
+                report_path = get_report_path(self.report_group, "summarizer", period_range)
+                save_minified_json(report_path, adaptive_card_json)
+                self.logger.info(f"💾 Summary Adaptive Card saved to: {report_path}")
+
+                if self.environment == "prod":
+                    try:
+                        s3_key = get_s3_report_key(
+                            self.s3_uploader.base_prefix, self.report_group, "summarizer", period_range,
+                        )
+                        minified = adaptive_card_json
+                        try:
+                            minified = json.dumps(json.loads(adaptive_card_json), ensure_ascii=False, separators=(",", ":"))
+                        except json.JSONDecodeError:
+                            pass
+                        self.s3_uploader.s3_client.put_object(
+                            Bucket=self.s3_uploader.bucket_name,
+                            Key=s3_key,
+                            Body=minified.encode("utf-8"),
+                            ContentType="application/json",
+                            Metadata={
+                                "content_type": "adaptive_card",
+                                "report_group": self.report_group,
+                                "period_range": period_range,
+                            },
+                        )
+                        self.logger.info(f"📤 Summary Adaptive Card uploaded to S3: {s3_key}")
+                    except Exception as s3_err:
+                        self.logger.warning(f"⚠️ Failed to upload Summary AC to S3: {s3_err}")
+            except Exception as save_err:
+                self.logger.warning(f"⚠️ Failed to save Summary Adaptive Card: {save_err}")
 
             # =========================================================
             # Combine synthesis and adaptive card
@@ -2315,108 +2384,86 @@ PERÍODO {period} ({date_range}):
             return 'unknown'
 
     async def export_full_stratified_conversation(self, all_conversations: dict, dateflight_local: Optional[str] = None) -> str:
-        """Export the FULL stratified conversation (all 3 steps) to JSON file and upload to S3"""
+        """Export the FULL stratified conversation (all 3 steps) to the logging directory."""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            period_identifier = dateflight_local if dateflight_local else timestamp[:8]
-            filename = f"summary_{period_identifier}_{timestamp}.json"
-            
-            # Create agent_conversations directory structure in current working directory
-            base_dir = Path.cwd() / get_agent_conversations_folder() / 'anomaly_summary'
-            base_dir.mkdir(parents=True, exist_ok=True)
-            
-            full_path = base_dir / filename
-            
+            period_range = format_period_range(date_param=dateflight_local)
+            filename = f"summary_{timestamp}.json"
+
+            full_path = get_logging_path(self.report_group, "summarizer", period_range, filename)
+
             conversation_data = {
-                "metadata": {
-                    "agent_type": "anomaly_summary",
-                    "analysis_type": "stratified_comprehensive",
-                    "export_timestamp": datetime.now().isoformat(),
-                    "dateflight_local": dateflight_local,
-                    "llm_type": self.llm_type.value,
-                    "num_steps": 4,
-                    "summary_success": True
-                },
+                "metadata": build_execution_metadata(
+                    model=self.llm_type.value,
+                    study_mode=self.study_mode,
+                    anomaly_detection_mode=self.anomaly_detection_mode,
+                    causal_filter=self.causal_filter,
+                    comparison_start_date=self.comparison_start_date,
+                    comparison_end_date=self.comparison_end_date,
+                    aggregation_days=self.aggregation_days,
+                    baseline_periods=self.baseline_periods,
+                    segment=self.segment,
+                    focus_touchpoint=self.focus_touchpoint,
+                    agent_type="anomaly_summary",
+                    analysis_type="stratified_comprehensive",
+                    dateflight_local=dateflight_local,
+                    num_steps=4,
+                    summary_success=True,
+                ),
                 "step1_section_connections": all_conversations.get('step1_section_connections', {}),
                 "step2_full_report": all_conversations.get('step2_full_report', {}),
                 "step3_executive_synthesis": all_conversations.get('step3_executive_synthesis', {}),
-                "step4_adaptive_card": all_conversations.get('step4_adaptive_card', {})
+                "step4_adaptive_card": all_conversations.get('step4_adaptive_card', {}),
             }
-            
-            # Save locally
-            with open(full_path, 'w', encoding='utf-8') as f:
-                json.dump(conversation_data, f, indent=2, ensure_ascii=False)
-            
+
+            save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Full stratified conversation exported to: {full_path}")
-            
-            # NOTE: S3 upload of stratified conversations disabled - only final consolidated report is saved
-            # try:
-            #     s3_key = await self.s3_uploader.upload_summary_conversation(conversation_data, filename)
-            #     if s3_key:
-            #         self.logger.info(f"📤 Full stratified conversation uploaded to S3: {s3_key}")
-            #     else:
-            #         self.logger.info("🔧 S3 upload skipped (local environment or failed)")
-            # except Exception as e:
-            #     self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
-            
             return str(full_path)
-            
+
         except Exception as e:
             self.logger.error(f"❌ Failed to export stratified conversation: {e}")
             return ""
 
     async def export_conversation(self, message_history: 'MessageHistory', dateflight_local: Optional[str] = None) -> str:
-        """Export the conversation log to JSON file and upload to S3 (legacy single-step)"""
+        """Export the conversation log to the logging directory (legacy single-step)."""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # Use dateflight_local if provided, otherwise use current date
-            period_identifier = dateflight_local if dateflight_local else timestamp[:8]  # Extract YYYYMMDD from timestamp
-            filename = f"summary_{period_identifier}_{timestamp}.json"
-            
-            # Create agent_conversations directory structure in current working directory
-            base_dir = Path.cwd() / get_agent_conversations_folder() / 'anomaly_summary'
-            base_dir.mkdir(parents=True, exist_ok=True)
-            
-            full_path = base_dir / filename
-            
+            period_range = format_period_range(date_param=dateflight_local)
+            filename = f"summary_legacy_{timestamp}.json"
+
+            full_path = get_logging_path(self.report_group, "summarizer", period_range, filename)
+
             conversation_data = {
-                "metadata": {
-                    "agent_type": "anomaly_summary",
-                    "analysis_type": "comprehensive_consolidation",
-                    "export_timestamp": datetime.now().isoformat(),
-                    "dateflight_local": dateflight_local,
-                    "llm_type": self.llm_type.value,
-                    "total_messages": len(message_history.get_messages()),
-                    "summary_success": True
-                },
+                "metadata": build_execution_metadata(
+                    model=self.llm_type.value,
+                    study_mode=self.study_mode,
+                    anomaly_detection_mode=self.anomaly_detection_mode,
+                    causal_filter=self.causal_filter,
+                    comparison_start_date=self.comparison_start_date,
+                    comparison_end_date=self.comparison_end_date,
+                    aggregation_days=self.aggregation_days,
+                    baseline_periods=self.baseline_periods,
+                    segment=self.segment,
+                    focus_touchpoint=self.focus_touchpoint,
+                    agent_type="anomaly_summary",
+                    analysis_type="comprehensive_consolidation",
+                    dateflight_local=dateflight_local,
+                    total_messages=len(message_history.get_messages()),
+                    summary_success=True,
+                ),
                 "conversation_log": [
                     {
                         "role": self._get_message_role(msg),
                         "content": msg.content,
                         "timestamp": getattr(msg, 'timestamp', None).isoformat() if hasattr(getattr(msg, 'timestamp', None), 'isoformat') else getattr(msg, 'timestamp', None)
                     } for msg in message_history.get_messages()
-                ]
+                ],
             }
-            
-            # Save locally
-            with open(full_path, 'w', encoding='utf-8') as f:
-                json.dump(conversation_data, f, indent=2, ensure_ascii=False)
-            
+
+            save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Summary conversation exported to: {full_path}")
-            
-            # NOTE: S3 upload of summary conversations disabled - only final consolidated report is saved
-            # try:
-            #     s3_key = await self.s3_uploader.upload_summary_conversation(conversation_data, filename)
-            #     if s3_key:
-            #         self.logger.info(f"📤 Summary conversation uploaded to S3: {s3_key}")
-            #     else:
-            #         self.logger.info("🔧 S3 upload skipped (local environment or failed)")
-            # except Exception as e:
-            #     self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
-            
             return str(full_path)
-            
+
         except Exception as e:
             self.logger.error(f"❌ Failed to export summary conversation: {e}")
             return ""

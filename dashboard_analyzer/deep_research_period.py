@@ -690,7 +690,15 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
             study_mode=study_mode,
-            environment=environment
+            environment=environment,
+            anomaly_detection_mode=detector.detection_mode,
+            causal_filter=causal_filter,
+            comparison_start_date=str(comparison_start_date) if comparison_start_date else None,
+            comparison_end_date=str(comparison_end_date) if comparison_end_date else None,
+            aggregation_days=aggregation_days,
+            baseline_periods=analysis_data.get('baseline_periods', 7),
+            segment=segment,
+            focus_touchpoint=focus_touchpoint,
         )
         ai_available = True
         print("🤖 AI Agent initialized for interpretations")
@@ -2054,12 +2062,19 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
             study_mode=ai_study_mode,
-            environment=environment
+            environment=environment,
+            anomaly_detection_mode=analysis_data['detector'].detection_mode,
+            causal_filter=causal_filter,
+            comparison_start_date=str(comparison_start_date) if comparison_start_date else None,
+            comparison_end_date=str(comparison_end_date) if comparison_end_date else None,
+            aggregation_days=aggregation_days,
+            baseline_periods=analysis_data.get('baseline_periods', 7),
+            segment=segment,
         )
         ai_available = True
     except Exception:
         ai_available = False
-    
+
     # Collect data for summary
     all_periods_data = []
     
@@ -2345,12 +2360,19 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
             study_mode=study_mode,
-            environment=environment
+            environment=environment,
+            anomaly_detection_mode=detector.detection_mode,
+            causal_filter=causal_filter,
+            comparison_start_date=str(comparison_start_date) if comparison_start_date else None,
+            comparison_end_date=str(comparison_end_date) if comparison_end_date else None,
+            aggregation_days=aggregation_days,
+            baseline_periods=analysis_data.get('baseline_periods', 7) if isinstance(analysis_data, dict) else 7,
+            segment=segment,
         )
         ai_available = True
     except Exception:
         ai_available = False
-    
+
     # Show only periods with anomalies
     periods_with_anomalies = [p for p in periods_analyzed if p in anomaly_periods]
     

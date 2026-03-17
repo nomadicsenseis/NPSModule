@@ -1,4 +1,4 @@
-﻿"""
+"""
 Clean Causal Explanation Agent
 ==============================
 
@@ -37,6 +37,10 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../..'))
 from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, get_agent_conversations_folder
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.output_paths import (
+    resolve_report_group, format_period_range,
+    get_logging_path, build_execution_metadata, save_pretty_json,
+)
 from dashboard_analyzer.anomaly_explanation.genai_core.message_history import MessageHistory
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.agent import Agent
 
@@ -312,7 +316,8 @@ class CausalExplanationAgent:
         self.environment = environment
         self.reference_date = reference_date  # Anchor date for fixed baseline in single mode
         self.focus_touchpoint = focus_touchpoint  # Optional touchpoint to force-investigate
-        
+        self.report_group = resolve_report_group(focus_touchpoint)
+
         # Transform detection_mode if needed (vslast -> vslast_dynamic when causal_filter is "vs Sel. Period")
         if detection_mode == "vslast" and causal_filter == "vs Sel. Period":
             self.detection_mode = "vslast_dynamic"
@@ -6464,85 +6469,61 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
         return self.tracker.get_tool_executions()
     
     async def export_conversation(self, filename: Optional[str] = None, node_path: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> str:
-        """Export the conversation log to JSON file and upload to S3"""
+        """Export the conversation log to the logging directory."""
         try:
-            print(f"🔍 DEBUG EXPORT: export_conversation called with start_date='{start_date}', end_date='{end_date}'")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
+            period_range = format_period_range(start_date=start_date, end_date=end_date)
+            safe_node = node_path.replace("/", "_") if node_path else "unknown"
+
             if filename is None:
-                # Create a descriptive filename with period and segment
-                safe_node_path = node_path.replace('/', '_') if node_path else "unknown"
-                
-                # Use actual data dates if available, otherwise fallback to timestamp
-                if start_date and end_date:
-                    # Convert to string format if they're datetime objects
-                    if hasattr(start_date, 'strftime'):
-                        start_str = start_date.strftime('%Y-%m-%d')
-                    else:
-                        start_str = str(start_date)
-                    
-                    if hasattr(end_date, 'strftime'):
-                        end_str = end_date.strftime('%Y-%m-%d')
-                    else:
-                        end_str = str(end_date)
-                    
-                    period_info = f"{start_str}_{end_str}"
-                    print(f"🔍 DEBUG EXPORT: Using dates for filename: start_str='{start_str}', end_str='{end_str}', period_info='{period_info}'")
-                else:
-                    period_info = timestamp[:8]
-                    print(f"🔍 DEBUG EXPORT: No dates provided, using timestamp: period_info='{period_info}'")
-                
-                filename = f"causal_{period_info}_{safe_node_path}_{timestamp}.json"
-                print(f"🔍 DEBUG EXPORT: Final filename: '{filename}'")
-            
-            # Create agent_conversations directory structure in current working directory
-            base_dir = Path.cwd() / get_agent_conversations_folder() / 'causal_explanation'
-            base_dir.mkdir(parents=True, exist_ok=True)
-            
-            full_path = base_dir / filename
-            
-            # Convert dates to strings for JSON serialization
-            start_date_str = start_date.strftime('%Y-%m-%d') if hasattr(start_date, 'strftime') else str(start_date) if start_date else None
-            end_date_str = end_date.strftime('%Y-%m-%d') if hasattr(end_date, 'strftime') else str(end_date) if end_date else None
-            
+                filename = f"causal_{timestamp}.json"
+
+            full_path = get_logging_path(
+                self.report_group, "causal", period_range, filename, node_path=safe_node,
+            )
+
+            start_date_str = start_date.strftime("%Y-%m-%d") if hasattr(start_date, "strftime") else str(start_date) if start_date else None
+            end_date_str = end_date.strftime("%Y-%m-%d") if hasattr(end_date, "strftime") else str(end_date) if end_date else None
+
+            comp_start = self.comparison_start_date.strftime("%Y-%m-%d") if hasattr(self.comparison_start_date, "strftime") else str(self.comparison_start_date) if self.comparison_start_date else None
+            comp_end = self.comparison_end_date.strftime("%Y-%m-%d") if hasattr(self.comparison_end_date, "strftime") else str(self.comparison_end_date) if self.comparison_end_date else None
+
             conversation_data = {
-            "metadata": {
-                            "agent_type": "causal_explanation",
-                            "analysis_type": "separated_workflow_investigation",
-                "export_timestamp": datetime.now().isoformat(),
-                            "node_path": node_path,
-                            "start_date": start_date_str,
-                            "end_date": end_date_str,
-                "total_iterations": self.tracker.iteration_count,
-                "llm_type": self.llm_type.value,
-                            "anomaly_type": self.current_anomaly_type,
-                            "total_messages": len(self.tracker.conversation_log),
-                            "tools_used": list(set([msg.get('metadata', {}).get('tool_name') for msg in self.tracker.conversation_log if msg.get('metadata', {}).get('tool_name')])),
-                            "investigation_success": len(self.tracker.previous_explanations) > 0
-            },
-            "conversation_log": self.tracker.conversation_log,
-                        "clean_explanations": self.tracker.previous_explanations,
-                        "collected_data_summary": self._build_collected_data_summary() if hasattr(self, 'collected_data') else {},
-                        "conversation_summary": self._get_conversation_summary(),
-                        "dax_queries": self.tracker.dax_queries
-        }
-        
-            # Save locally
-            with open(full_path, 'w', encoding='utf-8') as f:
-                json.dump(conversation_data, f, indent=2, ensure_ascii=False)
+                "metadata": build_execution_metadata(
+                    model=self.llm_type.value,
+                    study_mode=self.study_mode,
+                    anomaly_detection_mode=self.detection_mode,
+                    causal_filter=self.causal_filter,
+                    comparison_start_date=comp_start,
+                    comparison_end_date=comp_end,
+                    segment=safe_node,
+                    focus_touchpoint=self.focus_touchpoint,
+                    agent_type="causal_explanation",
+                    analysis_type="separated_workflow_investigation",
+                    node_path=node_path,
+                    start_date=start_date_str,
+                    end_date=end_date_str,
+                    total_iterations=self.tracker.iteration_count,
+                    anomaly_type=self.current_anomaly_type,
+                    total_messages=len(self.tracker.conversation_log),
+                    tools_used=list(set([
+                        msg.get("metadata", {}).get("tool_name")
+                        for msg in self.tracker.conversation_log
+                        if msg.get("metadata", {}).get("tool_name")
+                    ])),
+                    investigation_success=len(self.tracker.previous_explanations) > 0,
+                ),
+                "conversation_log": self.tracker.conversation_log,
+                "clean_explanations": self.tracker.previous_explanations,
+                "collected_data_summary": self._build_collected_data_summary() if hasattr(self, "collected_data") else {},
+                "conversation_summary": self._get_conversation_summary(),
+                "dax_queries": self.tracker.dax_queries,
+            }
+
+            save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Conversation exported to: {full_path}")
-            
-            # NOTE: S3 upload of causal conversations disabled - only final consolidated report is saved
-            # try:
-            #     s3_key = await self.s3_uploader.upload_causal_conversation(conversation_data, filename)
-            #     if s3_key:
-            #         self.logger.info(f"📤 Causal conversation uploaded to S3: {s3_key}")
-            #     else:
-            #         self.logger.info("🔧 S3 upload skipped (local environment or failed)")
-            # except Exception as e:
-            #     self.logger.warning(f"⚠️ Failed to upload to S3: {e}")
-            
             return str(full_path)
+
         except Exception as e:
             self.logger.error(f"❌ Failed to export conversation: {e}")
             return ""
