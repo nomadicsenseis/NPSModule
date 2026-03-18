@@ -208,12 +208,15 @@ async def generate_consolidated_summary(
         daily_data = data.get('daily_singles', [])
         
         # Format weekly data (it's a list of periods from execute_analysis_flow)
+        analysis_period_range = None
         if isinstance(weekly_data, list) and weekly_data:
             weekly_comparative_analysis = ""
             for period in weekly_data:
                 date_range = period.get('date_range', 'Unknown')
                 interpretation = period.get('ai_interpretation', '')
                 weekly_comparative_analysis += f"{interpretation}\n\n"
+                if not analysis_period_range and date_range and date_range != 'Unknown':
+                    analysis_period_range = date_range
         elif isinstance(weekly_data, str):
             weekly_comparative_analysis = weekly_data
         else:
@@ -229,11 +232,14 @@ async def generate_consolidated_summary(
             weekly_params = data.get('weekly_params', {})
             daily_params = data.get('daily_params', {})
             
-            # Extract analysis date from metadata or default to None
+            # Build date_ranges with the actual analysis period range
             analysis_date_str = execution_metadata.get('analysis_date')
-            date_ranges = {
-                'analysis_date': analysis_date_str
-            } if analysis_date_str else None
+            date_ranges = {}
+            if analysis_date_str:
+                date_ranges['analysis_date'] = analysis_date_str
+            if analysis_period_range:
+                date_ranges['analysis_period_range'] = analysis_period_range
+            date_ranges = date_ranges or None
 
             comprehensive_summary = await asyncio.wait_for(
                 agent.generate_comprehensive_summary_stratified(

@@ -39,7 +39,7 @@ from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUpload
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, get_agent_conversations_folder
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.output_paths import (
     resolve_report_group, format_period_range,
-    get_logging_path, build_execution_metadata, save_pretty_json,
+    get_logging_path, get_s3_logging_key, build_execution_metadata, save_pretty_json,
 )
 from dashboard_analyzer.anomaly_explanation.genai_core.message_history import MessageHistory
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.agent import Agent
@@ -6526,6 +6526,24 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
 
             save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Conversation exported to: {full_path}")
+
+            # Upload to S3 in production
+            if self.environment == "prod":
+                try:
+                    s3_key = get_s3_logging_key(
+                        self.s3_uploader.base_prefix, self.report_group,
+                        "causal", period_range, filename, node_path=safe_node,
+                    )
+                    self.s3_uploader.s3_client.put_object(
+                        Bucket=self.s3_uploader.bucket_name,
+                        Key=s3_key,
+                        Body=json.dumps(conversation_data, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                        ContentType="application/json",
+                    )
+                    self.logger.info(f"📤 Causal conversation uploaded to S3: {s3_key}")
+                except Exception as s3_err:
+                    self.logger.warning(f"⚠️ Failed to upload causal conversation to S3: {s3_err}")
+
             return str(full_path)
 
         except Exception as e:

@@ -24,7 +24,7 @@ from ..llms.aws_llm import AWSLLM
 from ..utils.enums import LLMType, MessageType, AgentName, get_agent_conversations_folder
 from ..utils.output_paths import (
     resolve_report_group, format_period_range,
-    get_report_path, get_logging_path, get_s3_report_key,
+    get_report_path, get_logging_path, get_s3_report_key, get_s3_logging_key,
     build_execution_metadata, save_minified_json, save_pretty_json,
 )
 from ..message_history import MessageHistory
@@ -1438,6 +1438,24 @@ Confirma que has recibido la información y estás listo para el análisis paso 
 
             save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Hierarchical conversation exported to: {full_path}")
+
+            # Upload to S3 in production
+            if self.environment == "prod":
+                try:
+                    s3_key = get_s3_logging_key(
+                        self.s3_uploader.base_prefix, self.report_group,
+                        "interpreter", period_range, filename,
+                    )
+                    self.s3_uploader.s3_client.put_object(
+                        Bucket=self.s3_uploader.bucket_name,
+                        Key=s3_key,
+                        Body=json.dumps(conversation_data, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                        ContentType="application/json",
+                    )
+                    self.logger.info(f"📤 Interpreter conversation uploaded to S3: {s3_key}")
+                except Exception as s3_err:
+                    self.logger.warning(f"⚠️ Failed to upload interpreter conversation to S3: {s3_err}")
+
             return str(full_path)
 
         except Exception as e:

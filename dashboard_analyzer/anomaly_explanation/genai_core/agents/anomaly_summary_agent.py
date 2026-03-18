@@ -23,7 +23,7 @@ from ..llms.aws_llm import AWSLLM
 from ..utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, get_agent_conversations_folder
 from ..utils.output_paths import (
     resolve_report_group, format_period_range,
-    get_report_path, get_logging_path, get_s3_report_key,
+    get_report_path, get_logging_path, get_s3_report_key, get_s3_logging_key,
     build_execution_metadata, save_minified_json, save_pretty_json,
 )
 from ..message_history import MessageHistory
@@ -987,7 +987,19 @@ class AnomalySummaryAgent:
                 key=lambda x: x.get('date', '0000-00-00')
             )
             self.logger.info(f"📅 Sorted {len(daily_single_analyses_sorted)} daily analyses chronologically")
-            
+
+            # Resolve the actual analysis period range for file naming.
+            # Prefer the weekly date range passed via date_ranges; fall back to
+            # deriving min/max from daily analyses; last resort is date_flight_local.
+            _apr = (date_ranges or {}).get('analysis_period_range')
+            if not _apr and daily_single_analyses_sorted:
+                daily_dates = sorted(
+                    d.get('date', '') for d in daily_single_analyses_sorted if d.get('date')
+                )
+                if daily_dates:
+                    _apr = f"{daily_dates[0]} to {daily_dates[-1]}"
+            analysis_period_str: Optional[str] = _apr or date_flight_local
+
             # Format daily analyses
             daily_analyses_formatted = []
             for daily_analysis in daily_single_analyses_sorted:
@@ -1179,7 +1191,7 @@ class AnomalySummaryAgent:
 
             # Save summary adaptive card as a report
             try:
-                period_range = format_period_range(date_param=date_flight_local)
+                period_range = format_period_range(date_param=analysis_period_str)
                 report_path = get_report_path(self.report_group, "summarizer", period_range)
                 save_minified_json(report_path, adaptive_card_json)
                 self.logger.info(f"💾 Summary Adaptive Card saved to: {report_path}")
@@ -1268,7 +1280,7 @@ class AnomalySummaryAgent:
                 'step4_adaptive_card': step4_conversation  # Full conversation including raw response
             }
             conversation_file = await self.export_full_stratified_conversation(
-                all_conversations, date_flight_local
+                all_conversations, analysis_period_str
             )
             if conversation_file:
                 self.logger.info(f"🗂️ Full stratified conversation saved: {conversation_file}")
@@ -2418,6 +2430,24 @@ PERÍODO {period} ({date_range}):
 
             save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Full stratified conversation exported to: {full_path}")
+
+            # Upload to S3 in production
+            if self.environment == "prod":
+                try:
+                    s3_key = get_s3_logging_key(
+                        self.s3_uploader.base_prefix, self.report_group,
+                        "summarizer", period_range, filename,
+                    )
+                    self.s3_uploader.s3_client.put_object(
+                        Bucket=self.s3_uploader.bucket_name,
+                        Key=s3_key,
+                        Body=json.dumps(conversation_data, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                        ContentType="application/json",
+                    )
+                    self.logger.info(f"📤 Summary conversation uploaded to S3: {s3_key}")
+                except Exception as s3_err:
+                    self.logger.warning(f"⚠️ Failed to upload summary conversation to S3: {s3_err}")
+
             return str(full_path)
 
         except Exception as e:
@@ -2462,6 +2492,23 @@ PERÍODO {period} ({date_range}):
 
             save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Summary conversation exported to: {full_path}")
+
+            if self.environment == "prod":
+                try:
+                    s3_key = get_s3_logging_key(
+                        self.s3_uploader.base_prefix, self.report_group,
+                        "summarizer", period_range, filename,
+                    )
+                    self.s3_uploader.s3_client.put_object(
+                        Bucket=self.s3_uploader.bucket_name,
+                        Key=s3_key,
+                        Body=json.dumps(conversation_data, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                        ContentType="application/json",
+                    )
+                    self.logger.info(f"📤 Summary legacy conversation uploaded to S3: {s3_key}")
+                except Exception as s3_err:
+                    self.logger.warning(f"⚠️ Failed to upload summary conversation to S3: {s3_err}")
+
             return str(full_path)
 
         except Exception as e:
