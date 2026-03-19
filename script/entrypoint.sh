@@ -6,6 +6,10 @@ weekly_args=()
 if [[ -n "${INSERT_DATE_CI:-}" ]]; then
   weekly_args+=(--insert-date-ci "${INSERT_DATE_CI}")
 fi
-python -u dashboard_analyzer/weekly_deep_research.py --focus-touchpoint "Cabin Crew" "${weekly_args[@]}"
+if [[ -n "${FOCUS_TOUCHPOINT:-}" ]]; then
+  weekly_args+=(--focus-touchpoint "${FOCUS_TOUCHPOINT}")
+fi
+
+python -u dashboard_analyzer/weekly_deep_research.py "${weekly_args[@]}"
 
 echo -e "\nCatia report generation completed."
