@@ -5,8 +5,8 @@ Defines the standard directory structure:
 
     output/
     ├── reports/{report_group}/                     # Final deliverables (adaptive cards)
-    │   ├── interpreter_{period_range}_{execution_date}.json
-    │   └── summarizer_{period_range}_{execution_date}.json
+    │   ├── interpreter_{execution_date}_{period_range}.json
+    │   └── summarizer_{execution_date}_{period_range}.json
     └── logging/{report_group}/                     # Debug / audit trail
         ├── summarizer/{period_range}/
         ├── interpreter/{period_range}/
@@ -83,7 +83,7 @@ def get_report_path(
     execution_date: YYYY-MM-DD of the run (appended to filename when given).
     """
     exe = execution_date or datetime.now().strftime("%Y-%m-%d")
-    return get_output_base() / "reports" / report_group / f"{agent_type}_{period_range}_{exe}.json"
+    return get_output_base() / "reports" / report_group / f"{agent_type}_{exe}_{period_range}.json"
 
 
 def get_logging_path(
@@ -116,7 +116,7 @@ def get_s3_report_key(
     execution_date: Optional[str] = None,
 ) -> str:
     exe = execution_date or datetime.now().strftime("%Y-%m-%d")
-    return f"{base_prefix}{report_group}/{agent_type}_{period_range}_{exe}.json"
+    return f"{base_prefix}{report_group}/{agent_type}_{exe}_{period_range}.json"
 
 
 def get_s3_logging_key(
