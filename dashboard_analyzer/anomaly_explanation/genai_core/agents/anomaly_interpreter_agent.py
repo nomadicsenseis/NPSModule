@@ -376,7 +376,17 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         return value
     
     async def _save_adaptive_card(self, card_json: str, date: Optional[str], segment: Optional[str]):
-        """Save the adaptive card JSON as a minified report and upload to S3 in prod."""
+        """Save the adaptive card JSON as a minified report and upload to S3 in prod.
+
+        Only comparative (weekly) reports are persisted; single (daily)
+        interpreter cards are used in-memory by the summary agent but not saved.
+        """
+        if self.study_mode == "single":
+            self.logger.info(
+                f"⏭️ Skipping report save for single/daily interpreter ({self._measure_kb(card_json):.2f} KB)"
+            )
+            return
+
         try:
             period_range = format_period_range(date_param=date)
             output_path = get_report_path(self.report_group, "interpreter", period_range)
