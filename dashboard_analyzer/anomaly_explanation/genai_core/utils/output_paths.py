@@ -5,14 +5,14 @@ Defines the standard directory structure:
 
     output/
     ├── reports/{report_group}/                     # Final deliverables (adaptive cards)
-    │   ├── interpreter_{period_range}.json
-    │   └── summarizer_{period_range}.json
+    │   ├── interpreter_{period_range}_{execution_date}.json
+    │   └── summarizer_{period_range}_{execution_date}.json
     └── logging/{report_group}/                     # Debug / audit trail
         ├── summarizer/{period_range}/
         ├── interpreter/{period_range}/
         └── causal/{period_range}/{node_path}/
 
-report_group is derived from focus_touchpoint ("General" when None).
+report_group is derived from focus_touchpoint ("general" when None, "cabin-crew" for "Cabin Crew", etc.).
 period_range is "{start_date}_{end_date}" (e.g. "2025-03-10_2025-03-17").
 """
 
@@ -30,7 +30,12 @@ def get_output_base() -> Path:
 
 
 def resolve_report_group(focus_touchpoint: Optional[str] = None) -> str:
-    return focus_touchpoint if focus_touchpoint else "General"
+    """Normalize the report group name to lowercase-hyphenated form.
+
+    Examples: None → "general", "Cabin Crew" → "cabin-crew"
+    """
+    raw = focus_touchpoint if focus_touchpoint else "General"
+    return raw.strip().lower().replace(" ", "-")
 
 
 def format_period_range(
@@ -66,12 +71,19 @@ def format_period_range(
 # Local path builders
 # ---------------------------------------------------------------------------
 
-def get_report_path(report_group: str, agent_type: str, period_range: str) -> Path:
+def get_report_path(
+    report_group: str,
+    agent_type: str,
+    period_range: str,
+    execution_date: Optional[str] = None,
+) -> Path:
     """Path for a report file (adaptive card).
 
     agent_type: "interpreter" | "summarizer"
+    execution_date: YYYY-MM-DD of the run (appended to filename when given).
     """
-    return get_output_base() / "reports" / report_group / f"{agent_type}_{period_range}.json"
+    exe = execution_date or datetime.now().strftime("%Y-%m-%d")
+    return get_output_base() / "reports" / report_group / f"{agent_type}_{period_range}_{exe}.json"
 
 
 def get_logging_path(
@@ -96,8 +108,15 @@ def get_logging_path(
 # S3 key builders (mirror the local structure under the existing prefix)
 # ---------------------------------------------------------------------------
 
-def get_s3_report_key(base_prefix: str, report_group: str, agent_type: str, period_range: str) -> str:
-    return f"{base_prefix}reports/{report_group}/{agent_type}_{period_range}.json"
+def get_s3_report_key(
+    base_prefix: str,
+    report_group: str,
+    agent_type: str,
+    period_range: str,
+    execution_date: Optional[str] = None,
+) -> str:
+    exe = execution_date or datetime.now().strftime("%Y-%m-%d")
+    return f"{base_prefix}{report_group}/{agent_type}_{period_range}_{exe}.json"
 
 
 def get_s3_logging_key(
