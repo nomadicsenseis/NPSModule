@@ -895,87 +895,14 @@ step8c_trim_sh_cabins:
 
 step8e_redistribute_content:
   system_prompt: |
-    Eres un editor experto en estructura de informes ejecutivos. Tu tarea es REORGANIZAR el contenido de una Adaptive Card JSON para que cada información esté en la sección correcta.
+    Te paso una Adaptive Card en JSON. Si hay texto que debería estar en otra sección (por ejemplo, mucha información de SH en GLOBAL, o detalles de Business LH en LH), recolócalo a su sección correspondiente sin perder información.
 
-    **OBJETIVO PRINCIPAL:**
-    Mover contenido detallado que está en secciones "padre" (como GLOBAL) a las secciones "hija" correspondientes (SH, LH, Cabin, Company) donde realmente pertenece.
+    **REGLA CRÍTICA:** NO pierdas información. Solo mueve el contenido de sitio, nada más.
 
-    **REGLAS CRÍTICAS - LEE ATENTAMENTE:**
-
-    1. **🚫 PROHIBICIÓN ABSOLUTA - PÉRDIDA DE INFORMACIÓN:**
-       - BAJO NINGUNA CIRCUNSTANCIA puedes eliminar información
-       - Todo el contenido debe mantenerse, solo cambia de ubicación
-       - Si mueves algo de GLOBAL a SH, el texto debe aparecer COMPLETO en SH
-
-    2. **REESTRUCTURACIÓN DE CONTENIDO:**
-       
-       **GLOBAL → Secciones específicas:**
-       - Si GLOBAL tiene análisis detallado de SH (más de 2-3 frases), muévelo a la sección SH
-       - Si GLOBAL tiene análisis detallado de LH, muévelo a la sección LH
-       - Si GLOBAL menciona cabinas específicas con detalle, muévelo a la cabina correspondiente
-       - Si GLOBAL menciona IB/YW con detalle operativo, muévelo a la sección de compañía
-       
-       **Ejemplo de redistribución CORRECTA:**
-       - ANTES (GLOBAL): "El NPS global subió +5.2 pts. En SH, el deterioro fue notable especialmente en Economy SH donde los retrasos en rutas como MAD-BCN y MAD-LIS causaron caídas de -8 pts. En LH, Business LH mostró mejoras en la puntualidad..."
-       - DESPUÉS (GLOBAL): "El NPS global subió +5.2 pts con mejoras en LH compensando presiones en SH."
-       - DESPUÉS (SH): "Presión operativa en SH especialmente en Economy SH donde los retrasos en rutas como MAD-BCN y MAD-LIS causaron caídas de -8 pts."
-       - DESPUÉS (LH): "Business LH mostró mejoras en la puntualidad..."
-
-    3. **QUÉ CONSERVAR EN GLOBAL:**
-       - Resumen ejecutivo de alto nivel (1-2 párrafos máximo)
-       - NPS global y variación
-       - Tendencias generales sin detalles específicos
-       - Referencias a las secciones hijas ("ver detalle en SH", "consultar LH")
-
-    4. **QUÉ MOVER A SECCIONES ESPECÍFICAS:**
-       - Análisis detallado de causas (>2 frases sobre lo mismo)
-       - Menciones específicas de rutas, vuelos, aeropuertos
-       - Detalles operativos (OTP, load factor, incidencias específicas)
-       - Evidencias detalladas (nombres de rutas, códigos de vuelo)
-       - Perfiles de pasajeros detallados
-
-    5. **ESTRUCTURA DE SECCIONES ESPERADA:**
-       
-       **GLOBAL:**
-       - NPS Global y variación
-       - Resumen de 1-2 frases sobre tendencia general
-       - Referencias breves a SH/LH ("mejora en LH", "presión en SH")
-       
-       **SH / LH:**
-       - NPS del radio y variación
-       - Análisis específico del radio (2-4 frases)
-       - Referencias a cabinas si aplica
-       
-       **CABINAS (Economy SH, Business LH, etc.):**
-       - NPS de la cabina y variación
-       - Análisis detallado específico de la cabina
-       - Rutas, causas, evidencias
-       
-       **COMPAÑÍAS (IB, YW):**
-       - NPS de la compañía y variación
-       - Análisis específico de la compañía
-       - Comparativa IB vs YW si aplica
-
-    6. **VALIDACIÓN POST-MOVIMIENTO:**
-       - Lee el resultado y verifica que toda la información original esté presente
-       - Comprueba que GLOBAL no tenga detalles que pertenezcan a otra sección
-       - Asegúrate de que las secciones hijas contengan toda la información que se les transfirió
-
-    **FORMATO DE SALIDA:**
-    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
+    Devuelve la Adaptive Card en el mismo formato (JSON minificado en una línea).
 
   input_template: |
-    JSON ACTUAL: {current_json}
-    
-    TU TAREA: Reorganiza el contenido para que cada información esté en su sección correspondiente.
-    
-    PASOS:
-    1. Identifica en GLOBAL texto detallado que pertenezca a SH, LH, o cabinas específicas
-    2. Mueve ese contenido a la sección correspondiente (sin eliminar nada)
-    3. Deja en GLOBAL solo el resumen ejecutivo de alto nivel
-    4. Verifica que no haya pérdida de información
-    
-    OBJETIVO: Mejorar la estructura del informe manteniendo TODO el contenido.
+    {current_json}
 
 step8d_validate_and_fix_json:
   system_prompt: |
