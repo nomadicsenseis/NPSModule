@@ -332,6 +332,7 @@ class AnomalySummaryAgent:
         debug_info = {
             'step5_modernize_tone': None,
             'step6_size_optimization': [],
+            'step6f_redistribute_content': None,
             'step7_validate_and_fix_json': None
         }
         
@@ -405,7 +406,7 @@ class AnomalySummaryAgent:
             'step6b_remove_subsegment_daily_context',
             'step6c_summarize_cabin_haul_company_weekly',
             'step6d_shorten_cabin_haul_weekly',
-            'step6e_shorten_overall_global'
+            'step6e_shorten_overall_global',
         ]
 
         last_step_applied = "modernize_only"
@@ -476,6 +477,59 @@ class AnomalySummaryAgent:
             self.logger.warning(f"⚠️ Adaptive Card still over limit after {last_step_applied}: {best_kb:.2f} KB")
         else:
             self.logger.info(f"✅ Adaptive Card final size optimization step: {last_step_applied} ({best_kb:.2f} KB)")
+
+        # --- STEP 6F: REDISTRIBUTE CONTENT (ALWAYS RUNS AFTER SIZE OPTIMIZATION) ---
+        # This step reorganizes content between sections for better structure
+        # It runs on the card that has already achieved the target size
+        redistribute_config = self.config.get('step6f_redistribute_content', {})
+        redistribute_system = redistribute_config.get('system_prompt', '')
+        redistribute_input_template = redistribute_config.get('input_template', '')
+
+        if redistribute_system and redistribute_input_template:
+            self.logger.info("🔄 Applying content redistribution for better structure...")
+            
+            escaped_for_llm = best_json.replace('"', '\\"')
+            redistribute_input = redistribute_input_template.format(current_json=escaped_for_llm)
+            
+            message_history = MessageHistory()
+            message_history.create_and_add_message(content=redistribute_system, message_type=MessageType.SYSTEM)
+            message_history.create_and_add_message(content=redistribute_input, message_type=MessageType.USER)
+
+            try:
+                response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+                redistributed = response.content if hasattr(response, 'content') else str(response)
+                
+                # Store debug info
+                debug_info['step6f_redistribute_content'] = {
+                    'messages': [
+                        {'role': 'system', 'content': redistribute_system},
+                        {'role': 'user', 'content': redistribute_input},
+                        {'role': 'assistant', 'content': redistributed}
+                    ],
+                    'input_size_kb': best_kb,
+                    'executed': True
+                }
+                
+                # Clean and minify the redistributed response
+                redistributed_clean = self._clean_json_response(redistributed)
+                redistributed_min = self._minify_json(redistributed_clean)
+                redistributed_kb = self._measure_kb(redistributed_min)
+                
+                debug_info['step6f_redistribute_content']['output_size_kb'] = redistributed_kb
+                
+                # Update best JSON with redistributed version
+                best_json = redistributed_min
+                best_kb = redistributed_kb
+                
+                self.logger.info(f"📦 Adaptive Card size after content redistribution: {best_kb:.2f} KB")
+                self.logger.info("✅ Content redistribution applied successfully")
+                
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to apply content redistribution: {e}")
+                debug_info['step6f_redistribute_content'] = {'executed': False, 'error': str(e)}
+        else:
+            self.logger.warning(f"⚠️ Missing config for step6f_redistribute_content, skipping")
+            debug_info['step6f_redistribute_content'] = {'executed': False, 'reason': 'Missing config'}
 
         # --- STEP 7: JSON Validation and Typo Correction (FINAL QUALITY CHECK) ---
         step7_key = 'step7_validate_and_fix_json'
@@ -897,6 +951,7 @@ class AnomalySummaryAgent:
                 # Merge optimization debug into step4 conversation
                 step4_conversation['step5_modernize_tone'] = optimization_debug.get('step5_modernize_tone')
                 step4_conversation['step6_size_optimization'] = optimization_debug.get('step6_size_optimization')
+                step4_conversation['step6f_redistribute_content'] = optimization_debug.get('step6f_redistribute_content')
                 step4_conversation['step7_validate_and_fix_json'] = optimization_debug.get('step7_validate_and_fix_json')
                 
                 # Combine synthesis and adaptive card
@@ -1183,6 +1238,7 @@ class AnomalySummaryAgent:
             # Merge optimization debug into step4 conversation (for debugging)
             step4_conversation['step5_modernize_tone'] = optimization_debug.get('step5_modernize_tone')
             step4_conversation['step6_size_optimization'] = optimization_debug.get('step6_size_optimization')
+            step4_conversation['step6f_redistribute_content'] = optimization_debug.get('step6f_redistribute_content')
             step4_conversation['step7_validate_and_fix_json'] = optimization_debug.get('step7_validate_and_fix_json')
             step4_conversation['final_result'] = adaptive_card_json  # Final optimized JSON
             step4_conversation['final_result_length'] = len(adaptive_card_json)

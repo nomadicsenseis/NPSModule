@@ -607,6 +607,47 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                     f"{best_kb:.2f} KB (target: {TARGET_KB} KB)"
                 )
 
+        # --- STEP 8E: REDISTRIBUTE CONTENT (ALWAYS RUNS AFTER SIZE OPTIMIZATION) ---
+        # This step reorganizes content between sections for better structure
+        # It runs on the card that has already achieved the target size
+        redistribute_config = self._get_config_value(['step8e_redistribute_content', 'system_prompt'])
+        redistribute_input_template = self._get_config_value(['step8e_redistribute_content', 'input_template'])
+
+        if redistribute_config and redistribute_input_template:
+            self.logger.info("🔄 Applying content redistribution for better structure...")
+
+            escaped_for_llm = best_json.replace('"', '\\"')
+
+            message_history = MessageHistory(logger=self.logger)
+            message_history.create_and_add_message(
+                content=redistribute_config,
+                message_type=MessageType.SYSTEM
+            )
+            message_history.create_and_add_message(
+                content=redistribute_input_template.format(current_json=escaped_for_llm),
+                message_type=MessageType.USER
+            )
+
+            try:
+                response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+                redistributed = response.content if hasattr(response, 'content') else str(response)
+
+                redistributed_clean = self._clean_json_response(redistributed)
+                redistributed_min = self._minify_json(redistributed_clean)
+                redistributed_kb = self._measure_kb(redistributed_min)
+
+                # Update best JSON with redistributed version
+                best_json = redistributed_min
+                best_kb = redistributed_kb
+                
+                self.logger.info(f"📦 Adaptive Card size after content redistribution: {best_kb:.2f} KB")
+                self.logger.info("✅ Content redistribution applied successfully")
+
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to apply content redistribution: {e}")
+        else:
+            self.logger.warning("⚠️ Missing config for step8e_redistribute_content, skipping")
+
         # --- FINAL STEP: JSON Validation and Typo Correction (ALWAYS runs) ---
         pre_validation_json = best_json
         step_config = self._get_config_value(['step8d_validate_and_fix_json', 'system_prompt'])
