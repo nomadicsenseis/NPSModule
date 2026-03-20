@@ -2395,8 +2395,20 @@ PERÍODO {period} ({date_range}):
         else:
             return 'unknown'
 
-    async def export_full_stratified_conversation(self, all_conversations: dict, dateflight_local: Optional[str] = None) -> str:
-        """Export the FULL stratified conversation (all 3 steps) to the logging directory."""
+    async def export_full_stratified_conversation(
+        self,
+        all_conversations: dict,
+        dateflight_local: Optional[str] = None,
+        execution_id: Optional[str] = None,
+        final_adaptive_card_json: Optional[str] = None,
+        final_executive_synthesis: Optional[str] = None,
+        adaptive_card_size_kb: Optional[float] = None,
+        daily_analysis_dates: Optional[List[str]] = None,
+        optimization_debug: Optional[Dict[str, Any]] = None,
+        execution_duration_ms: Optional[float] = None,
+        source_causal_report_ids: Optional[List[str]] = None,
+    ) -> str:
+        """Export the FULL stratified conversation (all 4 steps) to the logging directory and DynamoDB."""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             period_range = format_period_range(date_param=dateflight_local)
@@ -2431,6 +2443,7 @@ PERÍODO {period} ({date_range}):
             save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Full stratified conversation exported to: {full_path}")
 
+            s3_key = None
             # Upload to S3 in production
             if self.environment == "prod":
                 try:
@@ -2447,6 +2460,31 @@ PERÍODO {period} ({date_range}):
                     self.logger.info(f"📤 Summary conversation uploaded to S3: {s3_key}")
                 except Exception as s3_err:
                     self.logger.warning(f"⚠️ Failed to upload summary conversation to S3: {s3_err}")
+
+            # Persist to DynamoDB
+            if execution_id:
+                try:
+                    from ..utils.dynamodb_report_persistence import DynamoDBReportPersistence
+                    dynamo = DynamoDBReportPersistence(environment=self.environment)
+                    synthesis_id = dynamo.save_summarizer_report(
+                        execution_id=execution_id,
+                        agent=self,
+                        all_conversations=all_conversations,
+                        optimization_debug=optimization_debug,
+                        final_adaptive_card_json=final_adaptive_card_json,
+                        final_executive_synthesis=final_executive_synthesis,
+                        adaptive_card_size_kb=adaptive_card_size_kb,
+                        daily_analysis_dates=daily_analysis_dates,
+                        execution_duration_ms=execution_duration_ms,
+                        status="completed",
+                        s3_report_key=s3_key,
+                        source_causal_report_ids=source_causal_report_ids,
+                        analysis_date=dateflight_local,
+                    )
+                    if synthesis_id:
+                        self.logger.info(f"📊 Summarizer report persisted to DynamoDB: {synthesis_id}")
+                except Exception as ddb_err:
+                    self.logger.warning(f"⚠️ Failed to persist summarizer report to DynamoDB: {ddb_err}")
 
             return str(full_path)
 

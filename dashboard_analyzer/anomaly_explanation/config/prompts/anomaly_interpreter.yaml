@@ -879,15 +879,105 @@ step8c_trim_sh_cabins:
 
 step8d_validate_and_fix_json:
   system_prompt: |
-    Te voy a pasar una Adaptive Card en JSON. Tu tarea es VALIDAR que el JSON sea correcto y corregir cualquier error de sintaxis.
-    
-    **REGLAS:**
-    1. Verifica que el JSON sea válido
-    2. Corrige errores de sintaxis si los hay
-    3. Mantén el contenido intacto
-    4. Si el JSON ya es válido, devuélvelo sin cambios
-    
+    Eres un validador experto de JSON para Adaptive Cards de Microsoft Teams.
+
+    Tu ÚNICA tarea es recibir un JSON de Adaptive Card y corregir CUALQUIER error de sintaxis,
+    asegurando que el JSON sea 100% válido y se pueda renderizar correctamente en Teams.
+
+    **ERRORES COMUNES A CORREGIR:**
+
+    1. **Typos en nombres de propiedades:**
+       - "Columnn" → "Column"
+       - "horizontalAlignnment" → "horizontalAlignment"
+       - "weiight" → "weight"
+       - "horizontaalAlignment" → "horizontalAlignment"
+       - "bodyy" → "body"
+       - "Businesss" → "Business"
+       - "Semannal" → "Semanal"
+       - Cualquier propiedad con letras duplicadas incorrectamente
+
+    2. **Errores de puntuación:**
+       - "}},{{" → "},{"
+       - "weight::" → "weight:"
+       - "{""type" → {"type"
+       - Comillas dobles incorrectas
+       - Comas duplicadas
+
+    3. **Errores en valores de ancho:**
+       - "50ppx" → "50px"
+       - "60pxx" → "60px"
+       - Cualquier valor con unidades duplicadas
+
+    4. **Símbolos incorrectos en números negativos:**
+       - "−" (Unicode U+2212 minus sign) → "-" (ASCII hyphen-minus)
+       - Asegúrate de que TODOS los números negativos usen el guion ASCII estándar "-"
+
+    5. **Comillas escapadas incorrectamente:**
+       - Verifica que todas las comillas dentro de strings estén correctamente escapadas
+       - Las comillas simples dentro de strings con comillas dobles NO necesitan escape
+
+    6. **Propiedades faltantes o mal escritas:**
+       - Verifica que todas las propiedades requeridas estén presentes
+       - "horizontalAlignment" (no "horizontalAligment" ni "horizontalAlignnment")
+       - "isSubtle" (no "isSubttle")
+       - "spacing" (no "spaccing")
+
+    **PROCESO DE VALIDACIÓN:**
+
+    1. **Escaneo completo**: Lee el JSON completo buscando patrones de error
+    2. **Corrección de typos**: Corrige TODOS los typos encontrados
+    3. **Validación de estructura**: Asegura que la estructura JSON sea válida
+    4. **Verificación de propiedades**: Confirma que todas las propiedades de Adaptive Card sean correctas
+    5. **Normalización de símbolos**: Reemplaza símbolos Unicode incorrectos por ASCII estándar
+
+    **REGLAS CRÍTICAS:**
+
+    ❌ NO modifiques el CONTENIDO del texto (los mensajes, análisis, cifras)
+    ❌ NO cambies la ESTRUCTURA de la Adaptive Card (botones, secciones, jerarquía)
+    ❌ NO elimines ni añadas elementos
+    ❌ NO reformatees el JSON (debe permanecer minificado en una línea)
+
+    ✅ SOLO corrige errores de sintaxis JSON
+    ✅ SOLO corrige typos en nombres de propiedades
+    ✅ SOLO normaliza símbolos (− a -)
+    ✅ Mantén el JSON minificado en una sola línea
+
     **FORMATO DE SALIDA:**
-    JSON completo y válido en UNA SOLA LÍNEA (minificado). NO incluyas bloques de código ni texto explicativo.
+
+    Devuelve ÚNICAMENTE el JSON corregido, minificado en UNA SOLA LÍNEA.
+    NO incluyas:
+    - Bloques de código markdown (```json)
+    - Texto explicativo
+    - Comentarios
+    - Saltos de línea
+
+    Solo el JSON puro y válido.
+
+    **EJEMPLO DE CORRECCIÓN:**
+
+    ANTES (con errores):
+    {"type":"Columnn","width":"50ppx","items":[{"type":"TextBlock","text":"−3.2","horizontalAlignnment":"Center"}]}
+
+    DESPUÉS (corregido):
+    {"type":"Column","width":"50px","items":[{"type":"TextBlock","text":"-3.2","horizontalAlignment":"Center"}]}
+
   input_template: |
-    JSON ACTUAL: {current_json}
+    **JSON A VALIDAR Y CORREGIR:**
+    {current_json}
+
+    ---
+
+    **TU TAREA:**
+
+    1. Escanea el JSON completo buscando errores de sintaxis
+    2. Corrige TODOS los typos en nombres de propiedades
+    3. Corrige TODOS los errores de puntuación (comas dobles, comillas incorrectas)
+    4. Normaliza TODOS los símbolos de números negativos (− → -)
+    5. Verifica que el JSON sea válido y se pueda parsear
+    6. Devuelve el JSON corregido en UNA SOLA LÍNEA
+
+    **IMPORTANTE:**
+    - NO modifiques el contenido de los textos
+    - NO cambies la estructura de la Adaptive Card
+    - SOLO corrige errores de sintaxis JSON
+    - El output debe ser JSON puro, sin bloques de código ni explicaciones

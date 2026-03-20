@@ -473,222 +473,131 @@ Confirma que has recibido la información y estás listo para el análisis paso 
     async def _optimize_adaptive_card_size(self, adaptive_card_json: str) -> str:
         """
         Optimize Adaptive Card size through progressive reduction.
-        
+
         Target size: 24 KB
         Reduction order:
         1. Minify JSON
         2. Trim company details (IB/YW)
         3. Trim LH cabins
         4. Trim SH cabins
-        5. Validate and fix JSON
+
+        After reduction, ALWAYS run a final JSON validation & fix step.
         """
         TARGET_KB = 24
-        
+
         # Step 1: Minify JSON
         best_json = self._minify_json(adaptive_card_json)
         current_kb = self._measure_kb(best_json)
         self.logger.info(f"📦 Adaptive Card size after minification: {current_kb:.2f} KB")
-        
-        if current_kb <= TARGET_KB:
-            self.logger.info(f"✅ Adaptive Card already fits ({current_kb:.2f} KB)")
-            return best_json
-        
-        # Steps for progressive reduction
-        reduction_steps = [
-            'step8a_trim_company_details',
-            'step8b_trim_lh_cabins', 
-            'step8c_trim_sh_cabins',
-            'step8d_validate_and_fix_json'
-        ]
-        
-        last_step_applied = "minify_only"
-        best_kb = current_kb
-        
-        for step_key in reduction_steps:
-            step_config = self._get_config_value([step_key, 'system_prompt'])
-            step_input_template = self._get_config_value([step_key, 'input_template'])
-            
-            if not step_config or not step_input_template:
-                self.logger.warning(f"⚠️ Missing config for {step_key}, skipping")
-                continue
-            
-            self.logger.info(f"🔄 Applying optimization step: {step_key}...")
-            
-            # Pass escaped version to the LLM
+
+        if current_kb > TARGET_KB:
+            reduction_steps = [
+                'step8a_trim_company_details',
+                'step8b_trim_lh_cabins',
+                'step8c_trim_sh_cabins',
+            ]
+
+            last_step_applied = "minify_only"
+            best_kb = current_kb
+
+            for step_key in reduction_steps:
+                step_config = self._get_config_value([step_key, 'system_prompt'])
+                step_input_template = self._get_config_value([step_key, 'input_template'])
+
+                if not step_config or not step_input_template:
+                    self.logger.warning(f"⚠️ Missing config for {step_key}, skipping")
+                    continue
+
+                self.logger.info(f"🔄 Applying optimization step: {step_key}...")
+
+                escaped_for_llm = best_json.replace('"', '\\"')
+
+                message_history = MessageHistory(logger=self.logger)
+                message_history.create_and_add_message(
+                    content=step_config.format(target_kb=TARGET_KB),
+                    message_type=MessageType.SYSTEM
+                )
+                message_history.create_and_add_message(
+                    content=step_input_template.format(current_json=escaped_for_llm, target_kb=TARGET_KB),
+                    message_type=MessageType.USER
+                )
+
+                response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+                optimized = response.content if hasattr(response, 'content') else str(response)
+
+                optimized_clean = self._clean_json_response(optimized)
+                optimized_min = self._minify_json(optimized_clean)
+                size_kb = self._measure_kb(optimized_min)
+
+                self.logger.info(f"📦 Adaptive Card size after {step_key}: {size_kb:.2f} KB")
+
+                if size_kb < best_kb:
+                    best_json = optimized_min
+                    best_kb = size_kb
+                    last_step_applied = step_key
+
+                if size_kb <= TARGET_KB:
+                    self.logger.info(f"✅ Adaptive Card fits after {step_key} ({size_kb:.2f} KB)")
+                    break
+
+            if best_kb > TARGET_KB:
+                self.logger.warning(
+                    f"⚠️ Adaptive Card still over limit after {last_step_applied}: "
+                    f"{best_kb:.2f} KB (target: {TARGET_KB} KB)"
+                )
+
+        # --- FINAL STEP: JSON Validation and Typo Correction (ALWAYS runs) ---
+        pre_validation_json = best_json
+        step_config = self._get_config_value(['step8d_validate_and_fix_json', 'system_prompt'])
+        step_input_template = self._get_config_value(['step8d_validate_and_fix_json', 'input_template'])
+
+        if step_config and step_input_template:
+            self.logger.info("🔄 Applying final JSON validation and typo correction...")
+
             escaped_for_llm = best_json.replace('"', '\\"')
-            
+
             message_history = MessageHistory(logger=self.logger)
             message_history.create_and_add_message(
-                content=step_config.format(target_kb=TARGET_KB),
+                content=step_config,
                 message_type=MessageType.SYSTEM
             )
             message_history.create_and_add_message(
-                content=step_input_template.format(current_json=escaped_for_llm, target_kb=TARGET_KB),
+                content=step_input_template.format(current_json=escaped_for_llm),
                 message_type=MessageType.USER
             )
-            
-            response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
-            optimized = response.content if hasattr(response, 'content') else str(response)
-            
-            # Clean and minify the optimized response
-            optimized_clean = self._clean_json_response(optimized)
-            optimized_min = self._minify_json(optimized_clean)
-            size_kb = self._measure_kb(optimized_min)
-            
-            self.logger.info(f"📦 Adaptive Card size after {step_key}: {size_kb:.2f} KB")
-            
-            if size_kb < best_kb:
-                best_json = optimized_min
-                best_kb = size_kb
-                last_step_applied = step_key
-            
-            if size_kb <= TARGET_KB:
-                self.logger.info(f"✅ Adaptive Card fits after {step_key} ({size_kb:.2f} KB)")
-                break
-        
-        if best_kb > TARGET_KB:
-            self.logger.warning(f"⚠️ Adaptive Card still over limit after {last_step_applied}: {best_kb:.2f} KB")
-            self.logger.info(f"🔧 Applying aggressive fallback truncation...")
-            
-            # AGGRESSIVE FALLBACK: Truncate content in each section
+
             try:
-                import json
-                parsed = json.loads(best_json)
-                
-                # Target: reduce each text field to ~50% of current size
-                def truncate_text(text, max_chars=None):
-                    if not text or not isinstance(text, str):
-                        return text
-                    # If max_chars not specified, target ~200 chars per field
-                    if max_chars is None:
-                        max_chars = 200
-                    if len(text) <= max_chars:
-                        return text
-                    # Truncate at last sentence or comma
-                    truncated = text[:max_chars]
-                    last_period = truncated.rfind('.')
-                    last_comma = truncated.rfind(',')
-                    cut_point = max(last_period, last_comma)
-                    if cut_point > max_chars * 0.5:
-                        return text[:cut_point + 1]
-                    return truncated + "..."
-                
-                # Truncate all text fields in the Adaptive Card
-                for container in parsed.get('body', []):
-                    if container.get('type') == 'Container':
-                        for item in container.get('items', []):
-                            if 'text' in item and isinstance(item['text'], str):
-                                item['text'] = truncate_text(item['text'])
-                            if 'items' in item:
-                                for subitem in item['items']:
-                                    if 'text' in subitem and isinstance(subitem['text'], str):
-                                        subitem['text'] = truncate_text(subitem['text'])
-                
-                # Truncate action titles and content
-                for action in parsed.get('actions', []):
-                    if 'title' in action and isinstance(action['title'], str):
-                        action['title'] = truncate_text(action['title'], 100)
-                    if 'card' in action and 'body' in action['card']:
-                        for body_item in action['card']['body']:
-                            if 'text' in body_item and isinstance(body_item['text'], str):
-                                body_item['text'] = truncate_text(body_item['text'])
-                
-                best_json = json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
-                best_kb = self._measure_kb(best_json)
-                self.logger.info(f"📦 Adaptive Card size after aggressive truncation: {best_kb:.2f} KB")
-                
+                response, _, _ = await self.agent.invoke(messages=message_history.get_messages())
+                validated = response.content if hasattr(response, 'content') else str(response)
+
+                validated_clean = self._clean_json_response(validated)
+                validated_min = self._minify_json(validated_clean)
+
+                # Only accept if the result is valid JSON
+                try:
+                    json.loads(validated_min)
+                    best_json = validated_min
+                    best_kb = self._measure_kb(best_json)
+                    self.logger.info(f"📦 Adaptive Card size after validation: {best_kb:.2f} KB")
+                    self.logger.info("✅ Final JSON is valid and parseable")
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"❌ Validation step returned invalid JSON: {e}")
+                    self.logger.warning("⚠️ Keeping pre-validation JSON")
+                    best_json = pre_validation_json
+
             except Exception as e:
-                self.logger.error(f"❌ Fallback truncation failed: {e}")
-        
+                self.logger.warning(f"⚠️ Failed to apply JSON validation: {e}")
+                best_json = pre_validation_json
+        else:
+            self.logger.warning("⚠️ Missing config for step8d_validate_and_fix_json, skipping")
+
+        best_kb = self._measure_kb(best_json)
         if best_kb > TARGET_KB:
-            self.logger.warning(f"⚠️ Adaptive Card still over limit: {best_kb:.2f} KB (target: {TARGET_KB} KB)")
+            self.logger.warning(f"⚠️ Adaptive Card over limit: {best_kb:.2f} KB (target: {TARGET_KB} KB)")
         else:
             self.logger.info(f"✅ Adaptive Card final size: {best_kb:.2f} KB")
-        
-        self.logger.info(f"🚀 Final Adaptive Card JSON:\n{best_json}")
-        return best_json
 
-    async def _force_truncate_adaptive_card(self, adaptive_card_json: str) -> str:
-        """
-        Force truncate Adaptive Card to fit under 24KB limit.
-        This is a last resort when LLM-based optimization fails.
-        """
-        import json
-        
-        self.logger.warning(f"🔧 Force truncating Adaptive Card...")
-        
-        try:
-            parsed = json.loads(adaptive_card_json)
-            
-            # Aggressive truncation: reduce all text fields to ~150 chars
-            def hard_truncate(text, max_chars=150):
-                if not text or not isinstance(text, str):
-                    return text
-                if len(text) <= max_chars:
-                    return text
-                # Find last sentence boundary
-                truncated = text[:max_chars]
-                last_period = truncated.rfind('.')
-                last_comma = truncated.rfind(',')
-                cut_point = max(last_period, last_comma)
-                if cut_point > max_chars * 0.4:
-                    return text[:cut_point + 1]
-                return truncated + "..."
-            
-            # Truncate all text fields recursively
-            def truncate_all(obj):
-                if isinstance(obj, dict):
-                    for key, value in obj.items():
-                        if key == 'text' and isinstance(value, str):
-                            obj[key] = hard_truncate(value, 150)
-                        elif key == 'title' and isinstance(value, str):
-                            obj[key] = hard_truncate(value, 80)
-                        else:
-                            truncate_all(value)
-                elif isinstance(obj, list):
-                    for item in obj:
-                        truncate_all(item)
-            
-            truncate_all(parsed)
-            
-            result = json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
-            final_kb = self._measure_kb(result)
-            self.logger.warning(f"📦 Adaptive Card size after force truncation: {final_kb:.2f} KB")
-            
-            # If still over limit, make it even more aggressive
-            if final_kb > 24:
-                self.logger.warning(f"⚠️ Still over limit, applying ultra-aggressive truncation")
-                # Ultra-aggressive: reduce to 100 chars
-                def hard_truncate_ultra(text, max_chars=100):
-                    if not text or not isinstance(text, str):
-                        return text
-                    if len(text) <= max_chars:
-                        return text
-                    return text[:max_chars] + "..."
-                
-                def truncate_all_ultra(obj):
-                    if isinstance(obj, dict):
-                        for key, value in obj.items():
-                            if key == 'text' and isinstance(value, str):
-                                obj[key] = hard_truncate_ultra(value, 100)
-                            elif key == 'title' and isinstance(value, str):
-                                obj[key] = hard_truncate_ultra(value, 60)
-                            else:
-                                truncate_all_ultra(value)
-                    elif isinstance(obj, list):
-                        for item in obj:
-                            truncate_all_ultra(item)
-                
-                truncate_all_ultra(parsed)
-                result = json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
-                self.logger.warning(f"📦 Adaptive Card size after ultra-aggressive truncation: {self._measure_kb(result):.2f} KB")
-            
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"❌ Force truncation failed: {e}")
-            # Last resort: just return first 20KB of the string
-            return adaptive_card_json[:int(20 * 1024)]
+        return best_json
 
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
@@ -1076,11 +985,6 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                                     self.logger.error(f"❌ Optimization failed: {opt_error}, using minified version")
                                     optimized_card_json = self._minify_json(modernized_card_json)
                                 
-                                # Force truncate if still over limit (safety net)
-                                if self._measure_kb(optimized_card_json) > 24:
-                                    self.logger.warning(f"⚠️ Optimization didn't reduce enough, applying force truncation")
-                                    optimized_card_json = await self._force_truncate_adaptive_card(optimized_card_json)
-                                
                                 # Save the optimized adaptive card to a file (reduced version for storage)
                                 await self._save_adaptive_card(optimized_card_json, date, segment)
                                 
@@ -1096,6 +1000,10 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             print(f"🔍 DEBUG INTERPRETER: Final interpretation compiled, length: {len(final_interpretation)}", file=sys.stderr)
             print(f"🔍 DEBUG INTERPRETER: Final interpretation preview: {final_interpretation[:500]}...", file=sys.stderr)
             
+            # Store step_responses for DynamoDB persistence
+            self._last_step_responses = step_responses
+            self._last_final_interpretation = final_interpretation
+
             # Update desempeño metrics
             end_time = datetime.now()
             self.total_processing_time = (end_time - start_time).total_seconds()
@@ -1410,8 +1318,8 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             # Last resort: return a generic error
             return "⚠️ **ANÁLISIS PARCIAL** (Error en compilación)"
     
-    async def export_hierarchical_conversation(self, date: Optional[str] = None, error: Optional[str] = None) -> str:
-        """Export the hierarchical conversation log to the logging directory."""
+    async def export_hierarchical_conversation(self, date: Optional[str] = None, error: Optional[str] = None, execution_id: Optional[str] = None, source_causal_report_ids: Optional[List[str]] = None) -> str:
+        """Export the hierarchical conversation log to the logging directory and DynamoDB."""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             period_range = format_period_range(date_param=date)
@@ -1449,6 +1357,7 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Hierarchical conversation exported to: {full_path}")
 
+            s3_key = None
             # Upload to S3 in production
             if self.environment == "prod":
                 try:
@@ -1465,6 +1374,30 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                     self.logger.info(f"📤 Interpreter conversation uploaded to S3: {s3_key}")
                 except Exception as s3_err:
                     self.logger.warning(f"⚠️ Failed to upload interpreter conversation to S3: {s3_err}")
+
+            # Persist to DynamoDB
+            if execution_id:
+                try:
+                    from ..utils.dynamodb_report_persistence import DynamoDBReportPersistence
+                    dynamo = DynamoDBReportPersistence(environment=self.environment)
+                    adaptive_card = getattr(self, "last_adaptive_card", None)
+                    synthesis_id = dynamo.save_interpreter_report(
+                        execution_id=execution_id,
+                        agent=self,
+                        step_responses=getattr(self, "_last_step_responses", None),
+                        final_interpretation=getattr(self, "_last_final_interpretation", None),
+                        final_adaptive_card_json=adaptive_card,
+                        execution_duration_ms=self.total_processing_time * 1000 if self.total_processing_time else None,
+                        status="failed" if error else "completed",
+                        error_message=error,
+                        s3_report_key=s3_key,
+                        source_causal_report_ids=source_causal_report_ids,
+                        analysis_date=date,
+                    )
+                    if synthesis_id:
+                        self.logger.info(f"📊 Interpreter report persisted to DynamoDB: {synthesis_id}")
+                except Exception as ddb_err:
+                    self.logger.warning(f"⚠️ Failed to persist interpreter report to DynamoDB: {ddb_err}")
 
             return str(full_path)
 

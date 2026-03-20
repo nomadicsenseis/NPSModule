@@ -1347,7 +1347,9 @@ class CausalExplanationAgent:
                 result_parts.append("**RESUMEN:**")
                 result_parts.append(f"   {analysis_result['summary']}")
             
-            return "\n".join(result_parts)
+            result = "\n".join(result_parts)
+            self.collected_data['operative_data'] = result
+            return result
             
         except Exception as e:
             self.logger.error(f"❌ Error in correlation analysis operative data tool: {type(e).__name__}: {str(e)}")
@@ -6472,8 +6474,8 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
         """Get the structured investigation log (tool executions)"""
         return self.tracker.get_tool_executions()
     
-    async def export_conversation(self, filename: Optional[str] = None, node_path: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> str:
-        """Export the conversation log to the logging directory."""
+    async def export_conversation(self, filename: Optional[str] = None, node_path: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, execution_id: Optional[str] = None, execution_duration_ms: Optional[float] = None) -> str:
+        """Export the conversation log to the logging directory and DynamoDB."""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             period_range = format_period_range(start_date=start_date, end_date=end_date)
@@ -6527,6 +6529,7 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
             save_pretty_json(full_path, conversation_data)
             self.logger.info(f"📝 Conversation exported to: {full_path}")
 
+            s3_key = None
             # Upload to S3 in production
             if self.environment == "prod":
                 try:
@@ -6543,6 +6546,27 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                     self.logger.info(f"📤 Causal conversation uploaded to S3: {s3_key}")
                 except Exception as s3_err:
                     self.logger.warning(f"⚠️ Failed to upload causal conversation to S3: {s3_err}")
+
+            # Persist to DynamoDB
+            if execution_id:
+                try:
+                    from ..utils.dynamodb_report_persistence import DynamoDBReportPersistence
+                    dynamo = DynamoDBReportPersistence(environment=self.environment)
+                    final_synth = self.tracker.previous_explanations[-1] if self.tracker.previous_explanations else None
+                    report_id = dynamo.save_causal_report(
+                        execution_id=execution_id,
+                        node_path=node_path or "unknown",
+                        agent=self,
+                        final_synthesis=final_synth,
+                        execution_duration_ms=execution_duration_ms,
+                        status="completed",
+                        s3_report_key=s3_key,
+                    )
+                    if report_id:
+                        self.logger.info(f"📊 Causal report persisted to DynamoDB: {report_id}")
+                        self._last_dynamo_report_id = report_id
+                except Exception as ddb_err:
+                    self.logger.warning(f"⚠️ Failed to persist causal report to DynamoDB: {ddb_err}")
 
             return str(full_path)
 
