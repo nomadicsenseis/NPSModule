@@ -2309,7 +2309,8 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
                 )
                 
                 print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
-                print(ai_interpretation)
+                print_text = ai_interpretation.split("---ADAPTIVE_CARD_JSON---")[0].strip() if "---ADAPTIVE_CARD_JSON---" in ai_interpretation else ai_interpretation
+                print(print_text)
                 
             except Exception as e:
                 ai_interpretation = f"AI interpretation failed: {str(e)}"
@@ -2569,7 +2570,8 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
                 )
                 
                 print("🎯 IMPRIMIENDO INTERPRETACIÓN FINAL:")
-                print(ai_interpretation)
+                print_text = ai_interpretation.split("---ADAPTIVE_CARD_JSON---")[0].strip() if "---ADAPTIVE_CARD_JSON---" in ai_interpretation else ai_interpretation
+                print(print_text)
                 
             except Exception as e:
                 print(f"❌ Tree interpretation failed: {str(e)}")

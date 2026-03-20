@@ -209,11 +209,17 @@ async def generate_consolidated_summary(
         
         # Format weekly data (it's a list of periods from execute_analysis_flow)
         analysis_period_range = None
+        interpreter_adaptive_card = None
         if isinstance(weekly_data, list) and weekly_data:
             weekly_comparative_analysis = ""
             for period in weekly_data:
                 date_range = period.get('date_range', 'Unknown')
                 interpretation = period.get('ai_interpretation', '')
+                # Separate text from adaptive card JSON (same format as summarizer)
+                if "---ADAPTIVE_CARD_JSON---" in interpretation:
+                    text_part, card_part = interpretation.split("---ADAPTIVE_CARD_JSON---", 1)
+                    interpretation = text_part.strip()
+                    interpreter_adaptive_card = card_part.strip()
                 weekly_comparative_analysis += f"{interpretation}\n\n"
                 if not analysis_period_range and date_range and date_range != 'Unknown':
                     analysis_period_range = date_range
@@ -445,13 +451,20 @@ async def run_weekly_comprehensive_analysis(
                 print(f"✅ Found daily analysis data: {len(daily_single_analyses)} periods")
         
         # Convert daily data to the format expected by summary agent if needed
+        interpreter_adaptive_cards_daily = []
         if daily_single_analyses and isinstance(daily_single_analyses, list):
             formatted_daily_analyses = []
             for daily in daily_single_analyses:
                 if isinstance(daily, dict) and 'ai_interpretation' in daily:
+                    analysis_text = daily.get('ai_interpretation', '')
+                    # Separate text from adaptive card JSON (same format as summarizer)
+                    if "---ADAPTIVE_CARD_JSON---" in analysis_text:
+                        text_part, card_part = analysis_text.split("---ADAPTIVE_CARD_JSON---", 1)
+                        analysis_text = text_part.strip()
+                        interpreter_adaptive_cards_daily.append(card_part.strip())
                     formatted_daily_analyses.append({
                         'date': daily.get('date_range', daily.get('period', 'Unknown')),
-                        'analysis': daily.get('ai_interpretation', ''),
+                        'analysis': analysis_text,
                         'anomalies': ['daily_analysis']
                     })
             daily_single_analyses = formatted_daily_analyses

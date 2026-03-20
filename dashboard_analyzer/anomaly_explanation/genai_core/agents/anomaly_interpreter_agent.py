@@ -225,6 +225,7 @@ class AnomalyInterpreterAgent:
         
         # Store last generated Adaptive Card for summary agent
         self.last_adaptive_card = None
+        self.last_optimized_adaptive_card = None
         
         self.logger.info(f"🤖 AnomalyInterpreterAgent initialized with {llm_type.value}")
 
@@ -988,8 +989,9 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                                 # Save the optimized adaptive card to a file (reduced version for storage)
                                 await self._save_adaptive_card(optimized_card_json, date, segment)
                                 
-                                # Store UNREDUCED version for summary agent
+                                # Store both versions: unreduced for summary agent, optimized for return
                                 self.last_adaptive_card = modernized_card_json
+                                self.last_optimized_adaptive_card = optimized_card_json
             
             # Compile final response from all steps
             print("🔍 DEBUG INTERPRETER: Compiling final interpretation...", file=sys.stderr)
@@ -1016,9 +1018,16 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             if conversation_file:
                 self.logger.info(f"🗂️ Conversación jerárquica guardada: {conversation_file}")
             
+            # Combine interpretation + adaptive card (same structure as summarizer)
+            optimized_card = getattr(self, 'last_optimized_adaptive_card', None)
+            if optimized_card:
+                final_output = f"{final_interpretation}\n\n---ADAPTIVE_CARD_JSON---\n\n{optimized_card}"
+            else:
+                final_output = final_interpretation
+
             print("🔍 DEBUG INTERPRETER: About to return final interpretation", file=sys.stderr)
-            print(f"🔍 DEBUG INTERPRETER: Returning {len(final_interpretation)} characters", file=sys.stderr)
-            return final_interpretation
+            print(f"🔍 DEBUG INTERPRETER: Returning {len(final_output)} characters", file=sys.stderr)
+            return final_output
             
         except Exception as e:
             self.logger.error(f"❌ Error in hierarchical interpretation: {str(e)}")
