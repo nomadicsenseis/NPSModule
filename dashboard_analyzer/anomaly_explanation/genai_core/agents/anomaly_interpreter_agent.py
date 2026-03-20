@@ -376,11 +376,52 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 return None
         return value
     
-    async def _save_adaptive_card(self, card_json: str, date: Optional[str], segment: Optional[str]):
-        """Save the adaptive card JSON as a minified report and upload to S3 in prod.
+    def _interpreter_report_context(
+        self, date: Optional[str], segment: Optional[str]
+    ) -> Tuple[str, Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        """Build analysis_date, date_ranges, and params for comprehensive-report-shaped JSON."""
+        seg = (segment or self.segment or "Global").strip() or "Global"
+        if date and " to " in str(date):
+            parts = [p.strip() for p in str(date).split(" to ", 1)]
+            comp_start, comp_end = parts[0], parts[1]
+            analysis_date = comp_end
+        elif date:
+            d = str(date).strip()
+            comp_start = self.comparison_start_date or d
+            comp_end = self.comparison_end_date or d
+            analysis_date = d
+        else:
+            analysis_date = datetime.now().strftime("%Y-%m-%d")
+            comp_start = self.comparison_start_date or analysis_date
+            comp_end = self.comparison_end_date or analysis_date
 
-        Only comparative (weekly) reports are persisted; single (daily)
-        interpreter cards are used in-memory by the summary agent but not saved.
+        date_ranges = {
+            "analysis_date": analysis_date,
+            "comparison_start_date": comp_start,
+            "comparison_end_date": comp_end,
+        }
+        execution_metadata = {
+            "execution_date": datetime.now().isoformat() + "Z",
+            "analysis_date": analysis_date,
+            "segment": seg,
+            "explanation_mode": "interpreter_hierarchical",
+            "causal_filter": self.causal_filter or "N/A",
+        }
+        weekly_analysis_params = {
+            "anomaly_detection_mode": self.anomaly_detection_mode,
+            "baseline_periods": self.baseline_periods,
+            "aggregation_days": self.aggregation_days,
+            "periods": 1,
+            "study_mode": self.study_mode,
+        }
+        daily_analysis_params: Dict[str, Any] = {}
+        return analysis_date, date_ranges, execution_metadata, weekly_analysis_params, daily_analysis_params
+
+    async def _save_adaptive_card(self, card_json: str, date: Optional[str], segment: Optional[str]):
+        """Save report using the same JSON envelope as summarizer S3 comprehensive reports.
+
+        The Adaptive Card (optimized) is stored under ``final_synthesis`` (dict in prod when parseable).
+        Only comparative (weekly) reports are persisted; single (daily) cards are skipped.
         """
         if self.study_mode == "single":
             self.logger.info(
@@ -391,9 +432,32 @@ Confirma que has recibido la información y estás listo para el análisis paso 
         try:
             period_range = format_period_range(date_param=date)
             output_path = get_report_path(self.report_group, "interpreter", period_range)
+            (
+                _analysis_date,
+                date_ranges,
+                execution_metadata,
+                weekly_analysis_params,
+                daily_analysis_params,
+            ) = self._interpreter_report_context(date, segment)
 
-            save_minified_json(output_path, card_json)
-            self.logger.info(f"💾 Adaptive Card saved to: {output_path} ({self._measure_kb(card_json):.2f} KB)")
+            # Match summarizer: final_synthesis = parsed Adaptive Card object when JSON is valid
+            try:
+                final_synthesis: Any = json.loads(card_json)
+            except Exception:
+                final_synthesis = card_json
+
+            report_doc = self.s3_uploader.build_comprehensive_report_document(
+                execution_metadata=execution_metadata,
+                weekly_analysis_params=weekly_analysis_params,
+                daily_analysis_params=daily_analysis_params,
+                date_ranges=date_ranges,
+                final_synthesis=final_synthesis,
+            )
+            body = json.dumps(report_doc, ensure_ascii=False, separators=(",", ":"))
+            save_minified_json(output_path, body)
+            self.logger.info(
+                f"💾 Interpreter report (comprehensive shape) saved to: {output_path} ({self._measure_kb(body):.2f} KB)"
+            )
 
             # Upload to S3 in production
             if self.environment == "prod":
@@ -401,25 +465,21 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                     s3_key = get_s3_report_key(
                         self.s3_uploader.base_prefix, self.report_group, "interpreter", period_range,
                     )
-                    minified = card_json
-                    try:
-                        minified = json.dumps(json.loads(card_json), ensure_ascii=False, separators=(",", ":"))
-                    except json.JSONDecodeError:
-                        pass
                     self.s3_uploader.s3_client.put_object(
                         Bucket=self.s3_uploader.bucket_name,
                         Key=s3_key,
-                        Body=minified.encode("utf-8"),
+                        Body=body.encode("utf-8"),
                         ContentType="application/json",
                         Metadata={
-                            "content_type": "adaptive_card",
+                            "content_type": "comprehensive_analysis",
                             "report_group": self.report_group,
                             "period_range": period_range,
+                            "agent": "interpreter",
                         },
                     )
-                    self.logger.info(f"📤 Adaptive Card uploaded to S3: {s3_key}")
+                    self.logger.info(f"📤 Interpreter comprehensive report uploaded to S3: {s3_key}")
                 except Exception as s3_error:
-                    self.logger.warning(f"⚠️ Failed to upload Adaptive Card to S3: {s3_error}")
+                    self.logger.warning(f"⚠️ Failed to upload interpreter report to S3: {s3_error}")
 
         except Exception as e:
             self.logger.error(f"❌ Failed to save Adaptive Card: {e}")

@@ -103,6 +103,23 @@ class S3ReportUploader:
             "final_synthesis": final_synthesis,
             "report_generated_at": datetime.now().isoformat() + "Z"
         }
+
+    def build_comprehensive_report_document(
+        self,
+        execution_metadata: Dict[str, Any],
+        weekly_analysis_params: Dict[str, Any],
+        daily_analysis_params: Dict[str, Any],
+        date_ranges: Dict[str, Any],
+        final_synthesis: Union[str, Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Public helper: same JSON shape as upload_comprehensive_report (for agents that use a custom S3 key)."""
+        return self._build_report_json(
+            execution_metadata=execution_metadata,
+            weekly_analysis_params=weekly_analysis_params,
+            daily_analysis_params=daily_analysis_params,
+            date_ranges=date_ranges,
+            final_synthesis=final_synthesis,
+        )
     
     async def upload_comprehensive_report(self,
                                         execution_date: datetime,
