@@ -133,6 +133,58 @@ class AnomalySummaryAgent:
             logger.addHandler(handler)
         
         return logger
+
+    def _build_summarizer_comprehensive_report_json(
+        self,
+        adaptive_card_json: str,
+        execution_metadata: Optional[Dict[str, Any]],
+        weekly_analysis_params: Optional[Dict[str, Any]],
+        daily_analysis_params: Optional[Dict[str, Any]],
+        date_ranges: Optional[Dict[str, Any]],
+        segment: str,
+    ) -> str:
+        """Same JSON envelope as interpreter / upload_comprehensive_report (final_synthesis = Adaptive Card)."""
+        em = dict(execution_metadata or {})
+        dr = dict(date_ranges or {})
+        if "execution_date" not in em:
+            em["execution_date"] = datetime.now().isoformat() + "Z"
+        if "analysis_date" not in em:
+            em["analysis_date"] = dr.get("analysis_date") or datetime.now().strftime("%Y-%m-%d")
+        if "segment" not in em:
+            em["segment"] = segment
+        if "explanation_mode" not in em:
+            em["explanation_mode"] = "summarizer_stratified"
+        if "causal_filter" not in em:
+            em["causal_filter"] = self.causal_filter or "N/A"
+
+        wap = dict(weekly_analysis_params or {})
+        wap.setdefault("anomaly_detection_mode", self.anomaly_detection_mode)
+        wap.setdefault("baseline_periods", self.baseline_periods)
+        wap.setdefault("aggregation_days", self.aggregation_days)
+        wap.setdefault("study_mode", self.study_mode)
+        if "periods" not in wap:
+            wap["periods"] = 1
+
+        dap = dict(daily_analysis_params or {})
+
+        if "comparison_start_date" not in dr and self.comparison_start_date:
+            dr["comparison_start_date"] = self.comparison_start_date
+        if "comparison_end_date" not in dr and self.comparison_end_date:
+            dr["comparison_end_date"] = self.comparison_end_date
+
+        try:
+            final_synthesis: Any = json.loads(adaptive_card_json)
+        except Exception:
+            final_synthesis = adaptive_card_json
+
+        doc = self.s3_uploader.build_comprehensive_report_document(
+            execution_metadata=em,
+            weekly_analysis_params=wap,
+            daily_analysis_params=dap,
+            date_ranges=dr,
+            final_synthesis=final_synthesis,
+        )
+        return json.dumps(doc, ensure_ascii=False, separators=(",", ":"))
     
     def _load_prompt_config(self, config_path: str) -> Dict[str, Any]:
         """Load prompt configuration using importlib.resources for package support"""
@@ -1245,37 +1297,41 @@ class AnomalySummaryAgent:
             
             self.logger.info(f"✅ Step 4 complete: Adaptive Card generated (date_range: {date_range})")
 
-            # Save summary adaptive card as a report
+            # Save summarizer report (same comprehensive shape as interpreter: final_synthesis = Adaptive Card)
             try:
                 period_range = format_period_range(date_param=analysis_period_str)
                 report_path = get_report_path(self.report_group, "summarizer", period_range)
-                save_minified_json(report_path, adaptive_card_json)
-                self.logger.info(f"💾 Summary Adaptive Card saved to: {report_path}")
+                report_body = self._build_summarizer_comprehensive_report_json(
+                    adaptive_card_json,
+                    execution_metadata,
+                    weekly_analysis_params,
+                    daily_analysis_params,
+                    date_ranges,
+                    segment,
+                )
+                save_minified_json(report_path, report_body)
+                self.logger.info(f"💾 Summarizer comprehensive report saved to: {report_path}")
 
                 if self.environment == "prod":
                     try:
                         s3_key = get_s3_report_key(
                             self.s3_uploader.base_prefix, self.report_group, "summarizer", period_range,
                         )
-                        minified = adaptive_card_json
-                        try:
-                            minified = json.dumps(json.loads(adaptive_card_json), ensure_ascii=False, separators=(",", ":"))
-                        except json.JSONDecodeError:
-                            pass
                         self.s3_uploader.s3_client.put_object(
                             Bucket=self.s3_uploader.bucket_name,
                             Key=s3_key,
-                            Body=minified.encode("utf-8"),
+                            Body=report_body.encode("utf-8"),
                             ContentType="application/json",
                             Metadata={
-                                "content_type": "adaptive_card",
+                                "content_type": "comprehensive_analysis",
                                 "report_group": self.report_group,
                                 "period_range": period_range,
+                                "agent": "summarizer",
                             },
                         )
-                        self.logger.info(f"📤 Summary Adaptive Card uploaded to S3: {s3_key}")
+                        self.logger.info(f"📤 Summarizer comprehensive report uploaded to S3: {s3_key}")
                     except Exception as s3_err:
-                        self.logger.warning(f"⚠️ Failed to upload Summary AC to S3: {s3_err}")
+                        self.logger.warning(f"⚠️ Failed to upload summarizer report to S3: {s3_err}")
             except Exception as save_err:
                 self.logger.warning(f"⚠️ Failed to save Summary Adaptive Card: {save_err}")
 
