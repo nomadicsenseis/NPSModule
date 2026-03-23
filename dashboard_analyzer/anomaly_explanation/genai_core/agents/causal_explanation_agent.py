@@ -6582,6 +6582,32 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
             summary[msg_type] = summary.get(msg_type, 0) + 1
         return summary
 
+    def _ncs_combined_incident_text(self, df: pd.DataFrame) -> pd.Series:
+        """
+        Per-row text for NCS segment filtering. NCS rows are structured (flight, route,
+        description, …); using columns[0] alone (often ``flight``) misses XXX-YYY routes
+        and narrative, so haul/cabin filters misbehave.
+        """
+        cols = (
+            "route",
+            "origin",
+            "destination",
+            "description",
+            "email_summary",
+            "email_subject",
+            "flight",
+            "incident_type",
+        )
+        present = [c for c in cols if c in df.columns]
+        if not present:
+            if df.empty or len(df.columns) == 0:
+                return pd.Series(dtype=str)
+            return df.iloc[:, 0].fillna("").astype(str)
+        acc = df[present[0]].fillna("").astype(str)
+        for c in present[1:]:
+            acc = acc + " " + df[c].fillna("").astype(str)
+        return acc.str.strip()
+
     async def _filter_ncs_by_segment(
         self,
         ncs_data: pd.DataFrame,
@@ -6597,9 +6623,7 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
             if ncs_data.empty:
                 return ncs_data
             
-            # Get the first column (usually contains incident text)
-            incident_col = ncs_data.columns[0] if len(ncs_data.columns) > 0 else None
-            if incident_col is None:
+            if len(ncs_data.columns) == 0:
                 return ncs_data
             
             self.logger.info(f"Starting NCS filtering for segment: {node_path}")
@@ -6648,7 +6672,6 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
             if ncs_data.empty or len(ncs_data.columns) == 0:
                 return ncs_data
             
-            incident_col = ncs_data.columns[0]
             filtered_ncs = ncs_data.copy()
             
             # STEP 1: ALWAYS apply haul-based filtering using Routes Dictionary (Global, LH, SH)
@@ -6664,7 +6687,7 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                     filtered_ncs = await self._filter_using_routes_dictionary(
                         filtered_ncs,
                         haul_type,
-                        incident_col,
+                        self._ncs_combined_incident_text(filtered_ncs),
                         allow_unknown_route_incidents=True
                     )
                 else:
@@ -6672,7 +6695,7 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                     target_only = await self._filter_using_routes_dictionary(
                         filtered_ncs,
                         haul_type,
-                        incident_col,
+                        self._ncs_combined_incident_text(filtered_ncs),
                         allow_unknown_route_incidents=False
                     )
                     # B) attributable + unknown (for extracting the unknown slice only)
@@ -6680,7 +6703,7 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                         target_plus_unknown = await self._filter_using_routes_dictionary(
                             filtered_ncs,
                             haul_type,
-                            incident_col,
+                            self._ncs_combined_incident_text(filtered_ncs),
                             allow_unknown_route_incidents=True
                         )
                         unknown_only = target_plus_unknown[~target_plus_unknown.index.isin(target_only.index)]
@@ -6717,7 +6740,8 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                         combined_pattern = f"({exclusive_pattern}).*({other_cabin_pattern})|({other_cabin_pattern}).*({exclusive_pattern})"
                         
                         # Find incidents to potentially exclude
-                        exclusive_mask = filtered_ncs[incident_col].str.contains(combined_pattern, na=False, regex=True, case=False)
+                        cabin_text = self._ncs_combined_incident_text(filtered_ncs)
+                        exclusive_mask = cabin_text.str.contains(combined_pattern, na=False, regex=True, case=False)
                         incidents_to_exclude = filtered_ncs[exclusive_mask]
                         
                         if len(incidents_to_exclude) > 0:
@@ -8051,7 +8075,7 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
         self,
         ncs_data: pd.DataFrame,
         target_haul: str,
-        incident_col: str,
+        incident_text: pd.Series,
         allow_unknown_route_incidents: bool = True
     ) -> pd.DataFrame:
         """
@@ -8067,7 +8091,8 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
         Args:
             ncs_data: DataFrame con incidentes NCS
             target_haul: Haul objetivo ("LH" o "SH")
-            incident_col: Nombre de la columna con texto de incidentes
+            incident_text: Serie alineada por índice con el texto combinado por fila
+                (ruta, descripción, vuelo, etc.); ver ``_ncs_combined_incident_text``.
             
         Returns:
             DataFrame filtrado por rutas del haul objetivo
@@ -8194,7 +8219,9 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
                 return True if allow_unknown_route_incidents else False
             
             # 5. Aplicar filtro a cada incidente
-            mask = ncs_data[incident_col].apply(incident_belongs_to_target_haul)
+            if len(incident_text) != len(ncs_data) or not incident_text.index.equals(ncs_data.index):
+                incident_text = incident_text.reindex(ncs_data.index)
+            mask = incident_text.apply(incident_belongs_to_target_haul)
             filtered_data = ncs_data[mask]
             
             # 6. Log resultados
