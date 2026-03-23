@@ -21,6 +21,13 @@ shared_rules: |
   - ⚖️ **COHERENCIA CON EL NPS:** Respeta SIEMPRE el signo de la variación semanal. Si el NPS semanal sube, habla de **mejora**; si el NPS baja, habla de **deterioro**. NUNCA inventes un deterioro si el dato semanal es positivo, ni una mejora si es negativo. Si la operativa contradice al NPS, explícalo como una "paradoja" o "desconexión", pero no cambies la calificación del resultado.
   - 🗣️ **TONO MODERADO (ESTRICTO):** Evita lenguaje catastrofista o alarmista. NO uses palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió". USA alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
 
+  # NODOS NORMAL (N) — LENGUAJE DE ESTABILIDAD
+  - Cuando el informe indique segmento/nodo **Normal** (`N`) pero exista variación numérica de NPS vs el período de comparación:
+    - Si **|variación| ≤ 2,5 pts**, puedes describirlo como **estable**.
+    - Si **2,5 pts < |variación| ≤ 4 pts**, usa **"relativamente estable"** (no solo "estable") para reflejar movimiento moderado sin anomalía.
+  - No contradigas la etiqueta Normal: no trates esa variación como subida/bajada anómala.
+  - ⚖️ **Detector:** subida anómala positiva (no Normal) solo por encima de **4 pts** vs referencia; Normal en subidas hasta **4 pts** incl.
+
 # =============================================================================
 # STEP 1: ANALYZE SECTION CONNECTIONS (se ejecuta N veces, una por sección)
 # =============================================================================
@@ -295,6 +302,7 @@ step4_generate_adaptive_card:
     **PLANTILLA ESTRUCTURAL PARA SUMMARY (respetar esta forma y ORDEN, ejemplo MINIFICADO):**
     
     **ESTRUCTURA GENERAL:**
+    0. **FOCUS TOUCHPOINT (obligatorio si el mensaje de usuario lo indica):** Si el input incluye "🎯 **FOCUS TOUCHPOINT:**", el **primer elemento** del array `body` debe ser un bloque destacado con el nombre del focus (p. ej. "🎯 **Focus:** {nombre}") **antes** del título "Reporte de NPS y Variaciones". Si no hay focus en el input, no añadas este bloque.
     1. **CABECERA**: Título "Reporte de NPS y Variaciones" + período
     2. **TABLA PRINCIPAL**: Segmentos con NPS y variación
     3. **BOTONES EXPANDIBLES**: Un botón por segmento con análisis semanal + contexto diario
@@ -307,7 +315,7 @@ step4_generate_adaptive_card:
     **REGLA DE FUENTE:**
     - La síntesis ejecutiva trae secciones con títulos. Usa EXACTAMENTE esos títulos como fuente, salvo si vienen con Short Haul o Long Haul, en cuyo caso usa SH o LH respectivamente.
     - Si una sección no existe en la síntesis, NO inventes contenido para ella.
-    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** Si en la síntesis aparece información de un FOCUS TOUCHPOINT (marcado con 🎯), añade una acción `Action.ShowCard` con título "🎯 FOCUS: {nombre_touchpoint}" que incluya las tres subsecciones: (1) CSAT por segmento (CSAT actual, gap vs target, satisfaction diff si modo comparative), (2) verbatims del focus touchpoint por segmento (resumen, top positivos, top negativos; indicar ausencia si no hay datos), (3) % issues por segmento (Pct_Issues L7D y variación vs L7D_prev; indicar ausencia si no hay datos o no existe mapeo). Esta tarjeta es OBLIGATORIA cuando el dato está presente y DEBE ir PRIMERA en la lista de botones, ANTES que GLOBAL.
+    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** (A) **Body:** Si el usuario indicó focus, debe aparecer como **primer apartado** del `body` (regla 0). (B) **Actions:** Si la síntesis trae datos 🎯, añade `Action.ShowCard` "🎯 FOCUS: {nombre_touchpoint}" con (1) CSAT por segmento, (2) verbatims por segmento, (3) % issues. OBLIGATORIA cuando hay datos; **primera en botones**, antes que GLOBAL.
     
     **ORDEN DE SECCIONES EN LOS BOTONES (respetar estrictamente):**
     1. 🎯 FOCUS: {touchpoint} (si aplica - PRIMERO)
@@ -333,7 +341,7 @@ step4_generate_adaptive_card:
     - Escapa las comillas internas si es necesario para que sea un string JSON válido.
 
   input_template: |
-    INFORME:
+    {focus_touchpoint_block}INFORME:
     {comprehensive_response}
 
     PERÍODO: {date_range}
@@ -423,7 +431,7 @@ step6a_trim_low_impact_days:
       - Picos de incidentes operativos (cancelaciones masivas, disrupciones)
       - Eventos meteorológicos críticos
     - ELIMINA los días con:
-      - Variaciones pequeñas (< ±5 pts)
+      - Variaciones pequeñas (< ±4 pts)
       - Comportamiento estable o sin incidentes destacados
       - Mejoras artificiales por sesgo de muestra
     - Mantén 2-3 días críticos por segmento, no más.

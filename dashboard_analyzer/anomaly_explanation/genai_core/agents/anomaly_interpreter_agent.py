@@ -1006,9 +1006,20 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 step6_prompt = self._get_config_value(['step6_generate_adaptive_card', 'input_template'])
                 if step6_prompt:
                     date_range = f"{date}" if date else "Período no especificado"
+                    ft = (self.focus_touchpoint or "").strip()
+                    if ft:
+                        focus_touchpoint_block = (
+                            f"🎯 **FOCUS TOUCHPOINT:** {ft}\n"
+                            "En la Adaptive Card, el PRIMER elemento del array `body` debe ser un bloque "
+                            f'destacado (p. ej. TextBlock) con \"🎯 **Focus:** {ft}\" ANTES del título '
+                            '"Reporte de NPS y Variaciones".\n\n"
+                        )
+                    else:
+                        focus_touchpoint_block = ""
                     step6_input = step6_prompt.format(
                         executive_synthesis=executive_synthesis_content,
-                        date_range=date_range
+                        date_range=date_range,
+                        focus_touchpoint_block=focus_touchpoint_block,
                     )
                     
                     # Get system prompt for step 6

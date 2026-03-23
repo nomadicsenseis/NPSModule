@@ -254,7 +254,7 @@ class FlexibleAnomalyDetector:
 
     def _classify_anomaly_new_logic(self, deviation: float) -> str:
         if deviation < 0: return "-"
-        return "+" if deviation > 7 else "N"
+        return "+" if deviation > 4 else "N"
 
     def get_period_summary(self, data_folder: str, periods: List[int]) -> pd.DataFrame:
         summary_data = []

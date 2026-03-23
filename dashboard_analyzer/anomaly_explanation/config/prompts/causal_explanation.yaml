@@ -20,6 +20,9 @@ comparative_prompts:
     📊 **INTEGRIDAD CUANTITATIVA**: Un análisis sin datos es solo una opinión. Debes RESPALDAR cada afirmación con la métrica exacta obtenida de las herramientas (SHAP, OTP, incidentes, etc.). No digas "empeoró la puntualidad", di "la puntualidad empeoró en 4.5 pts".
     ⚠️ **SOBRE VALORES SHAP (CRÍTICO)**: Los valores de impacto de los drivers (SHAP) se expresan SIEMPRE en **puntos de NPS** (escala -100 a 100), NUNCA en puntos porcentuales (%) ni en porcentajes. El NPS NO es un porcentaje. Úsalos siempre como "X ppts de NPS".
     🔢 **FORMATO DE NÚMEROS**: Redondea SIEMPRE todos los valores numéricos (NPS, SHAP, OTP, etc.) a **1 decimal** máximo (ej: 15.0, -2.4).
+
+    📌 **NODOS NORMAL (N) — ESTABILIDAD EN EL TEXTO:** Si el segmento se trata como **Normal** (no anomalía) pero hay variación de NPS vs la comparación: con **|variación| ≤ 2,5 pts** puedes decir **estable**; con **2,5 < |variación| ≤ 4 pts** usa **"relativamente estable"** (no solo "estable"). No contradigas que no es anomalía.
+    📌 **Umbral de anomalía positiva (coherencia árbol):** Subida que deja de ser Normal = por encima de **4 pts** vs la referencia del árbol; por debajo o igual a **4** en subidas sigue siendo Normal en el detector.
     
     ⚠️ **AGREGACIÓN DE MÉTRICAS OPERATIVAS:**
     - **OTP (Puntualidad)**: Se calcula a nivel de **RADIO** (SH o LH). Todos los segmentos dentro de un mismo radio comparten el mismo dato de OTP, aunque puede variar por compañía (IB vs YW).
@@ -156,6 +159,9 @@ single_prompts:
     ⚠️ **PROHIBICIÓN DE "BASELINE" GENÉRICO**: Está terminantemente PROHIBIDO usar la palabra "baseline" a secas para referirse a la comparación. Debes especificar SIEMPRE a qué te refieres (ej: "vs la media de los últimos 7 días", "vs la semana anterior", etc.), usando la descripción proporcionada en el contexto.
     ⚠️ **SOBRE VALORES SHAP (CRÍTICO)**: Los valores de impacto de los drivers (SHAP) se expresan SIEMPRE en **puntos de NPS** (escala -100 a 100), NUNCA en puntos porcentuales (%) ni en porcentajes. El NPS NO es un porcentaje. Úsalos siempre como "X ppts de NPS".
     🔢 **FORMATO DE NÚMEROS**: Redondea SIEMPRE todos los valores numéricos (NPS, SHAP, OTP, etc.) a **1 decimal** máximo (ej: 15.0, -2.4).
+
+    📌 **NODOS NORMAL (N) — ESTABILIDAD EN EL TEXTO:** Si el segmento se trata como **Normal** (no anomalía) pero hay variación de NPS vs la comparación: con **|variación| ≤ 2,5 pts** puedes decir **estable**; con **2,5 < |variación| ≤ 4 pts** usa **"relativamente estable"** (no solo "estable"). No contradigas que no es anomalía.
+    📌 **Umbral de anomalía positiva (coherencia árbol):** Subida que deja de ser Normal = por encima de **4 pts** vs la referencia del árbol; hasta **4 pts** incl. en subidas el detector mantiene Normal.
     
     ⚠️ **AGREGACIÓN DE MÉTRICAS OPERATIVAS:**
     - **OTP (Puntualidad)**: Se calcula a nivel de **RADIO** (SH o LH). Todos los segmentos dentro de un mismo radio comparten el mismo dato de OTP, aunque puede variar por compañía (IB vs YW).

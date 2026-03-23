@@ -2689,12 +2689,25 @@ PERÍODO {period} ({date_range}):
             # Use .replace() instead of .format() because the system_prompt contains
             # embedded JSON with {} that would be misinterpreted as placeholders
             step4_system = step4_config.get('system_prompt', '').replace('{date_range}', date_range)
+            ft = (self.focus_touchpoint or "").strip()
+            if ft:
+                focus_touchpoint_block = (
+                    f"🎯 **FOCUS TOUCHPOINT:** {ft}\n"
+                    "En la Adaptive Card, el PRIMER elemento del array `body` debe ser un bloque "
+                    f'destacado con el focus (p. ej. \"🎯 **Focus:** {ft}\") ANTES del título '
+                    '"Reporte de NPS y Variaciones".\n\n"
+                )
+            else:
+                focus_touchpoint_block = ""
+
             step4_input = step4_config.get('input_template', '').replace(
                 '{comprehensive_response}', report_text
             ).replace(
                 '{full_report}', report_text
             ).replace(
                 '{date_range}', date_range
+            ).replace(
+                '{focus_touchpoint_block}', focus_touchpoint_block
             )
             
             message_history = MessageHistory()
