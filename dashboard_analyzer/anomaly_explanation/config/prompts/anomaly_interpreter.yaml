@@ -51,6 +51,16 @@ shared_rules: |
   # FOCUS TOUCHPOINT
   - **🎯 FOCUS TOUCHPOINT (cuando aplique):** Si en los datos de entrada aparece un bloque "🎯 FOCUS TOUCHPOINT", DEBES mencionar ese touchpoint explícitamente en la síntesis ejecutiva con sus métricas (CSAT actual, gap vs target). Si además aparece marcado como "🎯 FOCUS:" en los Explanatory Drivers, incluye también su variación vs período anterior y su SHAP. Analiza ese touchpoint aunque su SHAP sea bajo o neutro — su presencia es obligatoria en el análisis.
 
+  # EVENTOS DISRUPTIVOS / NCS SIN CAUSA EXPLÍCITA
+  - Si en el informe mencionas un **evento o episodio disruptivo** inferido de datos operativos (p. ej. **NCS**, picos de incidencias, muchos vuelos afectados en un **día concreto**, interrupciones) pero en el contexto **no consta una causa explícita y verificable** (tipo de incidente desconocido, causa no tipificada, "incidente no identificado", etc.), debes **dejarlo claro en el texto**: indica de forma explícita que **no ha sido posible identificar la causa con las herramientas y datos disponibles** (sin inventar motivos).
+  - No sustituyas esa carencia por una causa genérica inventada. Puedes describir el **hecho observable** (volumen de incidencias, ventana temporal, afectación a vuelos) y, en la misma frase o la siguiente, la **limitación** sobre la causa.
+  - Aplica esta regla sobre todo en la **síntesis ejecutiva final** y en cualquier apartado donde narres dicho episodio.
+
+  # NCS / INCIDENTES — CIFRAS POR NIVEL JERÁRQUICO (PADRE vs HIJOS)
+  - Si narras impacto operativo inferido de **NCS** (vuelos afectados, incidencias, cancelaciones, retrasos, etc.) en un **nodo hijo o nieto** (p. ej. **LH**, **SH**, **Economy SH**, **Business SH IB**), debes usar **solo cifras que consten para ese segmento** en el contexto (bloque causal / datos de ese nodo).
+  - **PROHIBIDO** copiar al hijo los **agregados del padre** (p. ej. **Global**): *incorrecto* decir que en **LH** hubo «18 vuelos afectados» si **18** es el total de **toda la red** y en el bloque de **LH** no aparece ese número ni un desglose equivalente. *Correcto:* citar **18 a nivel Global** (si aplica) y en LH usar **solo** lo que digan los datos de LH, o explicar el **contexto** sin atribuir la cifra global al subsegmento, o indicar que **no hay desglose por segmento** en los datos disponibles.
+  - Aplica esta regla en la **síntesis ejecutiva**, en el **DETALLE POR AGREGACIÓN** y en **reflexiones por cabina-radio** (paso 4C).
+
 # =============================================================================
 # COMPARATIVE MODE PROMPTS  
 # =============================================================================
@@ -377,6 +387,7 @@ hierarchical_diagnostic_helpers:
        - **Parte cuantitativa (deltas / conteos):**
          - Busca: "cancelaciones", "retrasos", "cancellations", "delays", "desvíos", "diversions", "aircraft limitations", "ncs_tool"
          - Formato: "cancelaciones +17, retrasos -126" → Copia exactamente
+         - **⚠️ JERARQUÍA:** Para cada NMA, copia **solo** conteos/deltas que aparezcan en el **bloque causal de ese nodo**. No arrastres al bloque de un hijo (p. ej. Economy LH) totales que figuren **solo** en Global u otro padre si no están desglosados para ese segmento.
        - **Parte cualitativa (reflexión / eventos especiales):**
          - Busca: "NCS_REFLEXION:" o la sección "🐴" / "Dark horses" dentro del bloque causal
          - Copia textualmente el resumen de eventos (con fechas) y la relación sugerida con el cambio de incidentes y el NPS (si aparece)
@@ -565,6 +576,8 @@ hierarchical_diagnostic_helpers:
     **✍️ NARRATIVA DE INCIDENTES (NCS):** 
     No uses listas densas entre paréntesis. Integra los datos en la frase de forma fluida y natural.
     - **⚠️ ESPECIFICIDAD:** NUNCA digas simplemente "otras incidencias" o "limitaciones" si el dato original especifica el motivo (ej: equipaje, puertas, huelgas). DEBES mencionar el motivo concreto.
+    - **⚠️ EPISODIOS SIN CAUSA CLARA (OBLIGATORIO):** Si narras un día o periodo con **muchas incidencias / vuelos afectados / impacto disruptivo** según NCS u otras fuentes del contexto, pero **no hay causa explícita** (incidente no identificado, tipo no especificado, solo volumen sin tipología), añade en el propio párrafo una frase clara del tipo: **no ha sido posible identificar la causa operativa con las herramientas y datos disponibles** (o equivalente). **No inventes** una causa para cerrar la narrativa.
+    - **⚠️ NCS: CIFRAS POR SEGMENTO (OBLIGATORIO):** Al hablar de **LH, SH, cabinas o compañías**, no reutilices **vuelos/incidencias totales de Global** como si fueran del subsegmento. Ejemplo *incorrecto:* Global tiene 18 vuelos afectados un día → no decir «18 vuelos afectados en **Economy LH**» salvo que el bloque causal de **Economy LH** aporte **esa cifra** o un desglose explícito. Si solo existe el total de red, menciónalo **solo a nivel Global** o en el hijo **sin cifra global** / indicando **ausencia de desglose**.
     
     **✍️ DETALLE DE VERBATIMS:**
     No generalices el feedback. Cita los problemas concretos y menciona al menos 1 o 2 rutas donde el feedback fue más intenso.
