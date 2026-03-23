@@ -191,11 +191,12 @@ step3_extract_synthesis:
     - 🔢 **REDONDEO:** 1 decimal para todo (NPS, SHAP, %). Enteros para conteos.
     - 📝 **HTML:** Estructura clara con títulos subrayados.
     - 🗣️ **TONO MODERADO (OBLIGATORIO):** Evita lenguaje catastrofista o alarmista. NO uses palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió". USA alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
-    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** Si en el informe aparece información de un FOCUS TOUCHPOINT (marcado con 🎯), incluye una sección dedicada **obligatoria** con las tres subsecciones siguientes para cada segmento relevante (Global, LH, SH según aplique):
-      1. **CSAT por segmento:** CSAT actual del focus touchpoint, gap vs target (CSAT − Target) y, en modo comparative, variación vs período anterior (satisfaction diff). En modo single, omitir la comparación vs período anterior.
-      2. **Verbatims del focus touchpoint por segmento:** resumen general de los verbatims recogidos, top verbatims de sentimiento positivo y top verbatims de sentimiento negativo. Si no hay verbatims para un segmento, indicarlo explícitamente.
-      3. **% Issues del focus touchpoint por segmento:** Pct_Issues del período actual (L7D) y variación vs período comparativo (L7D_prev). Si no hay datos de % issues para un segmento (p.ej. porque no existe mapeo display_name), indicarlo explícitamente.
-      Esta sección es OBLIGATORIA cuando el dato está presente. Usa el bloque "🎯 FOCUS TOUCHPOINT ENRICHMENT" del informe como fuente de datos para las subsecciones 2 y 3.
+    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** Si en el informe aparece información de un FOCUS TOUCHPOINT (marcado con 🎯), incluye una sección dedicada **obligatoria**. **Si el informe es a nivel Global**, esa sección debe contener **siempre tres párrafos o subsecciones en este orden:** **(1) Global, (2) SH, (3) LH**. En cada uno desarrolla las tres dimensiones siguientes (aunque falte dato: indica explícitamente "no disponible" / "sin verbatims" y **no omitas** el párrafo del nivel):
+      1. **CSAT por nivel:** CSAT actual del focus touchpoint, gap vs target (CSAT − Target) y, en modo comparative, variación vs período anterior (satisfaction diff). En modo single, omitir la comparación vs período anterior.
+      2. **Verbatims del focus por nivel:** resumen de verbatims, top positivos y top negativos. Si no hay verbatims para ese nivel, indicarlo explícitamente.
+      3. **% Issues por nivel:** Pct_Issues del período actual (L7D) y variación vs período comparativo (L7D_prev). Si no hay datos de % issues (p.ej. sin mapeo display_name), indicarlo explícitamente.
+      **Además**, puedes añadir párrafos por **cabina** o **compañía** si el informe muestra relevancia del touchpoint en esos subsegmentos. **Si el informe no es Global** (p. ej. solo SH o solo una cabina), incluye **solo** los párrafos que correspondan a ese ámbito (no fuerces Global/SH/LH fuera del segmento del informe).
+      Esta sección es OBLIGATORIA cuando el dato está presente. Usa el bloque "🎯 FOCUS TOUCHPOINT ENRICHMENT" del informe como fuente de datos para verbatims y % issues.
 
   input_template: |
     **INFORME COMPLETO:**
@@ -315,7 +316,7 @@ step4_generate_adaptive_card:
     **REGLA DE FUENTE:**
     - La síntesis ejecutiva trae secciones con títulos. Usa EXACTAMENTE esos títulos como fuente, salvo si vienen con Short Haul o Long Haul, en cuyo caso usa SH o LH respectivamente.
     - Si una sección no existe en la síntesis, NO inventes contenido para ella.
-    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** (A) **Body:** Si el usuario indicó focus, debe aparecer como **primer apartado** del `body` (regla 0). (B) **Actions:** Si la síntesis trae datos 🎯, añade `Action.ShowCard` "🎯 FOCUS: {nombre_touchpoint}" con (1) CSAT por segmento, (2) verbatims por segmento, (3) % issues. OBLIGATORIA cuando hay datos; **primera en botones**, antes que GLOBAL.
+    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** (A) **Body:** Si el usuario indicó focus, debe aparecer como **primer apartado** del `body` (regla 0). (B) **Actions:** Si la síntesis trae datos 🎯, añade `Action.ShowCard` "🎯 FOCUS: {nombre_touchpoint}" con el texto del análisis del touchpoint. **Cuando la síntesis es a nivel Global**, el contenido del ShowCard debe incluir **tres bloques en orden:** **Global → SH → LH**, cada uno con (1) CSAT y gap vs target, (2) verbatims, (3) % issues según la síntesis; si falta información en un nivel, indícalo en ese bloque sin eliminarlo. **Opcionalmente** añade sub-bloques por cabina o compañía si la síntesis los destaca. **Si la síntesis no es Global**, refleja solo los niveles del segmento analizado. OBLIGATORIA cuando hay datos; **primera en botones**, antes que GLOBAL.
     
     **ORDEN DE SECCIONES EN LOS BOTONES (respetar estrictamente):**
     1. 🎯 FOCUS: {touchpoint} (si aplica - PRIMERO)
@@ -437,7 +438,7 @@ step6a_trim_low_impact_days:
     - Mantén 2-3 días críticos por segmento, no más.
     
     **⚠️ PROTECCIÓN DE FOCUS TOUCHPOINT (OBLIGATORIO):**
-    Si en algún Container existe texto con "🎯 FOCUS TOUCHPOINT" o "ANÁLISIS DE [TOUCHPOINT]", ese bloque es INTOCABLE. NO lo recortes, NO lo elimines, NO lo resumas. El contexto diario se recorta ANTES que cualquier dato de focus touchpoint.
+    Si en algún Container existe texto con "🎯 FOCUS TOUCHPOINT" o "ANÁLISIS DE [TOUCHPOINT]", ese bloque es INTOCABLE. NO lo recortes, NO lo elimines, NO lo resumas. El contexto diario se recorta ANTES que cualquier dato de focus touchpoint. Si el focus va en el ShowCard "🎯 FOCUS" y el informe es Global, **no elimines** la tríada mínima de contenido **Global + SH + LH** (aunque acortes redacción dentro de cada bloque).
     
     **EJEMPLO DE REDUCCIÓN:**
     ANTES: "23-ene: +9.1 pts falso. 24-ene: +14.1 pts artificial. 25-ene: –0.9 pts. 26-ene: –0.7 pts. 27-ene: +5.2 pts. 28-ene: –25.9 pts crítico. 29-ene: –0.9 pts."
@@ -488,7 +489,7 @@ step6b_remove_subsegment_daily_context:
     **CRITERIO:** Primero se sacrifica el detalle por compañía, luego el detalle por cabina-radio.
     
     **⚠️ PROTECCIÓN DE FOCUS TOUCHPOINT (OBLIGATORIO):**
-    Si en algún Container existe texto con "🎯 FOCUS TOUCHPOINT" o "ANÁLISIS DE [TOUCHPOINT]", ese bloque es INTOCABLE. NO lo elimines aunque elimines el resto del contexto diario de ese segmento. El contexto diario se elimina ANTES que cualquier dato de focus touchpoint.
+    Si en algún Container existe texto con "🎯 FOCUS TOUCHPOINT" o "ANÁLISIS DE [TOUCHPOINT]", ese bloque es INTOCABLE. NO lo elimines aunque elimines el resto del contexto diario de ese segmento. El contexto diario se elimina ANTES que cualquier dato de focus touchpoint. En informes Global, conserva la presencia de los tres niveles **Global, SH, LH** dentro del contenido de focus cuando consten en el JSON.
     
     **OBJETIVO:** Reducir ~20-30% del tamaño total.
 
@@ -532,7 +533,7 @@ step6c_summarize_cabin_haul_company_weekly:
     - GLOBAL, SH, LH
     
     **⚠️ PROTECCIÓN DE FOCUS TOUCHPOINT (OBLIGATORIO):**
-    Si en algún texto existe un bloque con "🎯 FOCUS TOUCHPOINT" o "ANÁLISIS DE [TOUCHPOINT]", ese bloque es INTOCABLE. NO lo resumas, NO lo recortes, NO lo elimines. El texto de cabinas y radios se resume ANTES que cualquier dato de focus touchpoint.
+    Si en algún texto existe un bloque con "🎯 FOCUS TOUCHPOINT" o "ANÁLISIS DE [TOUCHPOINT]", ese bloque es INTOCABLE. NO lo resumas, NO lo recortes, NO lo elimines. El texto de cabinas y radios se resume ANTES que cualquier dato de focus touchpoint. Si el focus incluye la tríada Global/SH/LH (informe Global), **no fusiones ni elimines** uno de los tres niveles al resumir: como mínimo mantén una frase o etiqueta clara por nivel (Global, SH, LH).
     
     **EJEMPLO DE REDUCCIÓN (cabina-radio-compañía):**
     ANTES: "IB en Business SH registró NPS de 39.9 (–2.0 pts), el deterioro más moderado del segmento pese a compartir el mismo impacto operativo que YW. El driver de puntualidad generó reducción de 2.0 ppts de NPS según Explanatory Drivers (con OTP cayendo 11.1 puntos a 83.8%), pero el factor diferenciador crítico fue el servicio de tripulación de cabina, que logró contribución positiva de +0.5 ppts de NPS, siendo la única compañía en Business SH con este driver en positivo."

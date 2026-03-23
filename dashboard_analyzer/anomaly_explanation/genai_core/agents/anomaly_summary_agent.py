@@ -2695,7 +2695,11 @@ PERÍODO {period} ({date_range}):
                     f"🎯 **FOCUS TOUCHPOINT:** {ft}\n"
                     f"En la Adaptive Card, el PRIMER elemento del array `body` debe ser un bloque "
                     f'destacado con el focus (p. ej. "🎯 **Focus:** {ft}") ANTES del título '
-                    f'"Reporte de NPS y Variaciones".\n\n'
+                    f'"Reporte de NPS y Variaciones".\n'
+                    f"Si el informe/síntesis es a nivel **Global**, el `Action.ShowCard` 🎯 FOCUS debe incluir "
+                    f"**tres bloques en orden: Global → SH → LH** (CSAT/gap, verbatims, % issues; si falta dato, "
+                    f"indícalo en ese bloque). Opcional: sub-bloques por cabina o compañía si el informe lo destaca. "
+                    f"Si **no** es Global, solo los niveles del segmento del informe.\n\n"
                 )
             else:
                 focus_touchpoint_block = ""

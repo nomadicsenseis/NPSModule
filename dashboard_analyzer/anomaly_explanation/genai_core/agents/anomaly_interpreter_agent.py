@@ -1012,7 +1012,12 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                             f"🎯 **FOCUS TOUCHPOINT:** {ft}\n"
                             f"En la Adaptive Card, el PRIMER elemento del array `body` debe ser un bloque "
                             f'destacado (p. ej. TextBlock) con "🎯 **Focus:** {ft}" ANTES del título '
-                            f'"Reporte de NPS y Variaciones".\n\n'
+                            f'"Reporte de NPS y Variaciones".\n'
+                            f"Si la síntesis es a nivel **Global** (red completa), el `Action.ShowCard` "
+                            f"🎯 FOCUS debe incluir **tres bloques en orden: Global → SH → LH** (CSAT/gap, "
+                            f"verbatims, % issues por bloque; si falta dato, indícalo en ese bloque). "
+                            f"Puedes añadir sub-bloques por cabina o compañía si la síntesis lo justifica. "
+                            f"Si la síntesis **no** es Global, alinea el contenido del focus al segmento analizado.\n\n"
                         )
                     else:
                         focus_touchpoint_block = ""

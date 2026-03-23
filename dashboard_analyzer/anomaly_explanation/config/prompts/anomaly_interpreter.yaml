@@ -50,6 +50,7 @@ shared_rules: |
   
   # FOCUS TOUCHPOINT
   - **🎯 FOCUS TOUCHPOINT (cuando aplique):** Si en los datos de entrada aparece un bloque "🎯 FOCUS TOUCHPOINT", DEBES mencionar ese touchpoint explícitamente en la síntesis ejecutiva con sus métricas (CSAT actual, gap vs target). Si además aparece marcado como "🎯 FOCUS:" en los Explanatory Drivers, incluye también su variación vs período anterior y su SHAP. Analiza ese touchpoint aunque su SHAP sea bajo o neutro — su presencia es obligatoria en el análisis.
+  - **🎯 ESTRUCTURA POR NIVEL (FOCUS):** Cuando haya sección dedicada al focus touchpoint (enriquecimiento 🎯), el desglose por segmento debe adaptarse al **segmento raíz del informe**. Si el raíz es **Global**, es **OBLIGATORIO** incluir **siempre tres párrafos o sub-bloques en este orden:** (1) **Global** (red / agregado del touchpoint), (2) **SH**, (3) **LH** — cada uno con CSAT y gap vs target, verbatims y % issues cuando existan datos; si falta algún dato para un nivel, dilo explícitamente en ese nivel (no omitas el párrafo). **Además**, puedes añadir párrafos extra por **cabina** (p. ej. Economy SH, Business LH) o **compañía** (IB/YW) **solo si** el enrichment o los drivers muestran relevancia clara del touchpoint en ese subsegmento. Si el raíz **no** es Global (p. ej. solo SH, solo LH, una cabina), incluye **solo** los niveles que correspondan a ese ámbito (no fuerces párrafos de SH/LH/Global que queden fuera del segmento analizado).
 
   # EVENTOS DISRUPTIVOS / NCS SIN CAUSA EXPLÍCITA
   - Si en el informe mencionas un **evento o episodio disruptivo** inferido de datos operativos (p. ej. **NCS**, picos de incidencias, muchos vuelos afectados en un **día concreto**, interrupciones) pero en el contexto **no consta una causa explícita y verificable** (tipo de incidente desconocido, causa no tipificada, "incidente no identificado", etc.), debes **dejarlo claro en el texto**: indica de forma explícita que **no ha sido posible identificar la causa con las herramientas y datos disponibles** (sin inventar motivos).
@@ -513,7 +514,7 @@ hierarchical_diagnostic_helpers:
     - Si una cabina no tiene CAUSAL EXPLANATION, indica "Sin análisis causal disponible"
     - Si no hay rutas o perfiles en el CAUSAL EXPLANATION, indica "No disponible"
     - **AISLAMIENTO DE RUTAS POR CABINA-RADIO:** Las rutas de cada cabina deben provenir EXCLUSIVAMENTE del bloque causal de esa cabina. Una ruta que aparece en Business LH NO puede citarse en Economy SH YW aunque el mismo código de ruta aparezca en ambos bloques. Cada cabina tiene su propio conjunto de rutas.
-    - **🎯 FOCUS TOUCHPOINT EN CABINAS:** Si en los datos de entrada aparece un bloque "🎯 FOCUS TOUCHPOINT ENRICHMENT" con datos para un nodo que corresponde a esta cabina (ej: Global_SH para Economy SH o Business SH, Global_LH para cabinas LH), añade al final de la reflexión de esa cabina una línea con el CSAT del focus touchpoint y el gap vs target para ese nodo. Ejemplo: "🎯 Cabin Crew CSAT [Global_SH]: 72.3 (gap vs target: –4.7 pts)". Si no hay datos de focus touchpoint para esa cabina, omite esta línea.
+    - **🎯 FOCUS TOUCHPOINT EN CABINAS:** La sección final "ANÁLISIS DE [TOUCHPOINT]" ya cubre el mínimo **Global + SH + LH** cuando el segmento raíz es Global. Si el enrichment trae datos específicos para el nodo de **esta** cabina (p. ej. Global_SH para Economy SH, Global_LH para cabinas LH), puedes añadir al final de la reflexión de esa cabina **una línea** con CSAT y gap vs target de ejemplo: "🎯 Cabin Crew CSAT [Global_SH]: 72.3 (gap vs target: –4.7 pts)". Si no hay datos de focus para esa cabina, omite la línea (no sustituye el mínimo Global/SH/LH de la sección dedicada).
 
   step5_executive_synthesis: |
     🎯 **SÍNTESIS EJECUTIVA FINAL - ANÁLISIS NPS**
@@ -603,20 +604,25 @@ hierarchical_diagnostic_helpers:
     
     **SI EL SEGMENTO ES LH:**
     1. Economy LH
+    2. Business LH
+    3. Premium LH
 
     **🎯 SECCIÓN OBLIGATORIA DE FOCUS TOUCHPOINT (cuando aplique):**
     Si en los datos de entrada aparece un bloque "🎯 FOCUS TOUCHPOINT ENRICHMENT", DEBES añadir al final del HTML una sección dedicada con el siguiente formato:
 
     `<br><br><b><u>ANÁLISIS DE [NOMBRE TOUCHPOINT EN MAYÚSCULAS]</u></b><br>`
 
-    Esta sección DEBE incluir, para cada segmento relevante (Global, SH, LH según corresponda):
+    **Estructura obligatoria del contenido (según segmento raíz):**
+    - **Si el segmento raíz del informe es Global:** es **OBLIGATORIO** cubrir **tres párrafos o subsecciones en este orden:** **(1) Global, (2) SH, (3) LH**. En cada uno incluye, cuando haya datos: **CSAT y gap vs target**, **verbatims** (temas positivos/negativos; si no hay, dilo), **% issues** (L7D y variación vs comparativo; si no hay, dilo). **No omitas** uno de los tres niveles por falta de datos: escribe el párrafo e indica "no disponible" / "sin verbatims" donde corresponda.
+    - **Además (opcional):** puedes añadir párrafos por **cabina** o **compañía (IB/YW)** si el enrichment o los drivers muestran que el touchpoint es especialmente relevante en ese subsegmento.
+    - **Si el segmento raíz NO es Global** (p. ej. `Global/SH`, `Global/LH`, una cabina o compañía): incluye **solo** los párrafos que correspondan a ese ámbito (p. ej. en SH solo SH + cabinas/compañías bajo SH si aplica; en LH solo LH + cabinas LH si aplica). **No** fuerces párrafos de Global/SH/LH que queden fuera del segmento analizado.
+
+    En cada párrafo de nivel incluido, desarrolla:
     1. **CSAT y gap vs target:** CSAT actual del touchpoint, diferencia vs target (CSAT − Target). En modo comparative, incluye también la variación vs período anterior (Sat_diff del bloque de Explanatory Drivers). En modo single, omite la comparación vs período anterior.
     2. **Verbatims:** Resumen de los verbatims recogidos para ese segmento. Cita los temas concretos más frecuentes (positivos y negativos). Si no hay verbatims para un segmento, indícalo explícitamente.
     3. **% Issues:** Porcentaje de issues del período actual (L7D) y variación vs período comparativo (diff). Si no hay datos de % issues para un segmento, indícalo explícitamente.
 
     Esta sección es OBLIGATORIA cuando el bloque de enrichment está presente en los datos. No la omitas aunque el SHAP del touchpoint sea bajo o neutro.
-    2. Business LH
-    3. Premium LH
     
     **SI EL SEGMENTO ES UNA CABINA SH (Economy SH, Business SH):**
     1. [Cabina] IB
@@ -673,13 +679,13 @@ hierarchical_diagnostic_helpers:
     - "operative_data_tool" → "métricas operativas"
 
     **🎯 SECCIÓN OBLIGATORIA DE FOCUS TOUCHPOINT:**
-    Si en el tree_data aparece cualquier bloque marcado con "🎯 FOCUS TOUCHPOINT" o "FOCUS TOUCHPOINT ENRICHMENT", DEBES añadir al final del HTML (antes del cierre) la siguiente sección:
+    Si en el tree_data aparece cualquier bloque marcado con "🎯 FOCUS TOUCHPOINT" o "FOCUS TOUCHPOINT ENRICHMENT", DEBES añadir al final del HTML (antes del cierre) la siguiente sección (mismas reglas de **mínimo Global + SH + LH en orden** cuando el segmento raíz es Global, y niveles acotados al segmento cuando no lo es, como en el bloque "🎯 SECCIÓN OBLIGATORIA DE FOCUS TOUCHPOINT (cuando aplique)" más arriba):
 
     `<br><br><b><u>ANÁLISIS DE [NOMBRE_TOUCHPOINT]</u></b><br>`
 
     ⚠️ **EL TÍTULO DEBE SER EXACTAMENTE** `<b><u>ANÁLISIS DE CABIN CREW</u></b>` (o el nombre del touchpoint en mayúsculas). NO uses títulos alternativos como "DETERIORO EN CABIN CREW" o "CABIN CREW - ANÁLISIS". El formato exacto es obligatorio.
 
-    Contenido obligatorio de esta sección:
+    Contenido obligatorio de esta sección (además del desglose por nivel/párrafo exigido arriba):
     1. **CSAT del período**: Cita el valor CSAT del touchpoint y su diferencia vs target (formato: "CSAT=[valor], diff vs target=[diff] pts"). Si aparece también la variación vs período comparativo (Sat_diff), cítala como métrica separada: "variación vs período anterior: [Sat_diff] pts".
     2. **Posición como driver**: Indica si el touchpoint aparece en los Explanatory Drivers con SHAP positivo, negativo o neutro, y en qué segmentos.
     3. **Rutas con peor/mejor CSAT**: Lista las rutas donde el touchpoint tuvo mayor impacto (solo rutas con ≥5 encuestas). Atribuye cada ruta a su segmento correcto (SH o LH).
@@ -687,10 +693,11 @@ hierarchical_diagnostic_helpers:
     5. **Conclusión**: ¿Es driver principal o factor secundario de la anomalía? ¿En qué segmentos tiene mayor relevancia?
 
     ⚠️ **REGLAS DE LA SECCIÓN FOCUS:**
+    - Si el segmento raíz es **Global**, los tres párrafos **Global → SH → LH** son **innegociables** (con "no disponible" donde falte dato, no con omisión del nivel).
     - Si el SHAP del touchpoint es bajo o neutro, NO lo omitas — su presencia es obligatoria.
     - Distingue claramente: Sat_diff (vs período comparativo) ≠ CSAT vs target (vs objetivo mensual).
-    - Si hay verbatims de Cabin Crew en múltiples segmentos (SH y LH), analízalos por separado indicando el segmento.
-    - Si no hay datos de CSAT vs target disponibles, indica "No disponible" pero mantén la sección.
+    - Si hay verbatims del touchpoint en varios niveles, analízalos **por separado** indicando el segmento (coherente con los párrafos obligatorios Global/SH/LH cuando aplique).
+    - Si no hay datos de CSAT vs target disponibles, indica "No disponible" pero mantén la sección y el párrafo de nivel correspondiente.
 
 
 # =============================================================================
@@ -716,7 +723,7 @@ step6_generate_adaptive_card:
     **REGLA DE FUENTE:**
     - La síntesis ejecutiva trae secciones con títulos. Usa EXACTAMENTE esos títulos como fuente, salvo si vienen con Short Haul o Long Haul, en cuyo caso usa SH o LH respectivamente.
     - Si una sección no existe en la síntesis, NO inventes contenido para ella.
-    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** (A) **Body:** Si el usuario indicó focus touchpoint, ya debe ir como **primer apartado** del `body` (regla 0). (B) **Actions:** Si en la síntesis aparece información de FOCUS (🎯), añade `Action.ShowCard` "🎯 FOCUS: {nombre_touchpoint}" con: (1) CSAT por segmento, (2) verbatims del focus por segmento, (3) % issues por segmento (Pct_Issues L7D, etc.). OBLIGATORIA cuando hay datos; **primera en la lista de botones**, antes que GLOBAL.
+    - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** (A) **Body:** Si el usuario indicó focus touchpoint, ya debe ir como **primer apartado** del `body` (regla 0). (B) **Actions:** Si en la síntesis aparece información de FOCUS (🎯), añade `Action.ShowCard` "🎯 FOCUS: {nombre_touchpoint}" cuyo texto reproduzca el análisis del touchpoint. **Cuando el informe es a nivel Global**, el contenido de ese ShowCard debe incluir **siempre tres bloques de texto en orden:** **Global**, **SH**, **LH** — cada uno con (1) CSAT y gap vs target, (2) verbatims, (3) % issues cuando consten en la síntesis; si falta un dato en un nivel, indícalo explícitamente en ese bloque (no elimines el bloque). **Opcionalmente** añade sub-bloques por cabina o compañía si la síntesis los trae como relevantes. **Si el informe no es Global**, incluye solo los bloques alineados al segmento raíz (sin forzar Global/SH/LH ajenos). OBLIGATORIA cuando hay datos; **primera en la lista de botones**, antes que GLOBAL.
     
     **ORDEN DE SECCIONES EN LOS BOTONES (respetar estrictamente):**
     1. 🎯 FOCUS: {touchpoint} (si aplica - PRIMERO)
