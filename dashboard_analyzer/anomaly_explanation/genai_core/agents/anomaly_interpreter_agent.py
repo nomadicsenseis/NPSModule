@@ -1010,9 +1010,9 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                     if ft:
                         focus_touchpoint_block = (
                             f"🎯 **FOCUS TOUCHPOINT:** {ft}\n"
-                            "En la Adaptive Card, el PRIMER elemento del array `body` debe ser un bloque "
-                            f'destacado (p. ej. TextBlock) con \"🎯 **Focus:** {ft}\" ANTES del título '
-                            '"Reporte de NPS y Variaciones".\n\n"
+                            f"En la Adaptive Card, el PRIMER elemento del array `body` debe ser un bloque "
+                            f'destacado (p. ej. TextBlock) con "🎯 **Focus:** {ft}" ANTES del título '
+                            f'"Reporte de NPS y Variaciones".\n\n'
                         )
                     else:
                         focus_touchpoint_block = ""

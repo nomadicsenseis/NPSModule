@@ -2693,9 +2693,9 @@ PERÍODO {period} ({date_range}):
             if ft:
                 focus_touchpoint_block = (
                     f"🎯 **FOCUS TOUCHPOINT:** {ft}\n"
-                    "En la Adaptive Card, el PRIMER elemento del array `body` debe ser un bloque "
-                    f'destacado con el focus (p. ej. \"🎯 **Focus:** {ft}\") ANTES del título '
-                    '"Reporte de NPS y Variaciones".\n\n"
+                    f"En la Adaptive Card, el PRIMER elemento del array `body` debe ser un bloque "
+                    f'destacado con el focus (p. ej. "🎯 **Focus:** {ft}") ANTES del título '
+                    f'"Reporte de NPS y Variaciones".\n\n'
                 )
             else:
                 focus_touchpoint_block = ""
