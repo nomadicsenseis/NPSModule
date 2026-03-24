@@ -310,6 +310,7 @@ async def process_single_period(
     ai_available: bool,
     period_semaphore: asyncio.Semaphore,
     focus_touchpoint: Optional[str] = None,
+    execution_id: Optional[str] = None,
 ) -> dict:
     """
     Process a single period's analysis - designed to run in parallel with other periods.
@@ -352,6 +353,7 @@ async def process_single_period(
             environment=environment,
             analysis_date=analysis_date,
             focus_touchpoint=focus_touchpoint,
+            execution_id=execution_id,
         )
         
         # Get anomalies for this period
@@ -456,6 +458,7 @@ async def process_single_period(
                             comparison_end_date=comparison_end_date, 
                             environment=environment,
                             focus_touchpoint=focus_touchpoint,
+                            execution_id=execution_id,
                         )
                         
                         anomaly_state = period_anomalies.get(node_path, "?")
@@ -735,6 +738,7 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             ai_available=ai_available,
             period_semaphore=period_semaphore,
             focus_touchpoint=focus_touchpoint,
+            execution_id=execution_id,
         )
         for period in periods_with_anomalies
     ]
