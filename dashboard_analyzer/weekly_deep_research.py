@@ -9,6 +9,7 @@ import asyncio
 import argparse
 import json
 import tempfile
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 import logging
@@ -296,10 +297,12 @@ async def run_weekly_comprehensive_analysis(
     2. A daily single analysis for each of the last 7 days.
     Finally, it consolidates the results, uploads to S3, and sends email.
     """
+    execution_id = str(uuid.uuid4())
     print("🚀 WEEKLY DEEP RESEARCH - Comprehensive NPS Analysis")
     print("=" * 80)
     print(f"📅 Analysis Date: {analysis_date.strftime('%Y-%m-%d')} ({date_parameter})")
     print(f"🎯 Segment Focus: {segment}")
+    print(f"🆔 Execution ID: {execution_id}")
 
     generated_reports = []
 
@@ -495,6 +498,7 @@ async def run_weekly_comprehensive_analysis(
                 baseline_periods=7,
                 segment=segment,
                 focus_touchpoint=focus_touchpoint,
+                execution_id=execution_id,
             )
             print("✅ Summary Agent initialized. Generating executive summary...")
             

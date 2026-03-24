@@ -157,6 +157,7 @@ class AnomalyInterpreterAgent:
         baseline_periods: int = 7,
         segment: str = "Global",
         focus_touchpoint: Optional[str] = None,
+        execution_id: Optional[str] = None,
     ):
         """
         Initialize the Anomaly Interpreter Agent.
@@ -184,6 +185,7 @@ class AnomalyInterpreterAgent:
         self.logger = logger or self._setup_logger()
         self.study_mode = study_mode
         self.environment = environment
+        self.execution_id = execution_id
 
         # Execution context for output paths and metadata
         self.anomaly_detection_mode = anomaly_detection_mode
@@ -1131,7 +1133,7 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             self.logger.info(f"✅ Hierarchical interpretation completed in {self.total_processing_time:.2f}s")
             
             # Export successful conversation for debugging
-            conversation_file = await self.export_hierarchical_conversation(date=date)
+            conversation_file = await self.export_hierarchical_conversation(date=date, execution_id=self.execution_id)
             if conversation_file:
                 self.logger.info(f"🗂️ Conversación jerárquica guardada: {conversation_file}")
             
@@ -1151,7 +1153,7 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             error_msg = f"Error durante la interpretación jerárquica: {str(e)}"
             
             # Export error conversation for debugging
-            await self.export_hierarchical_conversation(date, error_msg)
+            await self.export_hierarchical_conversation(date, error_msg, execution_id=self.execution_id)
             
             return f"❌ Error en la interpretación jerárquica: {str(e)}"
     

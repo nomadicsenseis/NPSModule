@@ -304,7 +304,8 @@ class CausalExplanationAgent:
         study_mode: str = "comparative",
         environment: str = "prod",
         reference_date: Optional[datetime] = None,
-        focus_touchpoint: Optional[str] = None
+        focus_touchpoint: Optional[str] = None,
+        execution_id: Optional[str] = None,
     ):
         # Use default LLM type if none provided
         if llm_type is None:
@@ -316,6 +317,7 @@ class CausalExplanationAgent:
         self.environment = environment
         self.reference_date = reference_date  # Anchor date for fixed baseline in single mode
         self.focus_touchpoint = focus_touchpoint  # Optional touchpoint to force-investigate
+        self.execution_id = execution_id
         self.report_group = resolve_report_group(focus_touchpoint)
 
         # Transform detection_mode if needed (vslast -> vslast_dynamic when causal_filter is "vs Sel. Period")
@@ -2308,7 +2310,7 @@ class CausalExplanationAgent:
             return self._build_single_period_fallback()
         finally:
             try:
-                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date, execution_id=self.execution_id)
                 if conversation_file:
                     print(f"🗂️ Conversación guardada: {conversation_file}")
                     self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
@@ -2610,7 +2612,7 @@ class CausalExplanationAgent:
         except Exception as e:
             self.logger.error(f"❌ Error crítico en investigación comparativa: {type(e).__name__}: {e}")
             try:
-                await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date, execution_id=self.execution_id)
             except Exception:
                 pass
             return self._build_collected_data_summary()
@@ -2652,7 +2654,7 @@ class CausalExplanationAgent:
             return final_response
         finally:
             try:
-                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date)
+                conversation_file = await self.export_conversation(node_path=node_path, start_date=start_date, end_date=end_date, execution_id=self.execution_id)
                 if conversation_file:
                     self.logger.info(f"🗂️ Conversación completa guardada: {conversation_file}")
             except Exception as ex:

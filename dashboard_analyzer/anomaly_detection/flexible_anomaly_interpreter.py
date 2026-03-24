@@ -15,7 +15,7 @@ class FlexibleAnomalyInterpreter:
     Handles date range conversion and multi-source data collection
     """
     
-    def __init__(self, data_folder: str, pbi_collector: PBIDataCollector = None, drivers_survey_threshold: int = 100, default_comparison_days: int = 7, silent_mode: bool = False, detection_mode: str = "vslast", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, study_mode: str = None, environment: str = "local", analysis_date: datetime = None, focus_touchpoint: Optional[str] = None):
+    def __init__(self, data_folder: str, pbi_collector: PBIDataCollector = None, drivers_survey_threshold: int = 100, default_comparison_days: int = 7, silent_mode: bool = False, detection_mode: str = "vslast", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, study_mode: str = None, environment: str = "local", analysis_date: datetime = None, focus_touchpoint: Optional[str] = None, execution_id: Optional[str] = None):
         print(f"         🔍 DEBUG: FlexibleAnomalyInterpreter.__init__ called with detection_mode: '{detection_mode}', causal_filter: '{causal_filter}', environment: '{environment}', analysis_date: '{analysis_date}'")
         self.data_folder = data_folder
         self.pbi_collector = pbi_collector
@@ -37,6 +37,7 @@ class FlexibleAnomalyInterpreter:
         self.comparison_end_date = comparison_end_date  # End date for comparison period
         self.study_mode = study_mode  # Study mode: "single" or "comparative"
         self.focus_touchpoint = focus_touchpoint  # Optional touchpoint to force-investigate
+        self.execution_id = execution_id
         
         # Initialize agent lazily (will be created when needed with correct causal_filter)
         self.causal_agent = None
@@ -74,7 +75,8 @@ class FlexibleAnomalyInterpreter:
                     study_mode=agent_study_mode,
                     environment=self.environment,
                     reference_date=self.analysis_date,
-                    focus_touchpoint=self.focus_touchpoint
+                    focus_touchpoint=self.focus_touchpoint,
+                    execution_id=self.execution_id,
                 )
                 self._agent_initialized = True
                 if not self.silent_mode:

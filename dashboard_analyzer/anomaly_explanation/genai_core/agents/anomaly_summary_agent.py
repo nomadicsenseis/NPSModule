@@ -62,6 +62,7 @@ class AnomalySummaryAgent:
         baseline_periods: int = 7,
         segment: str = "Global",
         focus_touchpoint: Optional[str] = None,
+        execution_id: Optional[str] = None,
     ):
         """
         Initialize the Anomaly Summary Agent.
@@ -89,6 +90,7 @@ class AnomalySummaryAgent:
         self.logger = logger or self._setup_logger()
         self.silent_mode = False
         self.environment = environment
+        self.execution_id = execution_id
 
         # Execution context
         self.study_mode = study_mode
@@ -1392,7 +1394,8 @@ class AnomalySummaryAgent:
                 'step4_adaptive_card': step4_conversation  # Full conversation including raw response
             }
             conversation_file = await self.export_full_stratified_conversation(
-                all_conversations, analysis_period_str
+                all_conversations, analysis_period_str,
+                execution_id=self.execution_id,
             )
             if conversation_file:
                 self.logger.info(f"🗂️ Full stratified conversation saved: {conversation_file}")

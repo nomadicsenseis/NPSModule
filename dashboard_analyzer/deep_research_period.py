@@ -13,6 +13,7 @@ from typing import List, Dict, Any, Optional
 import sys
 import os
 import json
+import uuid
 from contextlib import redirect_stdout, redirect_stderr
 import pandas as pd
 
@@ -648,7 +649,7 @@ async def process_single_period(
         }
 
 
-async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None, focus_touchpoint: Optional[str] = None):
+async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None, focus_touchpoint: Optional[str] = None, execution_id: Optional[str] = None):
     """Show trees for all periods analyzed INCLUDING explanations and parent interpretations.
     
     PARALLEL EXECUTION: All periods are processed concurrently for faster results.
@@ -677,7 +678,7 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     # Initialize interpreter for explanations with agent mode
     pbi_collector = PBIDataCollector(environment=environment)
     analysis_date = analysis_data.get('analysis_date')
-    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date, environment=environment, analysis_date=analysis_date)
+    interpreter = FlexibleAnomalyInterpreter(data_folder, pbi_collector=pbi_collector, causal_filter=causal_filter, detection_mode=detector.detection_mode, comparison_start_date=comparison_start_date, comparison_end_date=comparison_end_date, environment=environment, analysis_date=analysis_date, execution_id=execution_id)
     print(f"🔧 Explanation mode: AGENT")
     
     # Initialize AI agent for interpretation
@@ -699,6 +700,7 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
             baseline_periods=analysis_data.get('baseline_periods', 7),
             segment=segment,
             focus_touchpoint=focus_touchpoint,
+            execution_id=execution_id,
         )
         ai_available = True
         print("🤖 AI Agent initialized for interpretations")
@@ -3330,7 +3332,8 @@ async def execute_analysis_flow(
     This includes data download, anomaly detection, and interpretation.
     """
     
-    print(f"\n🚀 DEBUG: execute_analysis_flow CALLED!")
+    execution_id = str(uuid.uuid4())
+    print(f"\n🚀 DEBUG: execute_analysis_flow CALLED! (execution_id={execution_id})")
     print(f"🔍 Parameters: segment={segment}, study_mode={study_mode}, environment={environment}")
     print(f"🔍 Parameters: causal_filter={causal_filter}, comparison_dates={comparison_start_date} to {comparison_end_date}")
 
@@ -3406,6 +3409,7 @@ async def execute_analysis_flow(
         environment=environment,
         study_mode=study_mode,
         focus_touchpoint=focus_touchpoint,
+        execution_id=execution_id,
     )
     
     print(f"🔍 DEBUG EXECUTE_ANALYSIS_FLOW: show_all_anomaly_periods_with_explanations completed")
