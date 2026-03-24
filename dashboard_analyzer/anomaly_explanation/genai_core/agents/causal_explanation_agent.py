@@ -6559,6 +6559,8 @@ Analiza los problemas recurrentes y su relación con las rutas: {', '.join(targe
                         execution_id=execution_id,
                         node_path=node_path or "unknown",
                         agent=self,
+                        analysis_start_date=start_date_str,
+                        analysis_end_date=end_date_str,
                         final_synthesis=final_synth,
                         execution_duration_ms=execution_duration_ms,
                         status="completed",

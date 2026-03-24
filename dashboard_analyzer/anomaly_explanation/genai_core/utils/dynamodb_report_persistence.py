@@ -118,6 +118,8 @@ class DynamoDBReportPersistence:
         execution_id: str,
         node_path: str,
         agent: Any,
+        analysis_start_date: Optional[str] = None,
+        analysis_end_date: Optional[str] = None,
         final_synthesis: Optional[str] = None,
         execution_duration_ms: Optional[float] = None,
         status: str = "completed",
@@ -129,9 +131,16 @@ class DynamoDBReportPersistence:
         Reads structured data directly from the agent's internal state
         (``collected_data``, ``tracker``, etc.) — no agent changes needed.
 
-        Returns the ``report_id`` on success, ``None`` on failure.
+        Key schema:
+          PK  ``REPORT_ID``       = causal_explanation#{node_path}#{start}#{end}
+          SK  ``EXPORT_TIMESTAMP`` = ISO-8601 timestamp (allows multiple runs)
+
+        Returns the ``REPORT_ID`` on success, ``None`` on failure.
         """
-        report_id = str(uuid.uuid4())
+        start_part = analysis_start_date or "unknown"
+        end_part = analysis_end_date or "unknown"
+        report_id = f"causal_explanation#{node_path}#{start_part}#{end_part}"
+        export_timestamp = datetime.utcnow().isoformat()
         np = _parse_node_path(node_path)
 
         collected = getattr(agent, "collected_data", {}) or {}
@@ -170,8 +179,10 @@ class DynamoDBReportPersistence:
             ))
 
         item = _strip_none({
-            # Keys
-            "report_id": report_id,
+            # Keys (PK + SK)
+            "REPORT_ID": report_id,
+            "EXPORT_TIMESTAMP": export_timestamp,
+            # Correlation
             "execution_id": execution_id,
             # Segment dimensions
             "node_path": node_path,
@@ -180,9 +191,9 @@ class DynamoDBReportPersistence:
             "cabin": np["cabin"],
             "company": np["company"],
             # Execution context
-            "execution_timestamp": datetime.utcnow().isoformat() + "Z",
-            "analysis_start_date": None,  # filled by caller via kwargs if needed
-            "analysis_end_date": None,
+            "execution_timestamp": export_timestamp,
+            "analysis_start_date": analysis_start_date,
+            "analysis_end_date": analysis_end_date,
             "comparison_start_date": comp_start,
             "comparison_end_date": comp_end,
             "causal_filter": getattr(agent, "causal_filter", None),
