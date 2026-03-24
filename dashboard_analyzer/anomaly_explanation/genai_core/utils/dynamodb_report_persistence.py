@@ -257,8 +257,16 @@ class DynamoDBReportPersistence:
         analysis_date: Optional[str] = None,
         period_type: str = "weekly",
     ) -> Optional[str]:
-        """Persist an interpreter run to DynamoDB."""
-        synthesis_id = str(uuid.uuid4())
+        """Persist an interpreter run to DynamoDB.
+
+        Key schema:
+          PK  ``REPORT_ID``       = interpreter#{segment}#{analysis_date}
+          SK  ``EXPORT_TIMESTAMP`` = ISO-8601 timestamp (allows multiple runs)
+        """
+        segment = getattr(agent, "segment", "Global")
+        date_part = analysis_date or "unknown"
+        report_id = f"interpreter#{segment}#{date_part}"
+        export_timestamp = datetime.utcnow().isoformat()
         tracker = getattr(agent, "conversation_tracker", None)
 
         # Map step_responses list to named columns
@@ -270,13 +278,14 @@ class DynamoDBReportPersistence:
         comp_end = getattr(agent, "comparison_end_date", None)
 
         item = _strip_none({
-            # Keys
-            "synthesis_id": synthesis_id,
+            # Keys (PK + SK)
+            "REPORT_ID": report_id,
+            "EXPORT_TIMESTAMP": export_timestamp,
             "agent_type": "interpreter",
             # Correlation
             "execution_id": execution_id,
             # Context
-            "execution_timestamp": datetime.utcnow().isoformat() + "Z",
+            "execution_timestamp": export_timestamp,
             "analysis_date": analysis_date,
             "period_type": period_type,
             "period_range": None,  # caller can set
@@ -337,7 +346,7 @@ class DynamoDBReportPersistence:
             "ttl": _ttl_epoch(self.ttl_seconds),
         })
 
-        return self._put_item(self._synthesis, item, "interpreter", synthesis_id)
+        return self._put_item(self._synthesis, item, "interpreter", report_id)
 
     # ------------------------------------------------------------------
     # Summarizer agent
@@ -362,8 +371,16 @@ class DynamoDBReportPersistence:
         analysis_date: Optional[str] = None,
         period_type: str = "weekly",
     ) -> Optional[str]:
-        """Persist a summarizer run to DynamoDB."""
-        synthesis_id = str(uuid.uuid4())
+        """Persist a summarizer run to DynamoDB.
+
+        Key schema:
+          PK  ``REPORT_ID``       = summarizer#{segment}#{analysis_date}
+          SK  ``EXPORT_TIMESTAMP`` = ISO-8601 timestamp (allows multiple runs)
+        """
+        segment = getattr(agent, "segment", "Global")
+        date_part = analysis_date or "unknown"
+        report_id = f"summarizer#{segment}#{date_part}"
+        export_timestamp = datetime.utcnow().isoformat()
         convs = all_conversations or {}
         opt = optimization_debug or {}
 
@@ -378,13 +395,14 @@ class DynamoDBReportPersistence:
             step6_map[step_name] = _safe_json(entry)
 
         item = _strip_none({
-            # Keys
-            "synthesis_id": synthesis_id,
+            # Keys (PK + SK)
+            "REPORT_ID": report_id,
+            "EXPORT_TIMESTAMP": export_timestamp,
             "agent_type": "summarizer",
             # Correlation
             "execution_id": execution_id,
             # Context
-            "execution_timestamp": datetime.utcnow().isoformat() + "Z",
+            "execution_timestamp": export_timestamp,
             "analysis_date": analysis_date,
             "period_type": period_type,
             "period_range": None,
@@ -434,7 +452,7 @@ class DynamoDBReportPersistence:
             "ttl": _ttl_epoch(self.ttl_seconds),
         })
 
-        return self._put_item(self._synthesis, item, "summarizer", synthesis_id)
+        return self._put_item(self._synthesis, item, "summarizer", report_id)
 
     # ------------------------------------------------------------------
     # Internal helpers
