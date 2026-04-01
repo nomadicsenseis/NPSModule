@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
-from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type
 
 def setup_logging():
     """Configurar logging detallado"""
@@ -32,7 +32,7 @@ def test_section_patterns():
     
     # Crear agente de prueba
     agent = AnomalySummaryAgent(
-        llm_type=LLMType.GPT4o_MINI,
+        llm_type=get_default_llm_type(),
         environment="local",
         logger=logger
     )
@@ -97,7 +97,7 @@ Business SH se mantuvo en 48.5 con -0.4 pts.
     logger.info(f"{'='*60}")
     
     agent = AnomalySummaryAgent(
-        llm_type=LLMType.GPT4o_MINI,
+        llm_type=get_default_llm_type(),
         environment="local",
         logger=logger
     )
@@ -153,7 +153,7 @@ YW en Economy SH alcanzó 42.5 con +3.8 pts.
     logger.info(f"{'='*60}")
     
     agent = AnomalySummaryAgent(
-        llm_type=LLMType.GPT4o_MINI,
+        llm_type=get_default_llm_type(),
         environment="local",
         logger=logger
     )
