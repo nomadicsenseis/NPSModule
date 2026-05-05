@@ -652,7 +652,7 @@ async def process_single_period(
         }
 
 
-async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None, focus_touchpoint: Optional[str] = None, execution_id: Optional[str] = None):
+async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None, focus_touchpoint: Optional[str] = None, execution_id: Optional[str] = None, llm_type=None):
     """Show trees for all periods analyzed INCLUDING explanations and parent interpretations.
     
     PARALLEL EXECUTION: All periods are processed concurrently for faster results.
@@ -689,8 +689,10 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
         from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_interpreter_agent import AnomalyInterpreterAgent
         from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, get_default_llm_type
         
+        resolved_llm_type = llm_type if llm_type is not None else get_default_llm_type()
+        print(f"🤖 Interpreter model: {resolved_llm_type.value if hasattr(resolved_llm_type, 'value') else resolved_llm_type}")
         ai_agent = AnomalyInterpreterAgent(
-            llm_type=get_default_llm_type(),
+            llm_type=resolved_llm_type,
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
             study_mode=study_mode,
@@ -3330,10 +3332,12 @@ async def execute_analysis_flow(
     study_mode: str = "comparative",
     environment: str = "prod",
     focus_touchpoint: Optional[str] = None,
+    llm_type=None,
 ) -> str:
     """
     Executes a complete analysis flow for a given configuration.
     This includes data download, anomaly detection, and interpretation.
+    If llm_type is None, falls back to get_default_llm_type().
     """
     
     execution_id = str(uuid.uuid4())
@@ -3414,6 +3418,7 @@ async def execute_analysis_flow(
         study_mode=study_mode,
         focus_touchpoint=focus_touchpoint,
         execution_id=execution_id,
+        llm_type=llm_type,
     )
     
     print(f"🔍 DEBUG EXECUTE_ANALYSIS_FLOW: show_all_anomaly_periods_with_explanations completed")

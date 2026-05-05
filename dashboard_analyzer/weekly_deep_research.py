@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
 Weekly Deep Research - Automated NPS Analysis
-Runs weekly comparative (7d) with interpreter; daily singles (1d x7) and executive
-summarizer are currently disabled in run_weekly_comprehensive_analysis (see commented blocks).
-When re-enabled: consolidates results, uploads comprehensive report to S3, etc.
+
+Pipeline (all three steps active):
+  1. Weekly comparative analysis (7d) — interpreter uses CLAUDE_OPUS_4_6 (default).
+  2. Daily single analyses (1d × 7) — interpreter uses CLAUDE_OPUS_4_5 to reduce cost.
+  3. Executive summarizer — uses CLAUDE_OPUS_4_6; uploads comprehensive report to S3.
 """
 
 import asyncio
@@ -27,7 +29,14 @@ from dashboard_analyzer.deep_research_period import (
 from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector
 from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
-from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, get_default_llm_type
+
+# Cost-optimised model assignment:
+#   - Daily interpreter  → CLAUDE_OPUS_4_5 (cheaper, high-throughput)
+#   - Weekly interpreter → CLAUDE_OPUS_4_6 (default, highest quality)
+#   - Summarizer         → CLAUDE_OPUS_4_6 (executive report, highest quality)
+DAILY_LLM_TYPE = LLMType.CLAUDE_OPUS_4_5
+SUMMARY_LLM_TYPE = LLMType.CLAUDE_OPUS_4_6
 
 
 # Constants for data availability probing
@@ -293,9 +302,10 @@ async def run_weekly_comprehensive_analysis(
 ):
     """
     Comprehensive weekly analysis orchestrator.
-    Currently runs only the weekly comparative flow (7d), then stops after the weekly interpreter.
-    Daily singles + summarizer + S3 comprehensive upload are commented out in this function
-    for easy restore; previously: (2) daily single per day, (3) consolidate and upload.
+    Runs three sequential steps:
+      1. Weekly comparative flow (7d) — CLAUDE_OPUS_4_6 interpreter.
+      2. Daily single analyses (1d × N days) — CLAUDE_OPUS_4_5 interpreter (cost-optimised).
+      3. Executive summarizer — CLAUDE_OPUS_4_6; uploads comprehensive report to S3.
     """
     execution_id = str(uuid.uuid4())
     print("🚀 WEEKLY DEEP RESEARCH - Comprehensive NPS Analysis")
@@ -357,7 +367,7 @@ async def run_weekly_comprehensive_analysis(
     
     async def run_daily_analysis():
         """Execute daily single analysis for each of the last N days"""
-        print(f"\n📊 [STEP 2] Starting Daily Analysis ({daily_periods} days)...")
+        print(f"\n📊 [STEP 2] Starting Daily Analysis ({daily_periods} days) — model: {DAILY_LLM_TYPE.value}...")
         try:
             result = await execute_analysis_flow(
                 analysis_date=analysis_date,
@@ -374,6 +384,7 @@ async def run_weekly_comprehensive_analysis(
                 study_mode="single",
                 environment=environment,
                 focus_touchpoint=focus_touchpoint,
+                llm_type=DAILY_LLM_TYPE,
             )
             
             # Check for success (list or non-error string)
@@ -411,20 +422,20 @@ async def run_weekly_comprehensive_analysis(
         print(f"⚠️ Weekly analysis: No data generated")
     
     # STEP 2: Only after weekly is complete, run daily analysis
-    # (Disabled: weekly pipeline stops after weekly interpreter; re-enable to run 7× daily singles again.)
-    # print("\n⚡ Weekly complete. Now executing DAILY analyses...")
-    # daily_result = await run_daily_analysis()
-    #
-    # if isinstance(daily_result, Exception):
-    #     print(f"❌ Daily analysis failed with exception: {daily_result}")
-    # elif isinstance(daily_result, dict) and daily_result.get('success') and daily_result.get('data'):
-    #     generated_reports.append({
-    #         'type': daily_result['type'],
-    #         'data': daily_result['data']
-    #     })
-    #     print(f"✅ Daily analysis: SUCCESS")
-    # else:
-    #     print(f"⚠️ Daily analysis: No data generated")
+    # Daily interpreter uses DAILY_LLM_TYPE (CLAUDE_OPUS_4_5) to reduce cost.
+    print("\n⚡ Weekly complete. Now executing DAILY analyses...")
+    daily_result = await run_daily_analysis()
+
+    if isinstance(daily_result, Exception):
+        print(f"❌ Daily analysis failed with exception: {daily_result}")
+    elif isinstance(daily_result, dict) and daily_result.get('success') and daily_result.get('data'):
+        generated_reports.append({
+            'type': daily_result['type'],
+            'data': daily_result['data']
+        })
+        print(f"✅ Daily analysis: SUCCESS")
+    else:
+        print(f"⚠️ Daily analysis: No data generated")
     
     # Summary of sequential execution results
     print("\n" + "=" * 40)
@@ -432,186 +443,170 @@ async def run_weekly_comprehensive_analysis(
     print("=" * 40)
     print(f"✅ Total reports generated: {len(generated_reports)}")
 
-    # Stop here after weekly interpreter (inside execute_analysis_flow). Daily singles +
-    # AnomalySummaryAgent + S3 comprehensive upload are commented below for easy restore.
+    # --- STEP 3: Executive Summarizer ---
+    # Summarizer uses SUMMARY_LLM_TYPE (CLAUDE_OPUS_4_6) for highest quality executive report.
     print("\n" + "=" * 40)
-    if generated_reports:
-        print("⏭️ Weekly comparative finished; skipping daily analyses and executive summarizer.")
-    else:
-        print("⚠️ No weekly report generated; daily + summarizer remain skipped.")
+    print("📝 STEP 3: Consolidating All Reports")
     print("=" * 40)
-    return None
+    if generated_reports:
+        print(f"✅ Found {len(generated_reports)} reports to summarize.")
 
-    # --- 3. Final Summary --- (disabled)
-    # print("\n" + "=" * 40)
-    # print("📝 STEP 3: Consolidating All Reports")
-    # print("=" * 40)
-    # if generated_reports:
-    #     print(f"✅ Found {len(generated_reports)} reports to summarize.")
-    #
-    #     # Separate weekly and daily reports
-    #     weekly_comparative_analysis = ""
-    #     daily_single_analyses = []
-    #
-    #     for report in generated_reports:
-    #         if report['type'] == 'weekly':
-    #             weekly_comparative_analysis = report['data']
-    #             if isinstance(weekly_comparative_analysis, list):
-    #                 print(f"✅ Found weekly report: {len(weekly_comparative_analysis)} items")
-    #             else:
-    #                 print(f"✅ Found weekly report: {len(str(weekly_comparative_analysis))} chars")
-    #         elif report['type'] == 'daily':
-    #             daily_single_analyses = report['data']
-    #             print(f"✅ Found daily analysis data: {len(daily_single_analyses)} periods")
-    #
-    #     # Convert daily data to the format expected by summary agent if needed
-    #     interpreter_adaptive_cards_daily = []
-    #     if daily_single_analyses and isinstance(daily_single_analyses, list):
-    #         formatted_daily_analyses = []
-    #         for daily in daily_single_analyses:
-    #             if isinstance(daily, dict) and 'ai_interpretation' in daily:
-    #                 analysis_text = daily.get('ai_interpretation', '')
-    #                 # Separate text from adaptive card JSON (same format as summarizer)
-    #                 if "---ADAPTIVE_CARD_JSON---" in analysis_text:
-    #                     text_part, card_part = analysis_text.split("---ADAPTIVE_CARD_JSON---", 1)
-    #                     analysis_text = text_part.strip()
-    #                     interpreter_adaptive_cards_daily.append(card_part.strip())
-    #                 formatted_daily_analyses.append({
-    #                     'date': daily.get('date_range', daily.get('period', 'Unknown')),
-    #                     'analysis': analysis_text,
-    #                     'anomalies': ['daily_analysis']
-    #                 })
-    #         daily_single_analyses = formatted_daily_analyses
-    #         print(f"✅ Formatted daily analyses: {len(daily_single_analyses)} periods")
-    #
-    #     # Use Summary Agent to consolidate
-    #     try:
-    #         print("\n🤖 Initializing Summary Agent...")
-    #         # Configure summary agent logger with handlers for production
-    #         summary_logger = logging.getLogger("summary_agent")
-    #         summary_logger.setLevel(logging.INFO)
-    #         if not summary_logger.handlers:
-    #             handler = logging.StreamHandler()
-    #             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    #             handler.setFormatter(formatter)
-    #             summary_logger.addHandler(handler)
-    #
-    #         summary_agent = AnomalySummaryAgent(
-    #             llm_type=get_default_llm_type(),
-    #             logger=summary_logger,
-    #             environment=environment,
-    #             study_mode="comparative",
-    #             anomaly_detection_mode="vslast",
-    #             causal_filter=causal_filter,
-    #             comparison_start_date=str(comparison_start_date) if comparison_start_date else None,
-    #             comparison_end_date=str(comparison_end_date) if comparison_end_date else None,
-    #             aggregation_days=7,
-    #             baseline_periods=7,
-    #             segment=segment,
-    #             focus_touchpoint=focus_touchpoint,
-    #             execution_id=execution_id,
-    #         )
-    #         print("✅ Summary Agent initialized. Generating executive summary...")
-    #
-    #         # Prepare metadata
-    #         execution_metadata = {
-    #             'analysis_date': analysis_date.strftime('%Y-%m-%d'),
-    #             'segment': segment,
-    #             'causal_filter': causal_filter
-    #         }
-    #
-    #         weekly_analysis_params = {
-    #             'anomaly_detection_mode': 'vslast',
-    #             'baseline_periods': 7,
-    #             'aggregation_days': 7,
-    #             'periods': 1,
-    #             'study_mode': 'comparative'
-    #         }
-    #
-    #         daily_analysis_params = {
-    #             'daily_anomaly_detection_mode': daily_anomaly_detection_mode,
-    #             'daily_baseline_periods': daily_baseline_periods,
-    #             'daily_aggregation_days': daily_aggregation_days,
-    #             'daily_periods': daily_periods
-    #         }
-    #
-    #         consolidated_data = [{
-    #             'weekly_comparative': weekly_comparative_analysis,
-    #             'daily_singles': daily_single_analyses,
-    #             'metadata': execution_metadata,
-    #             'weekly_params': weekly_analysis_params,
-    #             'daily_params': daily_analysis_params
-    #         }]
-    #
-    #         executive_summary = await generate_consolidated_summary(
-    #             summary_agent,
-    #             consolidated_data,
-    #             date_flight_local,
-    #             segment=segment
-    #         )
-    #
-    #         print("\n" + "=" * 80)
-    #         print("📋 EXECUTIVE SUMMARY")
-    #         print("=" * 80)
-    #         print(executive_summary)
-    #         print("=" * 80)
-    #
-    #         # Upload to S3
-    #         try:
-    #             print("\n📤 Uploading comprehensive report to S3...")
-    #             s3_uploader = S3ReportUploader(environment=environment)
-    #
-    #             # Prepare date ranges
-    #             date_ranges = {
-    #                 'analysis_date': analysis_date.strftime('%Y-%m-%d'),
-    #                 'comparison_start_date': comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date else None,
-    #                 'comparison_end_date': comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None
-    #             }
-    #
-    #             # In prod, only upload the adaptive card as a JSON object
-    #             final_synthesis_to_upload = executive_summary
-    #             if environment == "prod" and "---ADAPTIVE_CARD_JSON---" in executive_summary:
-    #                 # Extract the adaptive card JSON string
-    #                 card_json_str = executive_summary.split("---ADAPTIVE_CARD_JSON---")[-1].strip()
-    #                 try:
-    #                     # Parse into a dictionary so S3 uploader stores it as a JSON object
-    #                     final_synthesis_to_upload = json.loads(card_json_str)
-    #                 except Exception as e:
-    #                     print(f"⚠️ Could not parse adaptive card JSON: {e}")
-    #                     final_synthesis_to_upload = card_json_str
-    #
-    #             s3_key = await s3_uploader.upload_comprehensive_report(
-    #                 execution_date=datetime.now(),
-    #                 analysis_date=analysis_date.strftime('%Y-%m-%d'),
-    #                 segment=segment,
-    #                 explanation_mode="weekly_comprehensive",
-    #                 causal_filter=causal_filter,
-    #                 weekly_analysis_params=weekly_analysis_params,
-    #                 daily_analysis_params=daily_analysis_params,
-    #                 date_ranges=date_ranges,
-    #                 final_synthesis=final_synthesis_to_upload,
-    #                 comparison_start_date=comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date else None,
-    #                 comparison_end_date=comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None
-    #             )
-    #
-    #             if s3_key:
-    #                 print(f"✅ Report uploaded to S3: {s3_key}")
-    #             else:
-    #                 print("⚠️ S3 upload skipped (empty synthesis or local environment)")
-    #
-    #         except Exception as s3_error:
-    #             print(f"⚠️ S3 upload failed (non-critical): {s3_error}")
-    #
-    #         return executive_summary
-    #
-    #     except Exception as e:
-    #         print(f"❌ Error generating executive summary: {e}")
-    #         import traceback
-    #         traceback.print_exc()
-    #         return None
-    # else:
-    #     print("⚠️ No reports generated. Skipping consolidation.")
-    #     return None
+        # Separate weekly and daily reports
+        weekly_comparative_analysis = ""
+        daily_single_analyses = []
+
+        for report in generated_reports:
+            if report['type'] == 'weekly':
+                weekly_comparative_analysis = report['data']
+                if isinstance(weekly_comparative_analysis, list):
+                    print(f"✅ Found weekly report: {len(weekly_comparative_analysis)} items")
+                else:
+                    print(f"✅ Found weekly report: {len(str(weekly_comparative_analysis))} chars")
+            elif report['type'] == 'daily':
+                daily_single_analyses = report['data']
+                print(f"✅ Found daily analysis data: {len(daily_single_analyses)} periods")
+
+        # Convert daily data to the format expected by summary agent if needed
+        interpreter_adaptive_cards_daily = []
+        if daily_single_analyses and isinstance(daily_single_analyses, list):
+            formatted_daily_analyses = []
+            for daily in daily_single_analyses:
+                if isinstance(daily, dict) and 'ai_interpretation' in daily:
+                    analysis_text = daily.get('ai_interpretation', '')
+                    if "---ADAPTIVE_CARD_JSON---" in analysis_text:
+                        text_part, card_part = analysis_text.split("---ADAPTIVE_CARD_JSON---", 1)
+                        analysis_text = text_part.strip()
+                        interpreter_adaptive_cards_daily.append(card_part.strip())
+                    formatted_daily_analyses.append({
+                        'date': daily.get('date_range', daily.get('period', 'Unknown')),
+                        'analysis': analysis_text,
+                        'anomalies': ['daily_analysis']
+                    })
+            daily_single_analyses = formatted_daily_analyses
+            print(f"✅ Formatted daily analyses: {len(daily_single_analyses)} periods")
+
+        # Use Summary Agent to consolidate
+        try:
+            print(f"\n🤖 Initializing Summary Agent — model: {SUMMARY_LLM_TYPE.value}...")
+            summary_logger = logging.getLogger("summary_agent")
+            summary_logger.setLevel(logging.INFO)
+            if not summary_logger.handlers:
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                handler.setFormatter(formatter)
+                summary_logger.addHandler(handler)
+
+            summary_agent = AnomalySummaryAgent(
+                llm_type=SUMMARY_LLM_TYPE,
+                logger=summary_logger,
+                environment=environment,
+                study_mode="comparative",
+                anomaly_detection_mode="vslast",
+                causal_filter=causal_filter,
+                comparison_start_date=str(comparison_start_date) if comparison_start_date else None,
+                comparison_end_date=str(comparison_end_date) if comparison_end_date else None,
+                aggregation_days=7,
+                baseline_periods=7,
+                segment=segment,
+                focus_touchpoint=focus_touchpoint,
+                execution_id=execution_id,
+            )
+            print("✅ Summary Agent initialized. Generating executive summary...")
+
+            execution_metadata = {
+                'analysis_date': analysis_date.strftime('%Y-%m-%d'),
+                'segment': segment,
+                'causal_filter': causal_filter
+            }
+
+            weekly_analysis_params = {
+                'anomaly_detection_mode': 'vslast',
+                'baseline_periods': 7,
+                'aggregation_days': 7,
+                'periods': 1,
+                'study_mode': 'comparative'
+            }
+
+            daily_analysis_params = {
+                'daily_anomaly_detection_mode': daily_anomaly_detection_mode,
+                'daily_baseline_periods': daily_baseline_periods,
+                'daily_aggregation_days': daily_aggregation_days,
+                'daily_periods': daily_periods
+            }
+
+            consolidated_data = [{
+                'weekly_comparative': weekly_comparative_analysis,
+                'daily_singles': daily_single_analyses,
+                'metadata': execution_metadata,
+                'weekly_params': weekly_analysis_params,
+                'daily_params': daily_analysis_params
+            }]
+
+            executive_summary = await generate_consolidated_summary(
+                summary_agent,
+                consolidated_data,
+                date_flight_local,
+                segment=segment
+            )
+
+            print("\n" + "=" * 80)
+            print("📋 EXECUTIVE SUMMARY")
+            print("=" * 80)
+            print(executive_summary)
+            print("=" * 80)
+
+            # Upload to S3
+            try:
+                print("\n📤 Uploading comprehensive report to S3...")
+                s3_uploader = S3ReportUploader(environment=environment)
+
+                date_ranges = {
+                    'analysis_date': analysis_date.strftime('%Y-%m-%d'),
+                    'comparison_start_date': comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date else None,
+                    'comparison_end_date': comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None
+                }
+
+                final_synthesis_to_upload = executive_summary
+                if environment == "prod" and "---ADAPTIVE_CARD_JSON---" in executive_summary:
+                    card_json_str = executive_summary.split("---ADAPTIVE_CARD_JSON---")[-1].strip()
+                    try:
+                        final_synthesis_to_upload = json.loads(card_json_str)
+                    except Exception as e:
+                        print(f"⚠️ Could not parse adaptive card JSON: {e}")
+                        final_synthesis_to_upload = card_json_str
+
+                s3_key = await s3_uploader.upload_comprehensive_report(
+                    execution_date=datetime.now(),
+                    analysis_date=analysis_date.strftime('%Y-%m-%d'),
+                    segment=segment,
+                    explanation_mode="weekly_comprehensive",
+                    causal_filter=causal_filter,
+                    weekly_analysis_params=weekly_analysis_params,
+                    daily_analysis_params=daily_analysis_params,
+                    date_ranges=date_ranges,
+                    final_synthesis=final_synthesis_to_upload,
+                    comparison_start_date=comparison_start_date.strftime('%Y-%m-%d') if comparison_start_date else None,
+                    comparison_end_date=comparison_end_date.strftime('%Y-%m-%d') if comparison_end_date else None
+                )
+
+                if s3_key:
+                    print(f"✅ Report uploaded to S3: {s3_key}")
+                else:
+                    print("⚠️ S3 upload skipped (empty synthesis or local environment)")
+
+            except Exception as s3_error:
+                print(f"⚠️ S3 upload failed (non-critical): {s3_error}")
+
+            return executive_summary
+
+        except Exception as e:
+            print(f"❌ Error generating executive summary: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    else:
+        print("⚠️ No reports generated. Skipping consolidation.")
+        return None
 
 
 async def main():
