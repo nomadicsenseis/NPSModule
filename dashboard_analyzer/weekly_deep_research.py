@@ -32,10 +32,10 @@ from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_ag
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, get_default_llm_type
 
 # Cost-optimised model assignment:
-#   - Daily interpreter  → CLAUDE_OPUS_4_5 (cheaper, high-throughput)
+#   - Daily interpreter  → CLAUDE_SONNET_4_5 (cheaper, high-throughput)
 #   - Weekly interpreter → CLAUDE_OPUS_4_6 (default, highest quality)
 #   - Summarizer         → CLAUDE_OPUS_4_6 (executive report, highest quality)
-DAILY_LLM_TYPE = LLMType.CLAUDE_OPUS_4_5
+DAILY_LLM_TYPE = LLMType.CLAUDE_SONNET_4_5
 SUMMARY_LLM_TYPE = LLMType.CLAUDE_OPUS_4_6
 
 
