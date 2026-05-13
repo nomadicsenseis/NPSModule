@@ -35,12 +35,15 @@ class S3ReportUploader:
         """
         self.logger = logging.getLogger(__name__)
         
-        # S3 configuration
-        self.bucket_name = "ibdata-sbx-ew1-s3-customer"
-        self.base_prefix = "customer/catia/reports/business/"
-        
         # Environment configuration
         self.environment = environment
+
+        # S3 configuration — bucket is environment-dependent
+        self.bucket_name = (
+            "ibdata-prod-ew1-s3-customer" if self.environment == "prod"
+            else "ibdata-sbx-ew1-s3-customer"
+        )
+        self.base_prefix = "customer/catia/reports/business/"
         
         # Initialize AWS session using unified resolver - Reports use standard keys (not sandbox)
         self.session = get_aws_session(environment=self.environment, use_sandbox=False)
