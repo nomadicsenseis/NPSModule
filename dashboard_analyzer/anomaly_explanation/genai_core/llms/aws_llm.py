@@ -22,18 +22,18 @@ except (json.JSONDecodeError, KeyError):
 MODEL_ARNS_BY_ENV = {
     LLMType.CLAUDE_HAIKU_4_5.value: {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/78486g7eitdv",
-        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/78486g7eitdv",
-        "prod":  "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/deh8x2wc9ohx",  # TODO: confirm prod account ARN
+        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/deh8x2wc9ohx",
+        "prod":  "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/deh8x2wc9ohx",  # TODO: replace with prod account ARN
     },
     LLMType.CLAUDE_SONNET_4_5.value: {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/j9l4fod1sker",
-        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/j9l4fod1sker",
+        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/4o3iago8pudu",
         "prod":  "arn:aws:bedrock:eu-west-1:320714865578:application-inference-profile/1asrudnp23md",
     },
     LLMType.GPT_OSS_120B.value: {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/01q61xjcup73",
-        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/01q61xjcup73",
-        "prod":  "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv",  # TODO: confirm prod account ARN
+        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv",
+        "prod":  "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv",  # TODO: replace with prod account ARN
     },
     LLMType.CLAUDE_OPUS_4_6.value: {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/dfsaqs9f3a5v",
