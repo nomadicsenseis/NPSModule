@@ -14,24 +14,31 @@ try:
 except (json.JSONDecodeError, KeyError):
     BEDROCK_MODELS = {}
 
-# Model ARNs by environment (local vs prod)
-# Structure: { LLMType.value: { "local": "arn...", "prod": "arn..." } }
+# Model ARNs by environment (local / sbx / prod)
+# - local: developer machine (uses sbx account credentials)
+# - sbx:   AWS Sandbox account (856897973040)
+# - prod:  AWS Production account (320714865578)
+# Structure: { LLMType.value: { "local": "arn...", "sbx": "arn...", "prod": "arn..." } }
 MODEL_ARNS_BY_ENV = {
     LLMType.CLAUDE_HAIKU_4_5.value: {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/78486g7eitdv",
-        "prod": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/deh8x2wc9ohx"
+        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/78486g7eitdv",
+        "prod":  "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/deh8x2wc9ohx",  # TODO: confirm prod account ARN
     },
     LLMType.CLAUDE_SONNET_4_5.value: {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/j9l4fod1sker",
-        "prod": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/4o3iago8pudu"
+        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/j9l4fod1sker",
+        "prod":  "arn:aws:bedrock:eu-west-1:320714865578:application-inference-profile/1asrudnp23md",
     },
     LLMType.GPT_OSS_120B.value: {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/01q61xjcup73",
-        "prod": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv"
+        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/01q61xjcup73",
+        "prod":  "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv",  # TODO: confirm prod account ARN
     },
     LLMType.CLAUDE_OPUS_4_6.value: {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/dfsaqs9f3a5v",
-        "prod": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/dfsaqs9f3a5v"
+        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/dfsaqs9f3a5v",
+        "prod":  "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/dfsaqs9f3a5v",  # TODO: replace with prod account ARN
     },
 }
 
@@ -50,7 +57,8 @@ class AWSLLM(LLM):
         self.aws_session_token = aws_session_token
         self.profile_name = profile_name
         self.model_id = None
-        # Environment: "local" or "prod" - defaults to ENVIRONMENT env var or "prod"
+        # "local" = developer machine; anything else = cloud (Airflow).
+        # Inference profile account (sbx vs prod) is resolved separately via ENV env var.
         self.environment = environment or os.getenv("ENVIRONMENT", "prod").lower()
 
         super().__init__(llm_type, token_input_price, token_output_price)
@@ -116,11 +124,21 @@ class AWSLLM(LLM):
         )
     
     def _get_model_arn_by_env(self, llm_type_value: str) -> str:
-        """Get the model ARN based on the environment (local/prod)"""
+        """Get the model ARN based on the environment (local / sbx / prod).
+
+        - local:  developer machine → uses 'local' ARNs (sbx account)
+        - cloud:  reads ENV env var set by Airflow ('sbx' or 'prod') to pick
+                  the right AWS account inference profile.
+        """
         env_arns = MODEL_ARNS_BY_ENV.get(llm_type_value, {})
-        # Normalize environment to "local" or "prod"
-        env_key = "local" if self.environment == "local" else "prod"
-        return env_arns.get(env_key, env_arns.get("prod", ""))
+        if self.environment == "local":
+            env_key = "local"
+        else:
+            # In cloud (Airflow), ENV=sbx or ENV=prod distinguishes accounts
+            env_key = os.getenv("ENV", "sbx").lower()
+            if env_key not in ("sbx", "prod"):
+                env_key = "sbx"
+        return env_arns.get(env_key, env_arns.get("sbx", env_arns.get("local", "")))
 
     def _get_provider(self):
         """Get the provider name based on the model type"""
