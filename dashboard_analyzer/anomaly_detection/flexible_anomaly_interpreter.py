@@ -49,7 +49,7 @@ class FlexibleAnomalyInterpreter:
         if not self._agent_initialized:
             try:
                 from ..anomaly_explanation.genai_core.agents.causal_explanation_agent import CausalExplanationAgent
-                from ..anomaly_explanation.genai_core.utils.enums import LLMType, get_default_llm_type
+                from ..anomaly_explanation.genai_core.utils.enums import get_causal_llm_type
                 
                 # Use the provided causal_filter or fall back to instance variable
                 agent_causal_filter = causal_filter if causal_filter else self.causal_filter
@@ -66,7 +66,7 @@ class FlexibleAnomalyInterpreter:
                     agent_study_mode = "comparative"
                 
                 self.causal_agent = CausalExplanationAgent(
-                    llm_type=get_default_llm_type(), 
+                    llm_type=get_causal_llm_type(), 
                     silent_mode=self.silent_mode, 
                     detection_mode=self.detection_mode, 
                     causal_filter=agent_causal_filter, 

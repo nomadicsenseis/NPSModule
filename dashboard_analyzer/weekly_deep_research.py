@@ -2,10 +2,12 @@
 """
 Weekly Deep Research - Automated NPS Analysis
 
-Pipeline (all three steps active):
-  1. Weekly comparative analysis (7d) — interpreter uses CLAUDE_OPUS_4_6 (default).
-  2. Daily single analyses (1d × 7) — interpreter uses CLAUDE_OPUS_4_5 to reduce cost.
-  3. Executive summarizer — uses CLAUDE_OPUS_4_6; uploads comprehensive report to S3.
+Pipeline (when all steps active):
+  1. Weekly comparative (7d) — tree interpreter: Opus 4.6; causal work inside flow: Sonnet 4.5.
+  2. Daily singles (1d × N) — same interpreter model (Opus 4.6).
+  3. Executive summarizer — Opus 4.6; uploads comprehensive report to S3.
+
+Model roles are centralized in genai_core.utils.enums (CAUSAL / INTERPRETER / SUMMARIZER).
 """
 
 import asyncio
@@ -29,16 +31,10 @@ from dashboard_analyzer.deep_research_period import (
 from dashboard_analyzer.data_collection.pbi_collector import PBIDataCollector
 from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
-from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, get_default_llm_type
-
-# Cost-optimised model assignment:
-#   - Daily interpreter  → CLAUDE_SONNET_4_5 (cheaper, high-throughput)
-#   - Weekly interpreter → CLAUDE_OPUS_4_6 (default, highest quality)
-#   - Summarizer         → CLAUDE_OPUS_4_6 (executive report, highest quality)
-DAILY_LLM_TYPE = LLMType.CLAUDE_SONNET_4_5
-SUMMARY_LLM_TYPE = LLMType.CLAUDE_OPUS_4_6
-
-
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import (
+    get_interpreter_llm_type,
+    get_summarizer_llm_type,
+)
 # Constants for data availability probing
 MIN_PBI_LAG_DAYS = 4   # Minimum expected PBI lag
 MAX_PBI_LAG_DAYS = 10  # Maximum lag to probe before giving up
@@ -303,9 +299,9 @@ async def run_weekly_comprehensive_analysis(
     """
     Comprehensive weekly analysis orchestrator.
     Runs three sequential steps:
-      1. Weekly comparative flow (7d) — CLAUDE_OPUS_4_6 interpreter.
-      2. Daily single analyses (1d × N days) — CLAUDE_OPUS_4_5 interpreter (cost-optimised).
-      3. Executive summarizer — CLAUDE_OPUS_4_6; uploads comprehensive report to S3.
+      1. Weekly comparative flow (7d) — interpreter Opus 4.6 (causal agent: Sonnet 4.5).
+      2. Daily single analyses (1d × N days) — interpreter Opus 4.6.
+      3. Executive summarizer — Opus 4.6; uploads comprehensive report to S3.
     """
     execution_id = str(uuid.uuid4())
     print("🚀 WEEKLY DEEP RESEARCH - Comprehensive NPS Analysis")
@@ -347,6 +343,7 @@ async def run_weekly_comprehensive_analysis(
                 study_mode="comparative",
                 environment=environment,
                 focus_touchpoint=focus_touchpoint,
+                llm_type=get_interpreter_llm_type(),
             )
             
             # Check for success (list or non-error string)
@@ -367,7 +364,7 @@ async def run_weekly_comprehensive_analysis(
     
     async def run_daily_analysis():
         """Execute daily single analysis for each of the last N days"""
-        print(f"\n📊 [STEP 2] Starting Daily Analysis ({daily_periods} days) — model: {DAILY_LLM_TYPE.value}...")
+        print(f"\n📊 [STEP 2] Starting Daily Analysis ({daily_periods} days) — interpreter: {get_interpreter_llm_type().value}...")
         try:
             result = await execute_analysis_flow(
                 analysis_date=analysis_date,
@@ -384,7 +381,7 @@ async def run_weekly_comprehensive_analysis(
                 study_mode="single",
                 environment=environment,
                 focus_touchpoint=focus_touchpoint,
-                llm_type=DAILY_LLM_TYPE,
+                llm_type=get_interpreter_llm_type(),
             )
             
             # Check for success (list or non-error string)
@@ -421,8 +418,7 @@ async def run_weekly_comprehensive_analysis(
     else:
         print(f"⚠️ Weekly analysis: No data generated")
     
-    # STEP 2: Only after weekly is complete, run daily analysis
-    # Daily interpreter uses DAILY_LLM_TYPE (CLAUDE_OPUS_4_5) to reduce cost.
+    # STEP 2: Daily tree interpreter uses get_interpreter_llm_type() (Opus); causal steps still Sonnet.
     print("\n⚡ Weekly complete. Now executing DAILY analyses...")
     daily_result = await run_daily_analysis()
 
@@ -443,8 +439,7 @@ async def run_weekly_comprehensive_analysis(
     print("=" * 40)
     print(f"✅ Total reports generated: {len(generated_reports)}")
 
-    # --- STEP 3: Executive Summarizer ---
-    # Summarizer uses SUMMARY_LLM_TYPE (CLAUDE_OPUS_4_6) for highest quality executive report.
+    # --- STEP 3: Executive Summarizer (get_summarizer_llm_type → Opus) ---
     print("\n" + "=" * 40)
     print("📝 STEP 3: Consolidating All Reports")
     print("=" * 40)
@@ -487,7 +482,7 @@ async def run_weekly_comprehensive_analysis(
 
         # Use Summary Agent to consolidate
         try:
-            print(f"\n🤖 Initializing Summary Agent — model: {SUMMARY_LLM_TYPE.value}...")
+            print(f"\n🤖 Initializing Summary Agent — model: {get_summarizer_llm_type().value}...")
             summary_logger = logging.getLogger("summary_agent")
             summary_logger.setLevel(logging.INFO)
             if not summary_logger.handlers:
@@ -497,7 +492,7 @@ async def run_weekly_comprehensive_analysis(
                 summary_logger.addHandler(handler)
 
             summary_agent = AnomalySummaryAgent(
-                llm_type=SUMMARY_LLM_TYPE,
+                llm_type=get_summarizer_llm_type(),
                 logger=summary_logger,
                 environment=environment,
                 study_mode="comparative",

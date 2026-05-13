@@ -22,7 +22,7 @@ from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUpload
 from dashboard_analyzer.anomaly_detection.flexible_detector import FlexibleAnomalyDetector
 from dashboard_analyzer.anomaly_detection.flexible_anomaly_interpreter import FlexibleAnomalyInterpreter
 from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_summary_agent import AnomalySummaryAgent
-from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type, get_agent_conversations_folder
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_interpreter_llm_type, get_agent_conversations_folder
 
 # Global debug flag
 DEBUG_MODE = True
@@ -687,9 +687,9 @@ async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segmen
     # Initialize AI agent for interpretation
     try:
         from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_interpreter_agent import AnomalyInterpreterAgent
-        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, get_default_llm_type
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, get_interpreter_llm_type
         
-        resolved_llm_type = llm_type if llm_type is not None else get_default_llm_type()
+        resolved_llm_type = llm_type if llm_type is not None else get_interpreter_llm_type()
         print(f"🤖 Interpreter model: {resolved_llm_type.value if hasattr(resolved_llm_type, 'value') else resolved_llm_type}")
         ai_agent = AnomalyInterpreterAgent(
             llm_type=resolved_llm_type,
@@ -2055,7 +2055,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
     # Initialize AI agent for interpretation
     try:
         from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_interpreter_agent import AnomalyInterpreterAgent
-        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, get_default_llm_type
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, get_interpreter_llm_type
         
         # Determine study_mode based on analysis_type and causal_filter (same logic as interpreter)
         if analysis_type == "WEEKLY_COMPARATIVE" or causal_filter == "vs Sel. Period":
@@ -2066,7 +2066,7 @@ async def show_silent_anomaly_analysis(analysis_data: dict, analysis_type: str, 
             ai_study_mode = "comparative"  # Default to comparative
         
         ai_agent = AnomalyInterpreterAgent(
-            llm_type=get_default_llm_type(),
+            llm_type=get_interpreter_llm_type(),
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
             study_mode=ai_study_mode,
@@ -2362,10 +2362,10 @@ async def show_clean_anomaly_analysis(analysis_data: dict, segment: str = "Globa
     # Initialize AI agent for interpretation
     try:
         from dashboard_analyzer.anomaly_explanation.genai_core.agents.anomaly_interpreter_agent import AnomalyInterpreterAgent
-        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, get_default_llm_type
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, get_interpreter_llm_type
         
         ai_agent = AnomalyInterpreterAgent(
-            llm_type=get_default_llm_type(),
+            llm_type=get_interpreter_llm_type(),
             config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml",
             logger=logging.getLogger("ai_interpreter"),
             study_mode=study_mode,
@@ -3337,7 +3337,7 @@ async def execute_analysis_flow(
     """
     Executes a complete analysis flow for a given configuration.
     This includes data download, anomaly detection, and interpretation.
-    If llm_type is None, falls back to get_default_llm_type().
+    If llm_type is None, falls back to get_interpreter_llm_type().
     """
     
     execution_id = str(uuid.uuid4())

@@ -6,8 +6,16 @@ import logging
 # Set up logging
 logger = logging.getLogger(__name__)
 
-# Global model configuration - change this to switch all agents at once
-DEFAULT_LLM_TYPE = "CLAUDE_OPUS_4_6"  # Options: O4_MINI, CLAUDE_SONNET_4, O3, CLAUDE_SONNET_4_5, CLAUDE_OPUS_4_6, etc.
+# Role-specific LLM configuration (Bedrock)
+# - CausalExplanationAgent (multi-tool causal investigations): Sonnet 4.5
+# - AnomalyInterpreterAgent (tree interpretation): Opus 4.6
+# - AnomalySummaryAgent (executive summarizer): Opus 4.6
+CAUSAL_LLM_TYPE = "CLAUDE_SONNET_4_5"
+INTERPRETER_LLM_TYPE = "CLAUDE_OPUS_4_6"
+SUMMARIZER_LLM_TYPE = "CLAUDE_OPUS_4_6"
+
+# Legacy: conversation folder prefix + get_default_llm_type() (interpreter-aligned)
+DEFAULT_LLM_TYPE = INTERPRETER_LLM_TYPE
 
 
 def load_aws_credentials_from_temp_file(temp_env_file: str = None, use_sandbox: bool = True) -> dict:
@@ -125,13 +133,32 @@ class LLMType(Enum):
     GPT_OSS_120B = 'GPT_OSS_120B'
     GPT_5_2 = 'GPT_5_2'
 
-def get_default_llm_type() -> LLMType:
-    """Get the default LLM type from the global configuration"""
+def _resolve_llm_type(name: str, fallback: LLMType) -> LLMType:
     try:
-        return LLMType[DEFAULT_LLM_TYPE]
+        return LLMType[name]
     except KeyError:
-        # Fallback to O4_MINI if the configured type doesn't exist
-        return LLMType.O4_MINI
+        logger.warning("Unknown LLM type %r, using %s", name, fallback.name)
+        return fallback
+
+
+def get_causal_llm_type() -> LLMType:
+    """LLM for CausalExplanationAgent (tool-heavy causal investigations)."""
+    return _resolve_llm_type(CAUSAL_LLM_TYPE, LLMType.CLAUDE_SONNET_4_5)
+
+
+def get_interpreter_llm_type() -> LLMType:
+    """LLM for AnomalyInterpreterAgent (NPS tree interpretation)."""
+    return _resolve_llm_type(INTERPRETER_LLM_TYPE, LLMType.CLAUDE_OPUS_4_6)
+
+
+def get_summarizer_llm_type() -> LLMType:
+    """LLM for AnomalySummaryAgent (executive / stratified summaries)."""
+    return _resolve_llm_type(SUMMARIZER_LLM_TYPE, LLMType.CLAUDE_OPUS_4_6)
+
+
+def get_default_llm_type() -> LLMType:
+    """Backward-compatible default; same as interpreter (Opus) unless DEFAULT_LLM_TYPE is changed."""
+    return _resolve_llm_type(DEFAULT_LLM_TYPE, LLMType.O4_MINI)
 
 
 def get_agent_conversations_folder() -> str:

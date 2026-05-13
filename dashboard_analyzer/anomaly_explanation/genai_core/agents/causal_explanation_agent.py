@@ -36,7 +36,7 @@ from dashboard_analyzer.anomaly_explanation.genai_core.llms.aws_llm import AWSLL
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../..'))
 from dashboard_analyzer.data_collection.s3_report_uploader import S3ReportUploader
-from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, get_agent_conversations_folder
+from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import LLMType, MessageType, AgentName, get_causal_llm_type, get_agent_conversations_folder
 from dashboard_analyzer.anomaly_explanation.genai_core.utils.output_paths import (
     resolve_report_group, format_period_range,
     get_logging_path, get_s3_logging_key, build_execution_metadata, save_pretty_json,
@@ -309,7 +309,7 @@ class CausalExplanationAgent:
     ):
         # Use default LLM type if none provided
         if llm_type is None:
-            llm_type = get_default_llm_type()
+            llm_type = get_causal_llm_type()
         self.llm_type = llm_type
         self.config_path = config_path
         self.logger = logger or self._setup_logger()
@@ -8632,7 +8632,7 @@ if __name__ == "__main__":
             end_date="2025-05-15", 
             anomaly_type="negative",
             anomaly_magnitude=-15.0,
-            llm_type=get_default_llm_type()
+            llm_type=get_causal_llm_type()
         )
         
         print("🎯 Investigation Result:")

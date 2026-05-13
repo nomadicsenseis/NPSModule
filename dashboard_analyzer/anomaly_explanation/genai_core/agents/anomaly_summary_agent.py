@@ -20,7 +20,7 @@ import importlib.resources
 from ..agents.agent import Agent
 from ..llms.openai_llm import OpenAiLLM
 from ..llms.aws_llm import AWSLLM
-from ..utils.enums import LLMType, MessageType, AgentName, get_default_llm_type, get_agent_conversations_folder
+from ..utils.enums import LLMType, MessageType, AgentName, get_summarizer_llm_type, get_agent_conversations_folder
 from ..utils.output_paths import (
     resolve_report_group, format_period_range,
     get_report_path, get_logging_path, get_s3_report_key, get_s3_logging_key,
@@ -84,7 +84,7 @@ class AnomalySummaryAgent:
         """
         # Use default LLM type if none provided
         if llm_type is None:
-            llm_type = get_default_llm_type()
+            llm_type = get_summarizer_llm_type()
         self.llm_type = llm_type
         self.config_path = config_path
         self.logger = logger or self._setup_logger()
@@ -2762,8 +2762,8 @@ async def generate_summary_report(
     """
     # Use default LLM type if none provided
     if llm_type is None:
-        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type
-        llm_type = get_default_llm_type()
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_summarizer_llm_type
+        llm_type = get_summarizer_llm_type()
     agent = AnomalySummaryAgent(llm_type=llm_type)
     return await agent.generate_summary_report(periods_data)
 

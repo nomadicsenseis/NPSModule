@@ -179,8 +179,8 @@ class AnomalyInterpreterAgent:
         """
         # Use default LLM type if none provided
         if llm_type is None:
-            from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type
-            llm_type = get_default_llm_type()
+            from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_interpreter_llm_type
+            llm_type = get_interpreter_llm_type()
         self.llm_type = llm_type
         self.logger = logger or self._setup_logger()
         self.study_mode = study_mode
@@ -2211,8 +2211,8 @@ async def interpret_anomaly_tree(
     """
     # Use default LLM type if none provided
     if llm_type is None:
-        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_default_llm_type
-        llm_type = get_default_llm_type()
+        from dashboard_analyzer.anomaly_explanation.genai_core.utils.enums import get_interpreter_llm_type
+        llm_type = get_interpreter_llm_type()
     agent = AnomalyInterpreterAgent(
         llm_type=llm_type,
         config_path="dashboard_analyzer/anomaly_explanation/config/prompts/anomaly_interpreter.yaml"
