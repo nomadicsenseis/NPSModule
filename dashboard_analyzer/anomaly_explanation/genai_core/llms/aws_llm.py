@@ -134,10 +134,11 @@ class AWSLLM(LLM):
         if self.environment == "local":
             env_key = "local"
         else:
-            # In cloud (Airflow), ENV=sbx or ENV=prod distinguishes accounts
-            env_key = os.getenv("ENV", "sbx").lower()
+            # In cloud (Airflow/Batch), ENV=sbx or ENV=prod distinguishes accounts.
+            # Defaults to "prod" so that containers without ENV set use prod ARNs.
+            env_key = os.getenv("ENV", "prod").lower()
             if env_key not in ("sbx", "prod"):
-                env_key = "sbx"
+                env_key = "prod"
         return env_arns.get(env_key, env_arns.get("sbx", env_arns.get("local", "")))
 
     def _get_provider(self):
