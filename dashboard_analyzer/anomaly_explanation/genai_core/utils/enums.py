@@ -8,11 +8,11 @@ logger = logging.getLogger(__name__)
 
 # Role-specific LLM configuration (Bedrock)
 # - CausalExplanationAgent (multi-tool causal investigations): Sonnet 4.5
-# - AnomalyInterpreterAgent (tree interpretation): Opus 4.6
-# - AnomalySummaryAgent (executive summarizer): Opus 4.6
+# - AnomalyInterpreterAgent (tree interpretation): Sonnet 4.5 (temporarily; Opus 4.6 pending Marketplace subscription in prod)
+# - AnomalySummaryAgent (executive summarizer): Sonnet 4.5 (temporarily; Opus 4.6 pending Marketplace subscription in prod)
 CAUSAL_LLM_TYPE = "CLAUDE_SONNET_4_5"
-INTERPRETER_LLM_TYPE = "CLAUDE_OPUS_4_6"
-SUMMARIZER_LLM_TYPE = "CLAUDE_OPUS_4_6"
+INTERPRETER_LLM_TYPE = "CLAUDE_SONNET_4_5"  # TODO: restore to CLAUDE_OPUS_4_6 once AWS Marketplace subscription confirmed in prod
+SUMMARIZER_LLM_TYPE = "CLAUDE_SONNET_4_5"  # TODO: restore to CLAUDE_OPUS_4_6 once AWS Marketplace subscription confirmed in prod
 
 # Legacy: conversation folder prefix + get_default_llm_type() (interpreter-aligned)
 DEFAULT_LLM_TYPE = INTERPRETER_LLM_TYPE
