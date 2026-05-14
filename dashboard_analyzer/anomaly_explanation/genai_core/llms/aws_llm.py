@@ -1,7 +1,10 @@
 import json
+import logging
 import os
 
 from langchain_aws import ChatBedrock, ChatBedrockConverse
+
+logger = logging.getLogger(__name__)
 from botocore.config import Config
 import boto3
 
@@ -66,6 +69,13 @@ class AWSLLM(LLM):
     def create_llm(self):
         """Create the LangChain ChatBedrock or ChatBedrockConverse client for the specified model"""
         self._set_model_id()
+        logger.info(
+            "🤖 AWSLLM init | model=%s | environment=%s | ENV=%s | model_id=%s",
+            self.llm_type.value,
+            self.environment,
+            os.getenv("ENV", "<not set>"),
+            self.model_id,
+        )
         
         # Configure credentials for boto3 session (if needed)
         credentials = {}
