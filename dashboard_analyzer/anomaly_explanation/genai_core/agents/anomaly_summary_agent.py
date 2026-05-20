@@ -61,7 +61,7 @@ class AnomalySummaryAgent:
         aggregation_days: int = 7,
         baseline_periods: int = 7,
         segment: str = "Global",
-        focus_touchpoint: Optional[str] = None,
+        focus_touchpoint: Optional[List[str]] = None,
         execution_id: Optional[str] = None,
     ):
         """
@@ -2692,7 +2692,8 @@ PERÍODO {period} ({date_range}):
             # Use .replace() instead of .format() because the system_prompt contains
             # embedded JSON with {} that would be misinterpreted as placeholders
             step4_system = step4_config.get('system_prompt', '').replace('{date_range}', date_range)
-            ft = (self.focus_touchpoint or "").strip()
+            _ft_list = self.focus_touchpoint or []
+            ft = ", ".join(_ft_list).strip() if _ft_list else ""
             if ft:
                 focus_touchpoint_block = (
                     f"🎯 **FOCUS TOUCHPOINT:** {ft}\n"

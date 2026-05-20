@@ -309,7 +309,7 @@ async def process_single_period(
     ai_agent,
     ai_available: bool,
     period_semaphore: asyncio.Semaphore,
-    focus_touchpoint: Optional[str] = None,
+    focus_touchpoint: Optional[List[str]] = None,
     execution_id: Optional[str] = None,
 ) -> dict:
     """
@@ -427,9 +427,9 @@ async def process_single_period(
                         nodes_with_anomalies.append(seg)
                         print(f"      🎯 Focus Touchpoint: Adding segment '{seg}' for focus touchpoint analysis (not in tree)")
             
-            # Special case: if focus_touchpoint is "Cabin Crew", exclude YW company segments
+            # Special case: if any focus_touchpoint is "Cabin Crew", exclude YW company segments
             # because YW (Air Nostrum) doesn't have its own cabin crew - they use IB crew
-            if focus_touchpoint == "Cabin Crew":
+            if focus_touchpoint and "Cabin Crew" in focus_touchpoint:
                 nodes_to_remove = [n for n in nodes_with_anomalies if "/YW" in n]
                 for node in nodes_to_remove:
                     nodes_with_anomalies.remove(node)
@@ -499,25 +499,26 @@ async def process_single_period(
                         
                         # --- FOCUS TOUCHPOINT: añadir CSAT vs Target al nps_context ---
                         if focus_touchpoint and node_start_date and node_end_date:
-                            try:
-                                focus_data = await pbi_collector.collect_focus_touchpoint_csat_vs_target(
-                                    node_path=node_path,
-                                    start_date=node_start_date,
-                                    end_date=node_end_date,
-                                    touchpoint_name=focus_touchpoint,
-                                    comparison_filter=causal_filter,
-                                    comparison_start_date=comparison_start_date,
-                                    comparison_end_date=comparison_end_date,
-                                )
-                                if focus_data:
-                                    focus_line = (
-                                        f"🎯 FOCUS TOUCHPOINT '{focus_touchpoint}': "
-                                        f"CSAT={focus_data['csat']:.1f}, "
-                                        f"vs Target={focus_data['gap']:+.1f}pts"
+                            for _tp in focus_touchpoint:
+                                try:
+                                    focus_data = await pbi_collector.collect_focus_touchpoint_csat_vs_target(
+                                        node_path=node_path,
+                                        start_date=node_start_date,
+                                        end_date=node_end_date,
+                                        touchpoint_name=_tp,
+                                        comparison_filter=causal_filter,
+                                        comparison_start_date=comparison_start_date,
+                                        comparison_end_date=comparison_end_date,
                                     )
-                                    nps_context = f"{nps_context}\n{focus_line}" if nps_context else focus_line
-                            except Exception as _fe:
-                                print(f"⚠️ No se pudo obtener datos del focus touchpoint para {node_path}: {_fe}")
+                                    if focus_data:
+                                        focus_line = (
+                                            f"🎯 FOCUS TOUCHPOINT '{_tp}': "
+                                            f"CSAT={focus_data['csat']:.1f}, "
+                                            f"vs Target={focus_data['gap']:+.1f}pts"
+                                        )
+                                        nps_context = f"{nps_context}\n{focus_line}" if nps_context else focus_line
+                                except Exception as _fe:
+                                    print(f"⚠️ No se pudo obtener datos del focus touchpoint '{_tp}' para {node_path}: {_fe}")
                         # --- END FOCUS TOUCHPOINT ---
                         
                         explanation = await asyncio.wait_for(
@@ -652,7 +653,7 @@ async def process_single_period(
         }
 
 
-async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None, focus_touchpoint: Optional[str] = None, execution_id: Optional[str] = None, llm_type=None):
+async def show_all_anomaly_periods_with_explanations(analysis_data: dict, segment: str = "Global", causal_filter: str = "vs L7d", comparison_start_date: datetime = None, comparison_end_date: datetime = None, environment: str = "prod", study_mode: str = None, focus_touchpoint: Optional[List[str]] = None, execution_id: Optional[str] = None, llm_type=None):
     """Show trees for all periods analyzed INCLUDING explanations and parent interpretations.
     
     PARALLEL EXECUTION: All periods are processed concurrently for faster results.
@@ -2809,11 +2810,19 @@ async def main():
         "Lounge", "Comms", "Punctuality", "Arrivals experience",
         "Cabin Crew", "Check-in", "Pilot's announcements", "Airport security",
     ]
-    parser.add_argument('--focus-touchpoint', type=str, default=None,
-                       choices=VALID_TOUCHPOINTS,
-                       help='Touchpoint a investigar en profundidad (filtered_name del modelo PBI)')
-    
+    parser.add_argument('--focus-touchpoint', type=str, default=None, nargs='+',
+                       metavar='TOUCHPOINT',
+                       help='Uno o varios touchpoints a investigar (filtered_name del modelo PBI). '
+                            f'Valores válidos: {", ".join(VALID_TOUCHPOINTS)}')
+
     args = parser.parse_args()
+
+    # Validate focus-touchpoint values against the allowed list
+    if args.focus_touchpoint:
+        invalid = [tp for tp in args.focus_touchpoint if tp not in VALID_TOUCHPOINTS]
+        if invalid:
+            parser.error(f'--focus-touchpoint: valores no válidos: {invalid}. '
+                         f'Opciones: {VALID_TOUCHPOINTS}')
 
     # Add placeholders for arguments that might not be defined by the parser in all cases
     if not hasattr(args, 'comparison_start_date'):
@@ -3331,7 +3340,7 @@ async def execute_analysis_flow(
     date_flight_local: Optional[str] = None,
     study_mode: str = "comparative",
     environment: str = "prod",
-    focus_touchpoint: Optional[str] = None,
+    focus_touchpoint: Optional[List[str]] = None,
     llm_type=None,
 ) -> str:
     """

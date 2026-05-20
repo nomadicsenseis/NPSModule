@@ -19,7 +19,7 @@ period_range is "{start_date}_{end_date}" (e.g. "2025-03-10_2025-03-17").
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 
 
 OUTPUT_DIR_NAME = "output"
@@ -29,13 +29,20 @@ def get_output_base() -> Path:
     return Path.cwd() / OUTPUT_DIR_NAME
 
 
-def resolve_report_group(focus_touchpoint: Optional[str] = None) -> str:
+def resolve_report_group(focus_touchpoint: Optional[Union[str, List[str]]] = None) -> str:
     """Normalize the report group name to lowercase-hyphenated form.
 
-    Examples: None → "general", "Cabin Crew" → "cabin-crew"
+    Examples:
+        None                          → "general"
+        "Cabin Crew"                  → "cabin-crew"
+        ["Cabin Crew", "Punctuality"] → "cabin-crew+punctuality"
     """
-    raw = focus_touchpoint if focus_touchpoint else "General"
-    return raw.strip().lower().replace(" ", "-")
+    if not focus_touchpoint:
+        return "general"
+    if isinstance(focus_touchpoint, list):
+        slugs = [tp.strip().lower().replace(" ", "-") for tp in focus_touchpoint if tp]
+        return "+".join(slugs) if slugs else "general"
+    return focus_touchpoint.strip().lower().replace(" ", "-")
 
 
 def format_period_range(
@@ -147,7 +154,7 @@ def build_execution_metadata(
     aggregation_days: int = 7,
     baseline_periods: int = 7,
     segment: str = "Global",
-    focus_touchpoint: Optional[str] = None,
+    focus_touchpoint: Optional[Union[str, List[str]]] = None,
     **extra: Any,
 ) -> Dict[str, Any]:
     """Build a standard metadata dict to embed in every saved file."""

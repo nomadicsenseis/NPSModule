@@ -304,7 +304,7 @@ class CausalExplanationAgent:
         study_mode: str = "comparative",
         environment: str = "prod",
         reference_date: Optional[datetime] = None,
-        focus_touchpoint: Optional[str] = None,
+        focus_touchpoint: Optional[List[str]] = None,
         execution_id: Optional[str] = None,
     ):
         # Use default LLM type if none provided
@@ -316,7 +316,7 @@ class CausalExplanationAgent:
         self.silent_mode = silent_mode
         self.environment = environment
         self.reference_date = reference_date  # Anchor date for fixed baseline in single mode
-        self.focus_touchpoint = focus_touchpoint  # Optional touchpoint to force-investigate
+        self.focus_touchpoint = focus_touchpoint  # Optional list of touchpoints to force-investigate
         self.execution_id = execution_id
         self.report_group = resolve_report_group(focus_touchpoint)
 
@@ -678,25 +678,31 @@ class CausalExplanationAgent:
         node_path: str,
         start_dt: datetime,
         end_dt: datetime,
+        touchpoint_name: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
-        Collect CSAT and target data for the focus touchpoint without the explanatory_drivers filter.
+        Collect CSAT and target data for a focus touchpoint without the explanatory_drivers filter.
         Returns dict with keys: csat, target, gap, satisfaction_diff, shapdiff — or None on failure.
+
+        Args:
+            touchpoint_name: Specific touchpoint to query. Falls back to the first touchpoint in
+                             self.focus_touchpoint when not provided.
         """
-        if not self.focus_touchpoint:
+        tp = touchpoint_name or (self.focus_touchpoint[0] if self.focus_touchpoint else None)
+        if not tp:
             return None
         try:
             return await self.pbi_collector.collect_focus_touchpoint_csat_vs_target(
                 node_path=node_path,
                 start_date=start_dt,
                 end_date=end_dt,
-                touchpoint_name=self.focus_touchpoint,
+                touchpoint_name=tp,
                 comparison_filter=self.causal_filter,
                 comparison_start_date=self.comparison_start_date,
                 comparison_end_date=self.comparison_end_date,
             )
         except Exception as e:
-            self.logger.warning(f"⚠️ _collect_focus_touchpoint_data failed: {e}")
+            self.logger.warning(f"⚠️ _collect_focus_touchpoint_data failed for '{tp}': {e}")
             return None
 
     async def _explanatory_drivers_tool(self, node_path: str, start_date: str, end_date: str, min_surveys: int = 10) -> str:
@@ -865,64 +871,60 @@ class CausalExplanationAgent:
                     'TouchPoint_Master filtered_name'
                 ]
                 touchpoint_col = next((c for c in candidate_touchpoint_cols if c in df.columns), None)
+                _start_dt = start_dt if isinstance(start_date, datetime) else datetime.strptime(start_date, '%Y-%m-%d')
+                _end_dt = end_dt if isinstance(end_date, datetime) else datetime.strptime(end_date, '%Y-%m-%d')
 
-                focus_in_results = (
-                    touchpoint_col is not None
-                    and self.focus_touchpoint in df[touchpoint_col].values
-                )
+                for _tp in self.focus_touchpoint:
+                    focus_in_results = (
+                        touchpoint_col is not None
+                        and _tp in df[touchpoint_col].values
+                    )
 
-                if focus_in_results:
-                    # Mark existing row with 🎯 FOCUS prefix
-                    df.loc[df[touchpoint_col] == self.focus_touchpoint, touchpoint_col] = (
-                        f"🎯 FOCUS: {self.focus_touchpoint}"
-                    )
-                    analysis_result.append(f"🎯 FOCUS TOUCHPOINT '{self.focus_touchpoint}' found in normal drivers — marked.")
-                    # Also fetch CSAT vs target (different from Sat_diff which is vs causal_filter)
-                    focus_row = await self._collect_focus_touchpoint_data(
-                        node_path,
-                        start_dt if isinstance(start_date, datetime) else datetime.strptime(start_date, '%Y-%m-%d'),
-                        end_dt if isinstance(end_date, datetime) else datetime.strptime(end_date, '%Y-%m-%d'),
-                    )
-                    if focus_row is not None:
-                        analysis_result.append(
-                            f"🎯 FOCUS TOUCHPOINT CSAT (vs target): "
-                            f"CSAT={focus_row.get('csat')}, "
-                            f"Target_diff={focus_row.get('satisfaction_diff')} pts "
-                            f"(⚠️ este diff es vs TARGET, NO vs {self.causal_filter}. "
-                            f"El Sat_diff de arriba es vs {self.causal_filter}.)"
+                    if focus_in_results:
+                        # Mark existing row with 🎯 FOCUS prefix
+                        df.loc[df[touchpoint_col] == _tp, touchpoint_col] = f"🎯 FOCUS: {_tp}"
+                        analysis_result.append(f"🎯 FOCUS TOUCHPOINT '{_tp}' found in normal drivers — marked.")
+                        focus_row = await self._collect_focus_touchpoint_data(
+                            node_path, _start_dt, _end_dt, touchpoint_name=_tp,
                         )
-                else:
-                    # Query additional data without explanatory_drivers filter
-                    focus_row = await self._collect_focus_touchpoint_data(
-                        node_path,
-                        start_dt if isinstance(start_date, datetime) else datetime.strptime(start_date, '%Y-%m-%d'),
-                        end_dt if isinstance(end_date, datetime) else datetime.strptime(end_date, '%Y-%m-%d'),
-                    )
-                    if focus_row is not None and touchpoint_col:
-                        new_row = {col: None for col in df.columns}
-                        new_row[touchpoint_col] = f"🎯 FOCUS: {self.focus_touchpoint}"
-                        if 'Satisfaction diff' in df.columns:
-                            new_row['Satisfaction diff'] = focus_row.get('satisfaction_diff')
-                        if 'Satisfaction' in df.columns:
-                            new_row['Satisfaction'] = focus_row.get('csat')
-                        if 'Shapdiff' in df.columns:
-                            new_row['Shapdiff'] = focus_row.get('shapdiff')
-                        if 'NPS diff' in df.columns:
-                            new_row['NPS diff'] = None
-                        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                        analysis_result.append(
-                            f"🎯 FOCUS TOUCHPOINT '{self.focus_touchpoint}' added: "
-                            f"CSAT={focus_row.get('csat')}, "
-                            f"Sat_diff={focus_row.get('satisfaction_diff')}, "
-                            f"SHAP={focus_row.get('shapdiff')}"
-                        )
+                        if focus_row is not None:
+                            analysis_result.append(
+                                f"🎯 FOCUS TOUCHPOINT '{_tp}' CSAT (vs target): "
+                                f"CSAT={focus_row.get('csat')}, "
+                                f"Target_diff={focus_row.get('satisfaction_diff')} pts "
+                                f"(⚠️ este diff es vs TARGET, NO vs {self.causal_filter}. "
+                                f"El Sat_diff de arriba es vs {self.causal_filter}.)"
+                            )
                     else:
-                        no_data_label = f"🎯 FOCUS: {self.focus_touchpoint} (sin datos)"
-                        if touchpoint_col:
+                        # Query additional data without explanatory_drivers filter
+                        focus_row = await self._collect_focus_touchpoint_data(
+                            node_path, _start_dt, _end_dt, touchpoint_name=_tp,
+                        )
+                        if focus_row is not None and touchpoint_col:
                             new_row = {col: None for col in df.columns}
-                            new_row[touchpoint_col] = no_data_label
+                            new_row[touchpoint_col] = f"🎯 FOCUS: {_tp}"
+                            if 'Satisfaction diff' in df.columns:
+                                new_row['Satisfaction diff'] = focus_row.get('satisfaction_diff')
+                            if 'Satisfaction' in df.columns:
+                                new_row['Satisfaction'] = focus_row.get('csat')
+                            if 'Shapdiff' in df.columns:
+                                new_row['Shapdiff'] = focus_row.get('shapdiff')
+                            if 'NPS diff' in df.columns:
+                                new_row['NPS diff'] = None
                             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                        analysis_result.append(f"🎯 FOCUS TOUCHPOINT '{self.focus_touchpoint}': sin datos disponibles.")
+                            analysis_result.append(
+                                f"🎯 FOCUS TOUCHPOINT '{_tp}' added: "
+                                f"CSAT={focus_row.get('csat')}, "
+                                f"Sat_diff={focus_row.get('satisfaction_diff')}, "
+                                f"SHAP={focus_row.get('shapdiff')}"
+                            )
+                        else:
+                            no_data_label = f"🎯 FOCUS: {_tp} (sin datos)"
+                            if touchpoint_col:
+                                new_row = {col: None for col in df.columns}
+                                new_row[touchpoint_col] = no_data_label
+                                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                            analysis_result.append(f"🎯 FOCUS TOUCHPOINT '{_tp}': sin datos disponibles.")
             # --- END FOCUS TOUCHPOINT LOGIC ---
 
             return " | ".join(analysis_result)
@@ -1689,7 +1691,7 @@ class CausalExplanationAgent:
         aggregation_days: int = 7,
         comparison_context: str = "",
         baseline_periods: int = 7,
-        focus_touchpoint: Optional[str] = None
+        focus_touchpoint: Optional[List[str]] = None
     ) -> str:
         """
         Main investigation method that routes to single or comparative mode based on study_mode
@@ -1825,23 +1827,26 @@ class CausalExplanationAgent:
         nodes for the current segment.  Returns a formatted string to append to the
         investigation result, or None if nothing was collected.
         """
-        effective_focus = self.focus_touchpoint
-        if not effective_focus:
+        effective_focus_list: List[str] = self.focus_touchpoint or []
+        if not effective_focus_list:
             return None
 
-        display_name = get_touchpoint_display_name(effective_focus)
         relevant_nodes = self._get_relevant_nodes_for_segment(node_path)
+        tp_labels = ", ".join(f"'{tp}'" for tp in effective_focus_list)
 
         parts: List[str] = []
-        parts.append(f"━━━ 🎯 FOCUS TOUCHPOINT ENRICHMENT: '{effective_focus}' ━━━")
+        parts.append(f"━━━ 🎯 FOCUS TOUCHPOINT ENRICHMENT: {tp_labels} ━━━")
 
-        # ── Verbatims per node (filtered by topic) ──────────────────────────
+        # ── Verbatims per node per touchpoint (filtered by topic) ───────────
         self._focus_verbatims_by_node: Dict[str, str] = {}
 
-        if display_name:
+        for _tp in effective_focus_list:
+            display_name = get_touchpoint_display_name(_tp)
+            if not display_name:
+                continue
             for node in relevant_nodes:
+                node_key = f"{_tp}|{node}"
                 try:
-                    # Collect verbatims filtered by topic
                     df_verbatims = await self.pbi_collector.collect_verbatims_by_topic(
                         node_path=node,
                         start_date=start_date,
@@ -1851,42 +1856,42 @@ class CausalExplanationAgent:
                     )
                     
                     if not df_verbatims.empty:
-                        # Format verbatims for display
                         verbatim_col = next((c for c in df_verbatims.columns if "verbatim" in c.lower() and "sentiment" not in c.lower()), None)
                         route_col = next((c for c in df_verbatims.columns if "route" in c.lower()), None)
                         nps_col = next((c for c in df_verbatims.columns if "nps" in c.lower() and "score" in c.lower()), None)
                         category_col = next((c for c in df_verbatims.columns if "category" in c.lower()), None)
                         
-                        verbatims_lines = []
-                        verbatims_lines.append(f"Found {len(df_verbatims)} verbatims:")
-                        
+                        verbatims_lines = [f"Found {len(df_verbatims)} verbatims:"]
                         for idx, row in df_verbatims.iterrows():
                             route = row[route_col] if route_col and route_col in row else "N/A"
                             nps = row[nps_col] if nps_col and nps_col in row else "N/A"
                             category = row[category_col] if category_col and category_col in row else "N/A"
                             verbatim = row[verbatim_col] if verbatim_col and verbatim_col in row else "N/A"
-                            
                             verbatims_lines.append(f"  • Route: {route}, NPS: {nps}, Category: {category}")
                             verbatims_lines.append(f"    Text: {str(verbatim)[:200]}...")
                         
                         verbatims_result = "\n".join(verbatims_lines)
-                        self._focus_verbatims_by_node[node] = verbatims_result
-                        parts.append(f"\n📝 VERBATIMS [{node}] — filtered by topic '{display_name}'")
+                        self._focus_verbatims_by_node[node_key] = verbatims_result
+                        parts.append(f"\n📝 VERBATIMS [{node}] — '{display_name}'")
                         parts.append(verbatims_result)
                     else:
-                        self._focus_verbatims_by_node[node] = "(sin datos)"
-                        parts.append(f"\n📝 VERBATIMS [{node}]: sin datos disponibles")
+                        self._focus_verbatims_by_node[node_key] = "(sin datos)"
+                        parts.append(f"\n📝 VERBATIMS [{node}] — '{display_name}': sin datos disponibles")
                         
                 except Exception as e:
-                    self.logger.warning(f"⚠️ Could not collect focus verbatims for node '{node}': {e}")
-                    self._focus_verbatims_by_node[node] = f"(sin datos — error: {e})"
-                    parts.append(f"\n📝 VERBATIMS [{node}]: sin datos disponibles (error: {e})")
+                    self.logger.warning(f"⚠️ Could not collect focus verbatims for '{_tp}' on node '{node}': {e}")
+                    self._focus_verbatims_by_node[node_key] = f"(sin datos — error: {e})"
+                    parts.append(f"\n📝 VERBATIMS [{node}] — '{display_name}': sin datos disponibles (error: {e})")
 
-        # ── CSAT vs Target per node ─────────────────────────────────────────
+        # ── CSAT vs Target per node per touchpoint ──────────────────────────
         self._focus_csat_by_node: Dict[str, Dict] = {}
 
-        if display_name:
+        for _tp in effective_focus_list:
+            display_name = get_touchpoint_display_name(_tp)
+            if not display_name:
+                continue
             for node in relevant_nodes:
+                node_key = f"{_tp}|{node}"
                 try:
                     csat_result = await self.pbi_collector.collect_focus_touchpoint_csat_vs_target(
                         node_path=node,
@@ -1898,7 +1903,7 @@ class CausalExplanationAgent:
                         comparison_end_date=comparison_end_date,
                     )
                     if csat_result:
-                        self._focus_csat_by_node[node] = csat_result
+                        self._focus_csat_by_node[node_key] = csat_result
                         csat = csat_result.get("csat")
                         target = csat_result.get("target")
                         gap = csat_result.get("gap")
@@ -1908,7 +1913,6 @@ class CausalExplanationAgent:
                         gap_str = f"{gap:+.1f}" if gap is not None else "N/A"
                         sat_diff_str = f"{satisfaction_diff:+.1f}" if satisfaction_diff is not None else "N/A"
                         
-                        # Include satisfaction_diff only in comparative mode
                         if satisfaction_diff is not None:
                             parts.append(
                                 f"\n📊 CSAT vs TARGET [{node}] — '{display_name}': "
@@ -1920,65 +1924,68 @@ class CausalExplanationAgent:
                                 f"CSAT={csat_str}, Target={target_str}, Gap={gap_str}"
                             )
                     else:
-                        parts.append(f"\n📊 CSAT vs TARGET [{node}]: sin datos disponibles")
+                        parts.append(f"\n📊 CSAT vs TARGET [{node}] — '{display_name}': sin datos disponibles")
                 except Exception as e:
-                    self.logger.warning(f"⚠️ Could not collect CSAT vs target for node '{node}': {e}")
-                    parts.append(f"\n📊 CSAT vs TARGET [{node}]: sin datos disponibles (error: {e})")
+                    self.logger.warning(f"⚠️ Could not collect CSAT vs target for '{_tp}' on node '{node}': {e}")
+                    parts.append(f"\n📊 CSAT vs TARGET [{node}] — '{display_name}': sin datos disponibles (error: {e})")
 
-        # ── % Issues per node (only if display_name mapping exists) ─────────
+        # ── % Issues per node per touchpoint ────────────────────────────────
         self._focus_issues_pct_by_node: Dict[str, Dict] = {}
 
-        if display_name and comparison_start_date and comparison_end_date:
-            for node in relevant_nodes:
-                try:
-                    # Track the DAX query for debugging
-                    cabins_dbg, companies_dbg, hauls_dbg = self.pbi_collector._get_node_filters(node)
-                    issues_query_dbg = self.pbi_collector._get_focus_touchpoint_issues_pct_query(
-                        cabins=cabins_dbg, companies=companies_dbg, hauls=hauls_dbg,
-                        start_date=start_date, end_date=end_date,
-                        comparison_start_date=comparison_start_date,
-                        comparison_end_date=comparison_end_date,
-                        touchpoint_display_name=display_name,
+        if comparison_start_date and comparison_end_date:
+            for _tp in effective_focus_list:
+                display_name = get_touchpoint_display_name(_tp)
+                if not display_name:
+                    self.logger.warning(
+                        f"⚠️ No display_name mapping for '{_tp}' — skipping % issues query"
                     )
-                    self.tracker.add_dax_query(
-                        "focus_issues_pct",
-                        issues_query_dbg,
-                        {"node": node, "touchpoint": display_name},
+                    parts.append(
+                        f"\n📊 % ISSUES: omitido (no existe mapeo display_name para '{_tp}')"
                     )
-                    self.logger.info(f"🔍 focus_issues_pct query for '{node}': {issues_query_dbg[:300]}")
-
-                    issues_result = await self.pbi_collector.collect_focus_touchpoint_issues_pct(
-                        node_path=node,
-                        start_date=start_date,
-                        end_date=end_date,
-                        comparison_start_date=comparison_start_date,
-                        comparison_end_date=comparison_end_date,
-                        touchpoint_display_name=display_name,
-                    )
-                    if issues_result:
-                        self._focus_issues_pct_by_node[node] = issues_result
-                        pct_cur = issues_result.get("pct_issues_current")
-                        pct_prev = issues_result.get("pct_issues_prev")
-                        diff = issues_result.get("diff")
-                        pct_cur_str = f"{pct_cur*100:.1f}%" if pct_cur is not None else "N/A"
-                        pct_prev_str = f"{pct_prev*100:.1f}%" if pct_prev is not None else "N/A"
-                        diff_str = f"{diff*100:+.1f}%" if diff is not None else "N/A"
-                        parts.append(
-                            f"\n📊 % ISSUES [{node}] — '{display_name}': "
-                            f"L7D={pct_cur_str}, prev={pct_prev_str}, diff={diff_str}"
+                    continue
+                for node in relevant_nodes:
+                    node_key = f"{_tp}|{node}"
+                    try:
+                        cabins_dbg, companies_dbg, hauls_dbg = self.pbi_collector._get_node_filters(node)
+                        issues_query_dbg = self.pbi_collector._get_focus_touchpoint_issues_pct_query(
+                            cabins=cabins_dbg, companies=companies_dbg, hauls=hauls_dbg,
+                            start_date=start_date, end_date=end_date,
+                            comparison_start_date=comparison_start_date,
+                            comparison_end_date=comparison_end_date,
+                            touchpoint_display_name=display_name,
                         )
-                    else:
-                        parts.append(f"\n📊 % ISSUES [{node}]: sin datos disponibles")
-                except Exception as e:
-                    self.logger.warning(f"⚠️ Could not collect focus issues pct for node '{node}': {e}")
-                    parts.append(f"\n📊 % ISSUES [{node}]: sin datos disponibles (error: {e})")
-        elif not display_name:
-            self.logger.warning(
-                f"⚠️ No display_name mapping for '{effective_focus}' — skipping % issues query"
-            )
-            parts.append(
-                f"\n📊 % ISSUES: omitido (no existe mapeo display_name para '{effective_focus}')"
-            )
+                        self.tracker.add_dax_query(
+                            "focus_issues_pct",
+                            issues_query_dbg,
+                            {"node": node, "touchpoint": display_name},
+                        )
+                        self.logger.info(f"🔍 focus_issues_pct query for '{node}': {issues_query_dbg[:300]}")
+
+                        issues_result = await self.pbi_collector.collect_focus_touchpoint_issues_pct(
+                            node_path=node,
+                            start_date=start_date,
+                            end_date=end_date,
+                            comparison_start_date=comparison_start_date,
+                            comparison_end_date=comparison_end_date,
+                            touchpoint_display_name=display_name,
+                        )
+                        if issues_result:
+                            self._focus_issues_pct_by_node[node_key] = issues_result
+                            pct_cur = issues_result.get("pct_issues_current")
+                            pct_prev = issues_result.get("pct_issues_prev")
+                            diff = issues_result.get("diff")
+                            pct_cur_str = f"{pct_cur*100:.1f}%" if pct_cur is not None else "N/A"
+                            pct_prev_str = f"{pct_prev*100:.1f}%" if pct_prev is not None else "N/A"
+                            diff_str = f"{diff*100:+.1f}%" if diff is not None else "N/A"
+                            parts.append(
+                                f"\n📊 % ISSUES [{node}] — '{display_name}': "
+                                f"L7D={pct_cur_str}, prev={pct_prev_str}, diff={diff_str}"
+                            )
+                        else:
+                            parts.append(f"\n📊 % ISSUES [{node}] — '{display_name}': sin datos disponibles")
+                    except Exception as e:
+                        self.logger.warning(f"⚠️ Could not collect focus issues pct for '{_tp}' on node '{node}': {e}")
+                        parts.append(f"\n📊 % ISSUES [{node}] — '{display_name}': sin datos disponibles (error: {e})")
         else:
             # Single mode — no comparison dates available
             parts.append("\n📊 % ISSUES: omitido (modo single, sin fechas de comparación)")
@@ -3236,18 +3243,24 @@ class CausalExplanationAgent:
         node_path: str,
         start_dt: datetime,
         end_dt: datetime,
-        top_n: int = 5
+        top_n: int = 5,
+        touchpoint_override: Optional[str] = None,
     ) -> List[str]:
         """
-        Obtiene las rutas con peores CSATs del focus_touchpoint.
+        Obtiene las rutas con peores CSATs del focus_touchpoint (o de touchpoint_override).
         En modo comparative: peor CSAT diff (mayor caída).
         En modo single: peor CSAT absoluto.
         Retorna lista de rutas IATA (e.g., ["MAD-UIO", "MAD-BOG"]).
+
+        Args:
+            touchpoint_override: Touchpoint concreto a consultar. Si no se pasa, usa el primero
+                                 de self.focus_touchpoint (compatibilidad con callers antiguos).
         """
-        if not self.focus_touchpoint:
+        effective_tp = touchpoint_override or (self.focus_touchpoint[0] if self.focus_touchpoint else None)
+        if not effective_tp:
             return []
         try:
-            self.logger.info(f"🔍 Getting focus_touchpoint routes for '{self.focus_touchpoint}'...")
+            self.logger.info(f"🔍 Getting focus_touchpoint routes for '{effective_tp}'...")
 
             # Get routes data from PBI
             df_routes = await self.pbi_collector.collect_routes_for_date_range(
@@ -3260,7 +3273,7 @@ class CausalExplanationAgent:
             )
 
             if df_routes is None or df_routes.empty:
-                self.logger.warning(f"⚠️ No routes data available for focus_touchpoint '{self.focus_touchpoint}'")
+                self.logger.warning(f"⚠️ No routes data available for focus_touchpoint '{effective_tp}'")
                 return []
 
             # Find the column for this touchpoint's CSAT
@@ -3284,7 +3297,7 @@ class CausalExplanationAgent:
                 'lounge': 'Lounge',
             }
 
-            tp_key = self.focus_touchpoint.lower().strip()
+            tp_key = effective_tp.lower().strip()
             base_col = TOUCHPOINT_COLUMN_MAP.get(tp_key)
 
             # Fallback: try substring match if not in map
@@ -3307,7 +3320,7 @@ class CausalExplanationAgent:
                 ascending = True  # worst absolute CSAT first
             else:
                 self.logger.warning(
-                    f"⚠️ No CSAT column found for touchpoint '{self.focus_touchpoint}' in routes data. "
+                    f"⚠️ No CSAT column found for touchpoint '{effective_tp}' in routes data. "
                     f"Columns: {list(df_routes.columns)}"
                 )
                 return []
@@ -3328,13 +3341,13 @@ class CausalExplanationAgent:
             top_routes = df_sorted[route_col].head(top_n).tolist()
 
             self.logger.info(
-                f"✅ Focus touchpoint '{self.focus_touchpoint}' worst routes "
+                f"✅ Focus touchpoint '{effective_tp}' worst routes "
                 f"(sorted by {sort_col}): {top_routes}"
             )
             return [r for r in top_routes if r and r != 'Unknown' and re.match(r'^[A-Z]{3}-[A-Z]{3}$', str(r))]
 
         except Exception as e:
-            self.logger.warning(f"⚠️ _get_focus_touchpoint_routes failed: {e}")
+            self.logger.warning(f"⚠️ _get_focus_touchpoint_routes failed for '{effective_tp}': {e}")
             return []
 
     async def _verbatims_tool(self, node_path: str, start_date: str, end_date: str, anomaly_type: str = "neutral") -> str:
@@ -3372,11 +3385,14 @@ class CausalExplanationAgent:
             self.logger.info(f"📅 Date flow: analysis [{start_date} → {end_date}] | comparison [{comparison_start} → {comparison_end}] | sending to PBI: target=[{start_date}, {end_date}], comparison=[{comparison_start}, {comparison_end}]")
             
             # --- Route and touchpoint orchestration ---
-            # Build all_routes: union of identified_routes + focus_touchpoint_routes
+            # Build all_routes: union of identified_routes + focus_touchpoint_routes (for all tps)
             focus_tp_routes = []
             if self.focus_touchpoint:
-                focus_tp_routes = await self._get_focus_touchpoint_routes(node_path, start_dt, end_dt)
-                self.logger.info(f"🎯 Focus touchpoint '{self.focus_touchpoint}' routes: {focus_tp_routes}")
+                for _tp in self.focus_touchpoint:
+                    _tp_routes = await self._get_focus_touchpoint_routes(node_path, start_dt, end_dt, touchpoint_override=_tp)
+                    self.logger.info(f"🎯 Focus touchpoint '{_tp}' routes: {_tp_routes}")
+                    focus_tp_routes.extend(_tp_routes)
+                focus_tp_routes = list(dict.fromkeys(focus_tp_routes))  # deduplicate
 
             identified_routes = getattr(self.tracker, 'identified_routes', [])
             all_routes = list(dict.fromkeys(identified_routes + focus_tp_routes))  # deduplicated, order preserved
@@ -3392,13 +3408,23 @@ class CausalExplanationAgent:
                     df_neg = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="negative", route_filter=route)
                     route_verbatims.append((route, df_pos, df_neg))
 
-            # Collect verbatims filtered by focus_touchpoint
+            # Collect verbatims filtered by each focus_touchpoint and merge
             tp_verbatims = None  # (df_positive, df_negative) or None
             if self.focus_touchpoint:
-                self.logger.info(f"🎯 Collecting verbatims filtered by touchpoint '{self.focus_touchpoint}'...")
-                df_tp_pos = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="positive", touchpoint_filter=self.focus_touchpoint)
-                df_tp_neg = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="negative", touchpoint_filter=self.focus_touchpoint)
-                tp_verbatims = (df_tp_pos, df_tp_neg)
+                df_tp_pos_list = []
+                df_tp_neg_list = []
+                for _tp in self.focus_touchpoint:
+                    self.logger.info(f"🎯 Collecting verbatims filtered by touchpoint '{_tp}'...")
+                    _df_pos = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="positive", touchpoint_filter=_tp)
+                    _df_neg = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="negative", touchpoint_filter=_tp)
+                    if not _df_pos.empty:
+                        df_tp_pos_list.append(_df_pos)
+                    if not _df_neg.empty:
+                        df_tp_neg_list.append(_df_neg)
+                import pandas as _pd
+                df_tp_pos_merged = _pd.concat(df_tp_pos_list, ignore_index=True) if df_tp_pos_list else _pd.DataFrame()
+                df_tp_neg_merged = _pd.concat(df_tp_neg_list, ignore_index=True) if df_tp_neg_list else _pd.DataFrame()
+                tp_verbatims = (df_tp_pos_merged, df_tp_neg_merged)
 
             # Extract filters from node_path
             filters = self._get_chatbot_filters_from_node_path(node_path)
@@ -3498,8 +3524,11 @@ class CausalExplanationAgent:
             # --- Route and touchpoint orchestration ---
             focus_tp_routes = []
             if self.focus_touchpoint:
-                focus_tp_routes = await self._get_focus_touchpoint_routes(node_path, start_dt, end_dt)
-                self.logger.info(f"🎯 Focus touchpoint '{self.focus_touchpoint}' routes: {focus_tp_routes}")
+                for _tp in self.focus_touchpoint:
+                    _tp_routes = await self._get_focus_touchpoint_routes(node_path, start_dt, end_dt, touchpoint_override=_tp)
+                    self.logger.info(f"🎯 Focus touchpoint '{_tp}' routes: {_tp_routes}")
+                    focus_tp_routes.extend(_tp_routes)
+                focus_tp_routes = list(dict.fromkeys(focus_tp_routes))
 
             identified_routes = getattr(self.tracker, 'identified_routes', [])
             all_routes = list(dict.fromkeys(identified_routes + focus_tp_routes))
@@ -3516,10 +3545,20 @@ class CausalExplanationAgent:
 
             tp_verbatims = None
             if self.focus_touchpoint:
-                self.logger.info(f"🎯 Collecting verbatims filtered by touchpoint '{self.focus_touchpoint}'...")
-                df_tp_pos = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="positive", touchpoint_filter=self.focus_touchpoint)
-                df_tp_neg = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="negative", touchpoint_filter=self.focus_touchpoint)
-                tp_verbatims = (df_tp_pos, df_tp_neg)
+                _tp_pos_list = []
+                _tp_neg_list = []
+                for _tp in self.focus_touchpoint:
+                    self.logger.info(f"🎯 Collecting verbatims filtered by touchpoint '{_tp}'...")
+                    _df_pos = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="positive", touchpoint_filter=_tp)
+                    _df_neg = self.pbi_collector.collect_smart_verbatims(node_path, start_dt, end_dt, anomaly_type="negative", touchpoint_filter=_tp)
+                    if not _df_pos.empty:
+                        _tp_pos_list.append(_df_pos)
+                    if not _df_neg.empty:
+                        _tp_neg_list.append(_df_neg)
+                import pandas as _pd2
+                _merged_pos = _pd2.concat(_tp_pos_list, ignore_index=True) if _tp_pos_list else _pd2.DataFrame()
+                _merged_neg = _pd2.concat(_tp_neg_list, ignore_index=True) if _tp_neg_list else _pd2.DataFrame()
+                tp_verbatims = (_merged_pos, _merged_neg)
 
             # Extract filters from node_path
             filters = self._get_chatbot_filters_from_node_path(node_path)
@@ -3850,13 +3889,14 @@ Se muestran los comentarios más relevantes (Top 30 por longitud) filtrados por 
                 df_tp_pos, df_tp_neg = tp_verbatims
                 tp_pos_text = self._format_smart_verbatims(df_tp_pos) if df_tp_pos is not None and not df_tp_pos.empty else "Sin comentarios positivos."
                 tp_neg_text = self._format_smart_verbatims(df_tp_neg) if df_tp_neg is not None and not df_tp_neg.empty else "Sin comentarios negativos."
+                _tp_labels = ", ".join(self.focus_touchpoint)
                 result += (
-                    f"\n\n🎯 VERBATIMS FOCUS TOUCHPOINT — {self.focus_touchpoint}:\n"
+                    f"\n\n🎯 VERBATIMS FOCUS TOUCHPOINT — {_tp_labels}:\n"
                     f"  ✅ Positivos:\n{tp_pos_text}\n"
                     f"  ❌ Negativos:\n{tp_neg_text}"
                 )
                 if focus_tp_routes:
-                    result += f"\n  🛫 Rutas con peor CSAT en '{self.focus_touchpoint}': {', '.join(focus_tp_routes)}"
+                    result += f"\n  🛫 Rutas con peor CSAT en '{_tp_labels}': {', '.join(focus_tp_routes)}"
 
             result += f"""
 
@@ -3866,7 +3906,8 @@ Busca coincidencias con las rutas extraídas: {', '.join(target_routes)}
 Compara si estos temas aparecían en el período anterior."""
 
             if self.focus_touchpoint:
-                result += f"\nPrioriza el análisis del touchpoint '{self.focus_touchpoint}' y sus rutas más afectadas: {', '.join(focus_tp_routes)}."
+                _tp_labels = ", ".join(self.focus_touchpoint)
+                result += f"\nPrioriza el análisis de los touchpoints '{_tp_labels}' y sus rutas más afectadas: {', '.join(focus_tp_routes)}."
 
             # Store traceability data
             self.collected_data['verbatims_conversation'] = {
@@ -4064,13 +4105,14 @@ COMENTARIOS RELEVANTES (Top 30, {anomaly_type}):
                 df_tp_pos, df_tp_neg = tp_verbatims
                 tp_pos_text = self._format_smart_verbatims(df_tp_pos) if df_tp_pos is not None and not df_tp_pos.empty else "Sin comentarios positivos."
                 tp_neg_text = self._format_smart_verbatims(df_tp_neg) if df_tp_neg is not None and not df_tp_neg.empty else "Sin comentarios negativos."
+                _tp_labels_s = ", ".join(self.focus_touchpoint)
                 result += (
-                    f"\n\n🎯 VERBATIMS FOCUS TOUCHPOINT — {self.focus_touchpoint}:\n"
+                    f"\n\n🎯 VERBATIMS FOCUS TOUCHPOINT — {_tp_labels_s}:\n"
                     f"  ✅ Positivos:\n{tp_pos_text}\n"
                     f"  ❌ Negativos:\n{tp_neg_text}"
                 )
                 if focus_tp_routes:
-                    result += f"\n  🛫 Rutas con peor CSAT en '{self.focus_touchpoint}': {', '.join(focus_tp_routes)}"
+                    result += f"\n  🛫 Rutas con peor CSAT en '{_tp_labels_s}': {', '.join(focus_tp_routes)}"
 
             result += f"""
 
@@ -4078,7 +4120,8 @@ COMENTARIOS RELEVANTES (Top 30, {anomaly_type}):
 Analiza los problemas recurrentes y su relación con las rutas: {', '.join(target_routes)}"""
 
             if self.focus_touchpoint:
-                result += f"\nPrioriza el análisis del touchpoint '{self.focus_touchpoint}' y sus rutas más afectadas: {', '.join(focus_tp_routes)}."
+                _tp_labels_s = ", ".join(self.focus_touchpoint)
+                result += f"\nPrioriza el análisis de los touchpoints '{_tp_labels_s}' y sus rutas más afectadas: {', '.join(focus_tp_routes)}."
 
             # Store traceability data
             self.collected_data['verbatims_conversation'] = {
@@ -8434,7 +8477,8 @@ Proporciona análisis estructurado, específico y basado en evidencia de los dat
         if self.focus_touchpoint:
             focus_block = self.config.get('focus_touchpoint_prompt', '')
             if focus_block:
-                prompt = prompt + "\n\n" + focus_block.replace('{focus_touchpoint}', self.focus_touchpoint)
+                _tp_str = ", ".join(self.focus_touchpoint)
+                prompt = prompt + "\n\n" + focus_block.replace('{focus_touchpoint}', _tp_str)
 
         return prompt
     

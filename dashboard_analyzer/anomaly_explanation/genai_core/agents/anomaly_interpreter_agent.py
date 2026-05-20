@@ -156,7 +156,7 @@ class AnomalyInterpreterAgent:
         aggregation_days: int = 7,
         baseline_periods: int = 7,
         segment: str = "Global",
-        focus_touchpoint: Optional[str] = None,
+        focus_touchpoint: Optional[List[str]] = None,
         execution_id: Optional[str] = None,
     ):
         """
@@ -1008,7 +1008,8 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                 step6_prompt = self._get_config_value(['step6_generate_adaptive_card', 'input_template'])
                 if step6_prompt:
                     date_range = f"{date}" if date else "Período no especificado"
-                    ft = (self.focus_touchpoint or "").strip()
+                    _ft_list = self.focus_touchpoint or []
+                    ft = ", ".join(_ft_list).strip() if _ft_list else ""
                     if ft:
                         focus_touchpoint_block = (
                             f"🎯 **FOCUS TOUCHPOINT:** {ft}\n"

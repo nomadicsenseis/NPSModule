@@ -294,7 +294,7 @@ async def run_weekly_comprehensive_analysis(
     daily_aggregation_days: int = 1,
     daily_periods: int = 7,
     environment: str = "prod",
-    focus_touchpoint: Optional[str] = None,
+    focus_touchpoint: Optional[List[str]] = None,
 ):
     """
     Comprehensive weekly analysis orchestrator.
@@ -651,11 +651,19 @@ async def main():
         "Lounge", "Comms", "Punctuality", "Arrivals experience",
         "Cabin Crew", "Check-in", "Pilot's announcements", "Airport security",
     ]
-    parser.add_argument('--focus-touchpoint', type=str, default=None,
-                       choices=VALID_TOUCHPOINTS,
-                       help='Touchpoint a investigar en profundidad (filtered_name del modelo PBI)')
-    
+    parser.add_argument('--focus-touchpoint', type=str, default=None, nargs='+',
+                       metavar='TOUCHPOINT',
+                       help='Uno o varios touchpoints a investigar (filtered_name del modelo PBI). '
+                            f'Valores válidos: {", ".join(VALID_TOUCHPOINTS)}')
+
     args = parser.parse_args()
+
+    # Validate focus-touchpoint values against the allowed list
+    if args.focus_touchpoint:
+        invalid = [tp for tp in args.focus_touchpoint if tp not in VALID_TOUCHPOINTS]
+        if invalid:
+            parser.error(f'--focus-touchpoint: valores no válidos: {invalid}. '
+                         f'Opciones: {VALID_TOUCHPOINTS}')
     
     # Add placeholders for arguments that might not be defined
     if not hasattr(args, 'comparison_start_date'):

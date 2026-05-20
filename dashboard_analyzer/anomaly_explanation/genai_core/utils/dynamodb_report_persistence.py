@@ -43,6 +43,17 @@ def _safe_json(obj: Any) -> str:
         return str(obj)
 
 
+def _serialize_focus_touchpoint(value: Any) -> Optional[str]:
+    """Serialize focus_touchpoint (str or List[str]) to a JSON string for DynamoDB storage."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
+
+
 def _safe_str(value: Any, max_length: int = 0) -> Optional[str]:
     """Convert *value* to string, optionally truncating."""
     if value is None:
@@ -200,7 +211,7 @@ class DynamoDBReportPersistence:
             "anomaly_type": getattr(agent, "current_anomaly_type", None),
             "anomaly_detection_mode": getattr(agent, "detection_mode", None),
             "study_mode": getattr(agent, "study_mode", None),
-            "focus_touchpoint": getattr(agent, "focus_touchpoint", None),
+            "focus_touchpoint": _serialize_focus_touchpoint(getattr(agent, "focus_touchpoint", None)),
             "report_group": getattr(agent, "report_group", None),
             "llm_type": agent.llm_type.value if hasattr(agent, "llm_type") else None,
             "environment": getattr(agent, "environment", None),
@@ -297,7 +308,7 @@ class DynamoDBReportPersistence:
             "anomaly_detection_mode": getattr(agent, "anomaly_detection_mode", None),
             "study_mode": getattr(agent, "study_mode", None),
             "segment": getattr(agent, "segment", "Global"),
-            "focus_touchpoint": getattr(agent, "focus_touchpoint", None),
+            "focus_touchpoint": _serialize_focus_touchpoint(getattr(agent, "focus_touchpoint", None)),
             "report_group": getattr(agent, "report_group", None),
             "llm_type": agent.llm_type.value if hasattr(agent, "llm_type") else None,
             "aggregation_days": _safe_number(getattr(agent, "aggregation_days", None)),
@@ -414,7 +425,7 @@ class DynamoDBReportPersistence:
             "anomaly_detection_mode": getattr(agent, "anomaly_detection_mode", None),
             "study_mode": getattr(agent, "study_mode", None),
             "segment": getattr(agent, "segment", "Global"),
-            "focus_touchpoint": getattr(agent, "focus_touchpoint", None),
+            "focus_touchpoint": _serialize_focus_touchpoint(getattr(agent, "focus_touchpoint", None)),
             "report_group": getattr(agent, "report_group", None),
             "llm_type": agent.llm_type.value if hasattr(agent, "llm_type") else None,
             "aggregation_days": _safe_number(getattr(agent, "aggregation_days", None)),
