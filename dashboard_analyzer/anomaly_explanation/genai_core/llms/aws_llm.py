@@ -46,6 +46,16 @@ MODEL_ARNS_BY_ENV = {
 }
 
 
+def _normalize_cloud_env(raw: str | None, default: str = "prod") -> str:
+    """Normalize ENV from SSM/Batch (value may include surrounding quotes or spaces)."""
+    if not raw:
+        return default
+    key = str(raw).strip().strip('"').strip("'").lower()
+    if key not in ("sbx", "prod"):
+        return default
+    return key
+
+
 class AWSLLM(LLM):
     """
     AWSLLM class that uses LangChain's ChatBedrock or ChatBedrockConverse integration
@@ -69,11 +79,18 @@ class AWSLLM(LLM):
     def create_llm(self):
         """Create the LangChain ChatBedrock or ChatBedrockConverse client for the specified model"""
         self._set_model_id()
+        raw_env = os.getenv("ENV")
+        resolved_env = (
+            "local"
+            if self.environment == "local"
+            else _normalize_cloud_env(raw_env)
+        )
         logger.info(
-            "🤖 AWSLLM init | model=%s | environment=%s | ENV=%s | model_id=%s",
+            "🤖 AWSLLM init | model=%s | environment=%s | ENV(raw)=%s | ENV(resolved)=%s | model_id=%s",
             self.llm_type.value,
             self.environment,
-            os.getenv("ENV", "<not set>"),
+            raw_env if raw_env is not None else "<not set>",
+            resolved_env,
             self.model_id,
         )
         
@@ -145,10 +162,8 @@ class AWSLLM(LLM):
             env_key = "local"
         else:
             # In cloud (Airflow/Batch), ENV=sbx or ENV=prod distinguishes accounts.
-            # Defaults to "prod" so that containers without ENV set use prod ARNs.
-            env_key = os.getenv("ENV", "prod").lower()
-            if env_key not in ("sbx", "prod"):
-                env_key = "prod"
+            # SSM may inject quoted values (e.g. "sbx"); normalize before lookup.
+            env_key = _normalize_cloud_env(os.getenv("ENV"))
         return env_arns.get(env_key, env_arns.get("sbx", env_arns.get("local", "")))
 
     def _get_provider(self):
