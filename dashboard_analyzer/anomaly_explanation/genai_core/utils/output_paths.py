@@ -12,33 +12,58 @@ Defines the standard directory structure:
         ├── interpreter/{period_range}/
         └── causal/{period_range}/{node_path}/
 
-report_group is derived from focus_touchpoint ("general" when None, "cabin-crew" for "Cabin Crew", etc.).
+report_group is derived from focus_touchpoint ("general" when None, "cabin-crew" for "Cabin Crew",
+"ground-experience" for Check-in + Boarding + Arrivals experience, etc.).
 period_range is "{start_date}_{end_date}" (e.g. "2025-03-10_2025-03-17").
 """
 
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 
 OUTPUT_DIR_NAME = "output"
+
+# Canonical focus set → fixed S3/local folder (order-independent).
+GROUND_EXPERIENCE_TOUCHPOINTS: Set[str] = {
+    "Check-in",
+    "Boarding",
+    "Arrivals experience",
+}
+GROUND_EXPERIENCE_REPORT_GROUP = "ground-experience"
 
 
 def get_output_base() -> Path:
     return Path.cwd() / OUTPUT_DIR_NAME
 
 
+def _focus_touchpoint_set(focus_touchpoint: Union[str, List[str]]) -> Set[str]:
+    """Normalize focus touchpoint(s) to a set of trimmed display names."""
+    if isinstance(focus_touchpoint, str):
+        name = focus_touchpoint.strip()
+        return {name} if name else set()
+    return {tp.strip() for tp in focus_touchpoint if tp and str(tp).strip()}
+
+
 def resolve_report_group(focus_touchpoint: Optional[Union[str, List[str]]] = None) -> str:
     """Normalize the report group name to lowercase-hyphenated form.
 
+    Used for local output/ and S3 keys under customer/catia/reports/business/{report_group}/.
+
     Examples:
-        None                          → "general"
-        "Cabin Crew"                  → "cabin-crew"
-        ["Cabin Crew", "Punctuality"] → "cabin-crew+punctuality"
+        None                                                    → "general"
+        "Cabin Crew"                                              → "cabin-crew"
+        ["Check-in", "Boarding", "Arrivals experience"]           → "ground-experience"
+        ["Arrivals experience", "Check-in", "Boarding"]           → "ground-experience"
+        ["Cabin Crew", "Punctuality"]                             → "cabin-crew+punctuality"
     """
     if not focus_touchpoint:
         return "general"
+
+    if _focus_touchpoint_set(focus_touchpoint) == GROUND_EXPERIENCE_TOUCHPOINTS:
+        return GROUND_EXPERIENCE_REPORT_GROUP
+
     if isinstance(focus_touchpoint, list):
         slugs = [tp.strip().lower().replace(" ", "-") for tp in focus_touchpoint if tp]
         return "+".join(slugs) if slugs else "general"
