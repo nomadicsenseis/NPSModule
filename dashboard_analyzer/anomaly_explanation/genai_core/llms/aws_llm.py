@@ -30,7 +30,7 @@ MODEL_ARNS_BY_ENV = {
     },
     LLMType.CLAUDE_SONNET_4_5.value: {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/j9l4fod1sker",
-        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/4o3iago8pudu",
+        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/ifvmvz03hndj",
         "prod":  "arn:aws:bedrock:eu-west-1:320714865578:application-inference-profile/mxj1jn0onija",
     },
     LLMType.GPT_OSS_120B.value: {
