@@ -31,16 +31,24 @@ class S3ReportUploader:
         Initialize S3 Report Uploader
         
         Args:
-            environment: Environment type ("local" or "prod")
+            environment: Execution context ("local" = developer machine, anything else = cloud/AWS).
+                         The actual AWS account (sbx vs prod) is resolved from the ENV env var.
         """
         self.logger = logging.getLogger(__name__)
         
         # Environment configuration
         self.environment = environment
 
-        # S3 configuration — bucket is environment-dependent
+        # Resolve the AWS account (sbx vs prod) from ENV env var, same logic as aws_llm.py.
+        # Falls back to "prod" so that containers without ENV set use the prod bucket.
+        account_env = os.getenv("ENV", "prod").lower()
+        if account_env not in ("sbx", "prod"):
+            account_env = "prod"
+        self.account_env = account_env
+
+        # S3 configuration — bucket is account-dependent (sbx vs prod), not local vs cloud
         self.bucket_name = (
-            "ibdata-prod-ew1-s3-customer" if self.environment == "prod"
+            "ibdata-prod-ew1-s3-customer" if self.account_env == "prod"
             else "ibdata-sbx-ew1-s3-customer"
         )
         self.base_prefix = "customer/catia/reports/business/"
@@ -156,8 +164,8 @@ class S3ReportUploader:
             S3 key of uploaded file if successful, None if failed
         """
         try:
-            # Only upload in production environment
-            if self.environment != "prod":
+            # Only skip upload when running locally
+            if self.environment == "local":
                 self.logger.info("🔧 Local environment: Skipping S3 upload for comprehensive report")
                 return None
             
@@ -198,7 +206,7 @@ class S3ReportUploader:
             s3_key = f"{self.base_prefix}{filename}"
             
             # Convert to JSON string - Minify in prod to save space
-            if self.environment == "prod":
+            if self.account_env == "prod":
                 json_content = json.dumps(report_data, ensure_ascii=False, separators=(',', ':'))
             else:
                 json_content = json.dumps(report_data, indent=2, ensure_ascii=False)
@@ -256,8 +264,8 @@ class S3ReportUploader:
             S3 key of uploaded file if successful, None if failed
         """
         try:
-            # Only upload in production environment
-            if self.environment != "prod":
+            # Only skip upload when running locally
+            if self.environment == "local":
                 self.logger.info(f"🔧 Local environment: Skipping S3 upload for {agent_type} conversation")
                 return None
             
@@ -332,8 +340,8 @@ class S3ReportUploader:
             S3 key of uploaded file if successful, None if failed
         """
         try:
-            # Only upload in production environment
-            if self.environment != "prod":
+            # Only skip upload when running locally
+            if self.environment == "local":
                 self.logger.info(f"🔧 Local environment: Skipping S3 upload for mapped info")
                 return None
             
@@ -384,7 +392,7 @@ class S3ReportUploader:
         *period_range* is not provided (backward-compatible).
         """
         try:
-            if self.environment != "prod":
+            if self.environment == "local":
                 self.logger.info("🔧 Local environment: Skipping S3 upload for Adaptive Card")
                 return None
 
