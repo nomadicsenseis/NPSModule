@@ -240,10 +240,10 @@ class AnomalySummaryAgent:
             LLMType.CLAUDE_SONNET_4, LLMType.CLAUDE_OPUS_4_5, LLMType.CLAUDE_OPUS_4_6, LLMType.LLAMA3_70, LLMType.LLAMA3_1_70, LLMType.LLAMA3_1_405,
             # New models
             LLMType.AMAZON_NOVA_2_LITE, LLMType.AMAZON_NOVA_PRO, LLMType.AMAZON_TITAN_EMBED_TEXT_V2,
-            LLMType.CLAUDE_HAIKU_4_5, LLMType.CLAUDE_SONNET_4_5, LLMType.GPT_OSS_120B
+            LLMType.CLAUDE_HAIKU_4_5, LLMType.CLAUDE_SONNET_4_5, LLMType.CLAUDE_SONNET_4_6, LLMType.GPT_OSS_120B
         ]:
             return self._create_aws_llm(llm_type)
-        
+
         else:
             raise ValueError(f"Unsupported LLM type: {llm_type}")
     
