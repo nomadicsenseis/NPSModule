@@ -8,11 +8,11 @@ logger = logging.getLogger(__name__)
 
 # Role-specific LLM configuration (Bedrock)
 # - CausalExplanationAgent (multi-tool causal investigations): Sonnet 4.5
-# - AnomalyInterpreterAgent (tree interpretation): Sonnet 4.5 (temporarily; Opus 4.6 pending Marketplace subscription in prod)
-# - AnomalySummaryAgent (executive summarizer): Sonnet 4.5 (temporarily; Opus 4.6 pending Marketplace subscription in prod)
+# - AnomalyInterpreterAgent (tree interpretation): Sonnet 4.6
+# - AnomalySummaryAgent (executive summarizer): Sonnet 4.6
 CAUSAL_LLM_TYPE = "CLAUDE_SONNET_4_5"
-INTERPRETER_LLM_TYPE = "CLAUDE_SONNET_4_5"  # TODO: restore to CLAUDE_OPUS_4_6 once AWS Marketplace subscription confirmed in prod
-SUMMARIZER_LLM_TYPE = "CLAUDE_SONNET_4_5"  # TODO: restore to CLAUDE_OPUS_4_6 once AWS Marketplace subscription confirmed in prod
+INTERPRETER_LLM_TYPE = "CLAUDE_SONNET_4_6"
+SUMMARIZER_LLM_TYPE = "CLAUDE_SONNET_4_6"
 
 # Legacy: conversation folder prefix + get_default_llm_type() (interpreter-aligned)
 DEFAULT_LLM_TYPE = INTERPRETER_LLM_TYPE
@@ -129,6 +129,7 @@ class LLMType(Enum):
     AMAZON_TITAN_EMBED_TEXT_V2 = 'AMAZON_TITAN_EMBED_TEXT_V2'
     CLAUDE_HAIKU_4_5 = 'CLAUDE_HAIKU_4_5'
     CLAUDE_SONNET_4_5 = 'CLAUDE_SONNET_4_5'
+    CLAUDE_SONNET_4_6 = 'CLAUDE_SONNET_4_6'
     CLAUDE_OPUS_4_6 = 'CLAUDE_OPUS_4_6'  # eu.anthropic.claude-opus-4-6-v1
     GPT_OSS_120B = 'GPT_OSS_120B'
     GPT_5_2 = 'GPT_5_2'

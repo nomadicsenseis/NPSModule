@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 
 from langchain_aws import ChatBedrock, ChatBedrockConverse
 
@@ -38,6 +39,11 @@ MODEL_ARNS_BY_ENV = {
         "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv",
         "prod":  "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/1a1vdoh2kwzv",  # TODO: replace with prod account ARN
     },
+    LLMType.CLAUDE_SONNET_4_6.value: {
+        "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/p9kxd2gwpq3n",
+        "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/p9kxd2gwpq3n",
+        "prod":  "arn:aws:bedrock:eu-west-1:320714865578:application-inference-profile/jd9vsehmqlty",
+    },
     LLMType.CLAUDE_OPUS_4_6.value: {
         "local": "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/dfsaqs9f3a5v",
         "sbx":   "arn:aws:bedrock:eu-west-1:856897973040:application-inference-profile/dfsaqs9f3a5v",
@@ -47,11 +53,21 @@ MODEL_ARNS_BY_ENV = {
 
 
 def _normalize_cloud_env(raw: str | None, default: str = "prod") -> str:
-    """Normalize ENV from SSM/Batch (value may include surrounding quotes or spaces)."""
+    """Normalize ENV from SSM/Batch.
+
+    SSM/Batch can inject values with surrounding quotes, spaces, or escape characters
+    (e.g. '"sbx"', ' "prod" ', '\"sbx\"'). We extract only the word characters so any
+    wrapping punctuation is ignored.
+    """
     if not raw:
         return default
-    key = str(raw).strip().strip('"').strip("'").lower()
+    # Extract the first run of word characters (letters + digits + underscore).
+    match = re.search(r"[a-zA-Z]\w*", str(raw))
+    if not match:
+        return default
+    key = match.group(0).lower()
     if key not in ("sbx", "prod"):
+        logger.warning("ENV value %r normalized to %r — not in ('sbx','prod'), falling back to %r", raw, key, default)
         return default
     return key
 
@@ -162,8 +178,10 @@ class AWSLLM(LLM):
             env_key = "local"
         else:
             # In cloud (Airflow/Batch), ENV=sbx or ENV=prod distinguishes accounts.
-            # SSM may inject quoted values (e.g. "sbx"); normalize before lookup.
-            env_key = _normalize_cloud_env(os.getenv("ENV"))
+            # SSM may inject quoted values (e.g. '"sbx"'); normalize before lookup.
+            raw_env = os.getenv("ENV")
+            env_key = _normalize_cloud_env(raw_env)
+            logger.debug("_get_model_arn_by_env | ENV(raw)=%r | ENV(resolved)=%r", raw_env, env_key)
         return env_arns.get(env_key, env_arns.get("sbx", env_arns.get("local", "")))
 
     def _get_provider(self):
@@ -239,6 +257,8 @@ class AWSLLM(LLM):
             self.model_id = self._get_model_arn_by_env(LLMType.CLAUDE_HAIKU_4_5.value)
         elif self.llm_type.value == LLMType.CLAUDE_SONNET_4_5.value:
             self.model_id = self._get_model_arn_by_env(LLMType.CLAUDE_SONNET_4_5.value)
+        elif self.llm_type.value == LLMType.CLAUDE_SONNET_4_6.value:
+            self.model_id = self._get_model_arn_by_env(LLMType.CLAUDE_SONNET_4_6.value)
         elif self.llm_type.value == LLMType.GPT_OSS_120B.value:
             self.model_id = self._get_model_arn_by_env(LLMType.GPT_OSS_120B.value)
         elif self.llm_type.value == LLMType.CLAUDE_OPUS_4_6.value:
