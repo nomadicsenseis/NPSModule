@@ -109,6 +109,10 @@ class AWSLLM(LLM):
             resolved_env,
             self.model_id,
         )
+        print(
+            f"🤖 AWSLLM | model={self.llm_type.value} | environment={self.environment} "
+            f"| ENV(raw)={raw_env!r} | ENV(resolved)={resolved_env} | model_id={self.model_id}"
+        )
         
         # Configure credentials for boto3 session (if needed)
         credentials = {}
@@ -197,6 +201,7 @@ class AWSLLM(LLM):
             LLMType.CLAUDE_OPUS_4_5.value,
             LLMType.CLAUDE_HAIKU_4_5.value,
             LLMType.CLAUDE_SONNET_4_5.value,
+            LLMType.CLAUDE_SONNET_4_6.value,
             LLMType.CLAUDE_OPUS_4_6.value
         ]:
             return "anthropic"
@@ -258,7 +263,21 @@ class AWSLLM(LLM):
         elif self.llm_type.value == LLMType.CLAUDE_SONNET_4_5.value:
             self.model_id = self._get_model_arn_by_env(LLMType.CLAUDE_SONNET_4_5.value)
         elif self.llm_type.value == LLMType.CLAUDE_SONNET_4_6.value:
-            self.model_id = self._get_model_arn_by_env(LLMType.CLAUDE_SONNET_4_6.value)
+            resolved_arn = self._get_model_arn_by_env(LLMType.CLAUDE_SONNET_4_6.value)
+            if resolved_arn:
+                self.model_id = resolved_arn
+                print(f"✅ CLAUDE_SONNET_4_6 ARN resolved: {self.model_id}")
+            else:
+                fallback_arn = self._get_model_arn_by_env(LLMType.CLAUDE_SONNET_4_5.value)
+                self.model_id = fallback_arn
+                print(
+                    f"⚠️ CLAUDE_SONNET_4_6 ARN not found for current env — "
+                    f"falling back to CLAUDE_SONNET_4_5: {self.model_id}"
+                )
+                logger.warning(
+                    "CLAUDE_SONNET_4_6 ARN not found, falling back to CLAUDE_SONNET_4_5 (%s)",
+                    self.model_id,
+                )
         elif self.llm_type.value == LLMType.GPT_OSS_120B.value:
             self.model_id = self._get_model_arn_by_env(LLMType.GPT_OSS_120B.value)
         elif self.llm_type.value == LLMType.CLAUDE_OPUS_4_6.value:
