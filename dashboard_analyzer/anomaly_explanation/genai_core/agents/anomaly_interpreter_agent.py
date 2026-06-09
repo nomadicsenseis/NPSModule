@@ -1011,14 +1011,26 @@ Confirma que has recibido la información y estás listo para el análisis paso 
                     _ft_list = self.focus_touchpoint or []
                     ft = ", ".join(_ft_list).strip() if _ft_list else ""
                     if ft:
+                        multi_tp_note = (
+                            f"⚠️ **REGLA CRÍTICA — MÚLTIPLES TOUCHPOINTS ({len(_ft_list)}):** "
+                            f"Aunque la síntesis contiene secciones separadas para cada touchpoint "
+                            f"(ANÁLISIS DE {' / '.join(tp.upper() for tp in _ft_list)}), "
+                            f"en la Adaptive Card debes crear UN ÚNICO `Action.ShowCard` titulado "
+                            f'"🎯 FOCUS: {ft}" que agrupe el análisis de TODOS los touchpoints. '
+                            f"Dentro de ese único ShowCard, incluye un sub-bloque por touchpoint "
+                            f"(uno tras otro, en el mismo orden: {', '.join(_ft_list)}), "
+                            f"cada uno con su propio desglose Global → SH → LH. "
+                            f"NO crees botones separados por touchpoint.\n"
+                        ) if len(_ft_list) > 1 else ""
                         focus_touchpoint_block = (
                             f"🎯 **FOCUS TOUCHPOINT:** {ft}\n"
+                            f"{multi_tp_note}"
                             f"En la Adaptive Card, el PRIMER elemento del array `body` debe ser un bloque "
                             f'destacado (p. ej. TextBlock) con "🎯 **Focus:** {ft}" ANTES del título '
                             f'"Reporte de NPS y Variaciones".\n'
                             f"Si la síntesis es a nivel **Global** (red completa), el `Action.ShowCard` "
-                            f"🎯 FOCUS debe incluir **tres bloques en orden: Global → SH → LH** (CSAT/gap, "
-                            f"verbatims, % issues por bloque; si falta dato, indícalo en ese bloque). "
+                            f"🎯 FOCUS debe incluir **tres bloques en orden: Global → SH → LH** por cada touchpoint "
+                            f"(CSAT/gap, verbatims, % issues por bloque; si falta dato, indícalo en ese bloque). "
                             f"Puedes añadir sub-bloques por cabina o compañía si la síntesis lo justifica. "
                             f"Si la síntesis **no** es Global, alinea el contenido del focus al segmento analizado.\n\n"
                         )

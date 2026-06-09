@@ -3292,8 +3292,11 @@ class CausalExplanationAgent:
                 'f&b': 'F&B',
                 'food & beverage': 'F&B',
                 'food and beverage': 'F&B',
+                'in flight food and beverage': 'F&B',
                 'arrivals': 'Arrivals',
+                'arrivals experience': 'Arrivals',
                 'connections': 'Connections',
+                'connections experience': 'Connections',
                 'lounge': 'Lounge',
             }
 
