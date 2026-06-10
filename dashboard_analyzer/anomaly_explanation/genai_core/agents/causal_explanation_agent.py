@@ -614,6 +614,22 @@ class CausalExplanationAgent:
             self.logger.warning(f"Using fallback NCS collector (mode: {self.environment})")
             return NCSDataCollector(environment=self.environment)
     
+    async def _probe_model_access(self) -> bool:
+        """Send a minimal call to verify the current model is accessible.
+
+        Returns True if the model responds, False if AccessDeniedException is raised.
+        Other exceptions are re-raised (they are not access errors).
+        """
+        probe_history = MessageHistory(logger=self.logger)
+        probe_history.create_and_add_message(content="Test", message_type=MessageType.USER)
+        try:
+            await self.agent.invoke(messages=probe_history.get_messages())
+            return True
+        except Exception as e:
+            if "AccessDeniedException" in str(e):
+                return False
+            raise
+
     def _create_llm(self, llm_type: LLMType):
         """Create LLM instance"""
         if llm_type in [LLMType.GPT4o, LLMType.O3, LLMType.O3_MINI, LLMType.O4_MINI, LLMType.GPT_5_2]:
@@ -1703,6 +1719,29 @@ class CausalExplanationAgent:
         # Override focus_touchpoint if provided at call time
         if focus_touchpoint is not None:
             self.focus_touchpoint = focus_touchpoint
+
+        # --- Probe and resolve the working model before starting real work ---
+        _FALLBACK_CHAIN = [
+            LLMType.CLAUDE_SONNET_4_6,
+            LLMType.CLAUDE_OPUS_4_6,
+            LLMType.CLAUDE_SONNET_4_5,
+        ]
+        print(f"🔍 Causal agent: probing model access for {self.llm_type.value}...")
+        for model in _FALLBACK_CHAIN:
+            if self.llm_type != model:
+                self.llm_type = model
+                self.llm = self._create_llm(model)
+                self.agent = Agent(llm=self.llm, logger=self.logger)
+            if await self._probe_model_access():
+                print(f"✅ Causal agent model resolved: {self.llm_type.value}")
+                break
+            print(f"⚠️ Causal agent: {model.value} AccessDeniedException — trying next model...")
+            self.logger.warning("Causal agent: %s denied, trying next fallback", model.value)
+        else:
+            raise RuntimeError(
+                f"All causal agent fallback models denied access: {[m.value for m in _FALLBACK_CHAIN]}"
+            )
+
         print(f"🔍 DEBUG CAUSAL AGENT: investigate_anomaly called with start_date='{start_date}', end_date='{end_date}'")
         
         # Convert dates to datetime objects (handle both string and datetime inputs)
