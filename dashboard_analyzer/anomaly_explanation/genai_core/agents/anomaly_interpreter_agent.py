@@ -777,19 +777,45 @@ Confirma que has recibido la información y estás listo para el análisis paso 
     async def interpret_anomaly_tree(self, tree_data: str, date: Optional[str] = None, segment: Optional[str] = None) -> str:
         """
         Interpret a causal agent explanation using conversational hierarchical methodology.
-        
-        Args:
-            tree_data: The causal agent explanation/narrative (not an anomaly tree)
-            date: Optional date for context (e.g., "2025-05-24")
-            segment: Optional segment for analysis
-            
-        Returns:
-            Structured interpretation following the conversational hierarchical methodology
+
+        Applies an automatic fallback chain on AccessDeniedException (interpreter only):
+          1. CLAUDE_SONNET_4_6  (primary, env-specific ARN)
+          2. CLAUDE_OPUS_4_6    (first fallback, env-specific ARN)
+          3. CLAUDE_SONNET_4_5  (last resort, env-specific ARN)
         """
-        self.logger.info("🔄 Using CONVERSATIONAL hierarchical interpretation (self-conversation enabled)")
-        
-        # Always use the conversational method that includes self-conversation
-        return await self.interpret_anomaly_tree_hierarchical(tree_data, date, segment)
+        _FALLBACK_CHAIN = [
+            LLMType.CLAUDE_SONNET_4_6,
+            LLMType.CLAUDE_OPUS_4_6,
+            LLMType.CLAUDE_SONNET_4_5,
+        ]
+
+        while True:
+            self.logger.info("🔄 Using CONVERSATIONAL hierarchical interpretation (self-conversation enabled)")
+            try:
+                return await self.interpret_anomaly_tree_hierarchical(tree_data, date, segment)
+            except Exception as e:
+                if "AccessDeniedException" not in str(e):
+                    raise
+
+                current_idx = _FALLBACK_CHAIN.index(self.llm_type) if self.llm_type in _FALLBACK_CHAIN else -1
+                next_idx = current_idx + 1
+
+                if next_idx >= len(_FALLBACK_CHAIN):
+                    self.logger.error("❌ All interpreter fallback models exhausted. Last error: %s", e)
+                    raise
+
+                next_model = _FALLBACK_CHAIN[next_idx]
+                print(
+                    f"⚠️ Interpreter: {self.llm_type.value} AccessDeniedException — "
+                    f"falling back to {next_model.value}"
+                )
+                self.logger.warning(
+                    "Interpreter %s AccessDeniedException, retrying with %s",
+                    self.llm_type.value, next_model.value,
+                )
+                self.llm_type = next_model
+                self.llm = self._create_llm(next_model)
+                self.agent = Agent(llm=self.llm, logger=self.logger)
 
     async def interpret_anomaly_tree_hierarchical(self, tree_data: str, date: Optional[str] = None, segment: Optional[str] = None) -> str:
         """
@@ -1162,6 +1188,9 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             return final_output
             
         except Exception as e:
+            if "AccessDeniedException" in str(e):
+                # Re-raise so the fallback chain in interpret_anomaly_tree can handle it
+                raise
             self.logger.error(f"❌ Error in hierarchical interpretation: {str(e)}")
             error_msg = f"Error durante la interpretación jerárquica: {str(e)}"
             
