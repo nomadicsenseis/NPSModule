@@ -1726,7 +1726,7 @@ class CausalExplanationAgent:
             LLMType.CLAUDE_OPUS_4_6,
             LLMType.CLAUDE_SONNET_4_5,
         ]
-        print(f"🔍 Causal agent: probing model access for {self.llm_type.value}...")
+        print(f"🔍 Causal agent: probing model access — chain: {[m.value for m in _FALLBACK_CHAIN]}...")
         for model in _FALLBACK_CHAIN:
             if self.llm_type != model:
                 self.llm_type = model
