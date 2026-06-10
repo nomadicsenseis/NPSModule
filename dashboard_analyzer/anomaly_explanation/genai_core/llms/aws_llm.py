@@ -92,6 +92,27 @@ class AWSLLM(LLM):
 
         super().__init__(llm_type, token_input_price, token_output_price)
 
+    async def __call__(self, prompt: list, tools: list = None, structured_output=None):
+        """Invoke with automatic AccessDeniedException fallback to Sonnet 4.5."""
+        try:
+            return await super().__call__(prompt, tools, structured_output)
+        except Exception as e:
+            err_str = str(e)
+            if "AccessDeniedException" in err_str and self.llm_type == LLMType.CLAUDE_SONNET_4_6:
+                fallback_arn = self._get_model_arn_by_env(LLMType.CLAUDE_SONNET_4_5.value)
+                print(
+                    f"⚠️ CLAUDE_SONNET_4_6 AccessDeniedException — falling back to "
+                    f"CLAUDE_SONNET_4_5 (ARN: {fallback_arn})"
+                )
+                logger.warning(
+                    "CLAUDE_SONNET_4_6 AccessDeniedException, retrying with CLAUDE_SONNET_4_5 (%s)",
+                    fallback_arn,
+                )
+                self.llm_type = LLMType.CLAUDE_SONNET_4_5
+                self.llm = self.create_llm()
+                return await super().__call__(prompt, tools, structured_output)
+            raise
+
     def create_llm(self):
         """Create the LangChain ChatBedrock or ChatBedrockConverse client for the specified model"""
         self._set_model_id()
