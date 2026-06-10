@@ -774,11 +774,29 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             environment=self.environment
         )
     
+    async def _probe_model_access(self) -> bool:
+        """Send a minimal call to verify the current model is accessible.
+
+        Returns True if the model responds, False if AccessDeniedException is raised.
+        Other exceptions are re-raised (they are not access errors).
+        """
+        from ..message_history import MessageHistory
+        probe_history = MessageHistory(logger=self.logger)
+        probe_history.create_and_add_message(content="Test", message_type=MessageType.USER)
+        try:
+            await self.agent.invoke(messages=probe_history.get_messages())
+            return True
+        except Exception as e:
+            if "AccessDeniedException" in str(e):
+                return False
+            raise
+
     async def interpret_anomaly_tree(self, tree_data: str, date: Optional[str] = None, segment: Optional[str] = None) -> str:
         """
         Interpret a causal agent explanation using conversational hierarchical methodology.
 
-        Applies an automatic fallback chain on AccessDeniedException (interpreter only):
+        Before starting the heavy interpretation, probes the configured model and applies
+        a fallback chain (interpreter-only) if AccessDeniedException is raised:
           1. CLAUDE_SONNET_4_6  (primary, env-specific ARN)
           2. CLAUDE_OPUS_4_6    (first fallback, env-specific ARN)
           3. CLAUDE_SONNET_4_5  (last resort, env-specific ARN)
@@ -789,33 +807,27 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             LLMType.CLAUDE_SONNET_4_5,
         ]
 
-        while True:
-            self.logger.info("🔄 Using CONVERSATIONAL hierarchical interpretation (self-conversation enabled)")
-            try:
-                return await self.interpret_anomaly_tree_hierarchical(tree_data, date, segment)
-            except Exception as e:
-                if "AccessDeniedException" not in str(e):
-                    raise
-
-                current_idx = _FALLBACK_CHAIN.index(self.llm_type) if self.llm_type in _FALLBACK_CHAIN else -1
-                next_idx = current_idx + 1
-
-                if next_idx >= len(_FALLBACK_CHAIN):
-                    self.logger.error("❌ All interpreter fallback models exhausted. Last error: %s", e)
-                    raise
-
-                next_model = _FALLBACK_CHAIN[next_idx]
-                print(
-                    f"⚠️ Interpreter: {self.llm_type.value} AccessDeniedException — "
-                    f"falling back to {next_model.value}"
-                )
-                self.logger.warning(
-                    "Interpreter %s AccessDeniedException, retrying with %s",
-                    self.llm_type.value, next_model.value,
-                )
-                self.llm_type = next_model
-                self.llm = self._create_llm(next_model)
+        # --- Probe and resolve the working model before starting real work ---
+        print(f"🔍 Interpreter: probing model access for {self.llm_type.value}...")
+        for model in _FALLBACK_CHAIN:
+            if self.llm_type != model:
+                self.llm_type = model
+                self.llm = self._create_llm(model)
                 self.agent = Agent(llm=self.llm, logger=self.logger)
+
+            if await self._probe_model_access():
+                print(f"✅ Interpreter model resolved: {self.llm_type.value}")
+                break
+
+            print(f"⚠️ Interpreter: {model.value} AccessDeniedException — trying next model...")
+            self.logger.warning("Interpreter: %s denied, trying next fallback", model.value)
+        else:
+            raise RuntimeError(
+                f"All interpreter fallback models denied access: {[m.value for m in _FALLBACK_CHAIN]}"
+            )
+        # --- Model resolved, proceed with real interpretation ---
+        self.logger.info("🔄 Using CONVERSATIONAL hierarchical interpretation (self-conversation enabled)")
+        return await self.interpret_anomaly_tree_hierarchical(tree_data, date, segment)
 
     async def interpret_anomaly_tree_hierarchical(self, tree_data: str, date: Optional[str] = None, segment: Optional[str] = None) -> str:
         """
@@ -1188,9 +1200,6 @@ Confirma que has recibido la información y estás listo para el análisis paso 
             return final_output
             
         except Exception as e:
-            if "AccessDeniedException" in str(e):
-                # Re-raise so the fallback chain in interpret_anomaly_tree can handle it
-                raise
             self.logger.error(f"❌ Error in hierarchical interpretation: {str(e)}")
             error_msg = f"Error durante la interpretación jerárquica: {str(e)}"
             
