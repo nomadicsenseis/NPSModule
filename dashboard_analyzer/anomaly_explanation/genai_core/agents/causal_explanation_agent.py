@@ -1720,12 +1720,26 @@ class CausalExplanationAgent:
         if focus_touchpoint is not None:
             self.focus_touchpoint = focus_touchpoint
 
-        # --- Force Sonnet 4.5 for causal agent ---
-        if self.llm_type != LLMType.CLAUDE_SONNET_4_5:
-            self.llm_type = LLMType.CLAUDE_SONNET_4_5
-            self.llm = self._create_llm(LLMType.CLAUDE_SONNET_4_5)
-            self.agent = Agent(llm=self.llm, logger=self.logger)
-        print(f"✅ Causal agent using: {self.llm_type.value}")
+        # --- Probe and resolve model: Sonnet 4.6 → Sonnet 4.5 ---
+        _FALLBACK_CHAIN = [
+            LLMType.CLAUDE_SONNET_4_6,
+            LLMType.CLAUDE_SONNET_4_5,
+        ]
+        print(f"🔍 Causal agent: probing model access — chain: {[m.value for m in _FALLBACK_CHAIN]}...")
+        for model in _FALLBACK_CHAIN:
+            if self.llm_type != model:
+                self.llm_type = model
+                self.llm = self._create_llm(model)
+                self.agent = Agent(llm=self.llm, logger=self.logger)
+            if await self._probe_model_access():
+                print(f"✅ Causal agent model resolved: {self.llm_type.value}")
+                break
+            print(f"⚠️ Causal agent: {model.value} AccessDeniedException — trying next model...")
+            self.logger.warning("Causal agent: %s denied, trying next fallback", model.value)
+        else:
+            raise RuntimeError(
+                f"All causal agent fallback models denied access: {[m.value for m in _FALLBACK_CHAIN]}"
+            )
 
         print(f"🔍 DEBUG CAUSAL AGENT: investigate_anomaly called with start_date='{start_date}', end_date='{end_date}'")
         

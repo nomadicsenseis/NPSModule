@@ -7,10 +7,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Role-specific LLM configuration (Bedrock)
-# - CausalExplanationAgent (multi-tool causal investigations): Sonnet 4.5
+# - CausalExplanationAgent (multi-tool causal investigations): Sonnet 4.6 (fallback 4.5)
 # - AnomalyInterpreterAgent (tree interpretation): Sonnet 4.6
 # - AnomalySummaryAgent (executive summarizer): Sonnet 4.6
-CAUSAL_LLM_TYPE = "CLAUDE_SONNET_4_5"
+CAUSAL_LLM_TYPE = "CLAUDE_SONNET_4_6"
 INTERPRETER_LLM_TYPE = "CLAUDE_SONNET_4_6"
 SUMMARIZER_LLM_TYPE = "CLAUDE_SONNET_4_6"
 
@@ -144,7 +144,7 @@ def _resolve_llm_type(name: str, fallback: LLMType) -> LLMType:
 
 def get_causal_llm_type() -> LLMType:
     """LLM for CausalExplanationAgent (tool-heavy causal investigations)."""
-    return _resolve_llm_type(CAUSAL_LLM_TYPE, LLMType.CLAUDE_SONNET_4_5)
+    return _resolve_llm_type(CAUSAL_LLM_TYPE, LLMType.CLAUDE_SONNET_4_6)
 
 
 def get_interpreter_llm_type() -> LLMType:
