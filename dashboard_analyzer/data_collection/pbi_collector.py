@@ -83,7 +83,7 @@ TOUCHPOINT_TOPIC_MAP: Dict[str, str] = {
     "Lounge": "Sala VIP",
     "Aircraft interior": "Interior del Avión",
     "IFE": "Entretenimiento",
-    "Arrivals experience": "Experiencia de Llegada",
+    "Arrivals experience": "Desembarque",
     "Connections experience": "Experiencia de Conexión",
     "Punctuality": "Puntualidad",
 }
@@ -2003,9 +2003,11 @@ EVALUATE
         )
         seg_filters_prefix = (", " + seg_filters) if seg_filters else ""
 
-        # Use issue_type_3 value if available, fall back to display_name
-        issue_type_value = get_touchpoint_issue_type(touchpoint_display_name) or touchpoint_display_name
-        safe_issue_type = issue_type_value.replace('"', '\\"')
+        # Filter by Touchpoint (high-level display name in Issue_touchpoint_Dict).
+        # The [Touchpoint] column matches display_name values like "Check-in", "Boarding",
+        # "Arrivals experience" — verified against PBI. The [issue_type_3] values are
+        # granular sub-issues and don't correspond to the touchpoint-level names.
+        safe_touchpoint = touchpoint_display_name.replace('"', '\\"')
 
         query = (
             "EVALUATE\n"
@@ -2020,15 +2022,13 @@ EVALUATE
             '    ROW("Period", "L7D",\n'
             '        "Pct_Issues", CALCULATE([Switch_%_Affected_D&G],\n'
             f"            _dateL7D{seg_filters_prefix},\n"
-            "            TREATAS({1}, Issue_touchpoint_Dict[explanatory_drivers]),\n"
-            f'            FILTER(ALL(Issue_touchpoint_Dict), Issue_touchpoint_Dict[issue_type_3] = "{safe_issue_type}")\n'
+            f'            FILTER(ALL(Issue_touchpoint_Dict), Issue_touchpoint_Dict[Touchpoint] = "{safe_touchpoint}")\n'
             "        )\n"
             "    ),\n"
             '    ROW("Period", "L7D_prev",\n'
             '        "Pct_Issues", CALCULATE([Switch_%_Affected_D&G],\n'
             f"            _datePrev{seg_filters_prefix},\n"
-            "            TREATAS({1}, Issue_touchpoint_Dict[explanatory_drivers]),\n"
-            f'            FILTER(ALL(Issue_touchpoint_Dict), Issue_touchpoint_Dict[issue_type_3] = "{safe_issue_type}")\n'
+            f'            FILTER(ALL(Issue_touchpoint_Dict), Issue_touchpoint_Dict[Touchpoint] = "{safe_touchpoint}")\n'
             "        )\n"
             "    )\n"
             ")\n"
