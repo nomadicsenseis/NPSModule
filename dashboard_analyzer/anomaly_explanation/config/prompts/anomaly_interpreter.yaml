@@ -527,10 +527,10 @@ hierarchical_diagnostic_helpers:
     **⚠️ DATOS DE REFERENCIA DEL SEGMENTO:**
     {SEGMENT_REFERENCE}
 
-    **⚠️ FORMATO TEAMS (CRÍTICO):**
-    - El output FINAL debe ser **HTML** (NO Markdown).
-    - Usa solo: `<b>...</b>`, `<u>...</u>`, `<br>`, `<ul>`, `<li>`.
-    - No uses `**negrita**` (usa `<b>`), `#`, `-` ni backticks.
+    **⚠️ FORMATO MARKDOWN (CRÍTICO):**
+    - El output FINAL debe ser **Markdown** (NO HTML).
+    - Usa: `**texto**` para negritas, `*texto*` para cursivas, línea en blanco para separar párrafos.
+    - NO uses etiquetas HTML: `<b>`, `<i>`, `<br>`, `<u>`, `<ul>`, `<li>`. Se mostrarían como texto literal en la Adaptive Card.
     - No uses emojis.
 
     **⚠️ REGLAS DE LENGUAJE EJECUTIVO:**
@@ -548,21 +548,21 @@ hierarchical_diagnostic_helpers:
       *   Ejemplos: `NPS de 27.9 (+0.6 pts)`; `NPS de 8.7 (–3.7 pts)`.
     - Para números enteros (conteos de incidentes, pasajeros), NO uses decimales.
 
-    **Formato esperado (HTML):**
+    **Formato esperado (Markdown):**
     
     Empieza SIEMPRE con:
-    `<b>SÍNTESIS EJECUTIVA</b><br>`
+    `**SÍNTESIS EJECUTIVA**`
     
     **PÁRRAFO INTRODUCTORIO (1-2 líneas):**
     Resume el resultado del SEGMENTO RAÍZ con NPS y variación, e indica brevemente la dinámica general.
-    Ejemplo: "La red global registró un <b>NPS de 25.0 (–3.6 pts)</b> con respecto a la semana anterior, resultado de una convergencia negativa en ambos radios."
+    Ejemplo: "La red global registró un **NPS de 25.0 (–3.6 pts)** con respecto a la semana anterior, resultado de una convergencia negativa en ambos radios."
     
     **DESARROLLO POR NMA (1-2 párrafos por cada NMA del paso 4):**
     Para CADA NMA identificado, narra de forma fluida incluyendo:
-    1. **Localización y magnitud:** "En <b>[RADIO/CABINA]</b>, el NPS cayó/subió a <b>[valor] ([variación])</b>..."
+    1. **Localización y magnitud:** "En **[RADIO/CABINA]**, el NPS cayó/subió a **[valor] ([variación])**..."
     2. **Causas:** "...debido a [causas del paso 4B: drivers SHAP, métricas operativas, incidentes NCS]..."
-    3. **Rutas afectadas:** "...afectando especialmente a las rutas <b>[rutas del paso 4B]</b>..."
-    4. **Perfiles reactivos:** "Los pasajeros más sensibles fueron los agrupados por <b>[perfiles del paso 4B con spread]</b>."
+    3. **Rutas afectadas:** "...afectando especialmente a las rutas **[rutas del paso 4B]**..."
+    4. **Perfiles reactivos:** "Los pasajeros más sensibles fueron los agrupados por **[perfiles del paso 4B con spread]**."
     5. **Propagación:** "Esta presión en [NMA origen] se propagó a [padre] (donde [hermano] se mantuvo estable/en dirección opuesta), arrastrando a [abuelo] hacia [dirección]."
     
     **⚠️ CASOS ESPECIALES DE PROPAGACIÓN:**
@@ -572,7 +572,7 @@ hierarchical_diagnostic_helpers:
     
     **INTERACCIÓN FINAL (1 párrafo):**
     Explica cómo convergen los NMAs al nivel del segmento raíz:
-    "La convergencia de <b>[Radio/Cabina A] ([variación])</b> y <b>[Radio/Cabina B] ([variación])</b>, ambos en [dirección], produjo [el resultado del segmento raíz]."
+    "La convergencia de **[Radio/Cabina A] ([variación])** y **[Radio/Cabina B] ([variación])**, ambos en [dirección], produjo [el resultado del segmento raíz]."
     
     **✍️ NARRATIVA DE INCIDENTES (NCS):** 
     No uses listas densas entre paréntesis. Integra los datos en la frase de forma fluida y natural.
@@ -583,8 +583,8 @@ hierarchical_diagnostic_helpers:
     **✍️ DETALLE DE VERBATIMS:**
     No generalices el feedback. Cita los problemas concretos y menciona al menos 1 o 2 rutas donde el feedback fue más intenso.
 
-    **DETALLE POR AGREGACIÓN JERÁRQUICA (HTML):**
-    Añade `<br><br><b><u>DETALLE POR AGREGACIÓN</u></b><br>` **SOLAMENTE SI** hay reflexiones de cabina-radio en el paso 4C.
+    **DETALLE POR AGREGACIÓN JERÁRQUICA:**
+    Añade `**DETALLE POR AGREGACIÓN**` (en línea propia, separada por línea en blanco) **SOLAMENTE SI** hay reflexiones de cabina-radio en el paso 4C.
     
     **ESTRUCTURA JERÁRQUICA SEGÚN EL SEGMENTO RAÍZ:**
     
@@ -608,9 +608,9 @@ hierarchical_diagnostic_helpers:
     3. Premium LH
 
     **🎯 SECCIÓN OBLIGATORIA DE FOCUS TOUCHPOINT (cuando aplique):**
-    Si en los datos de entrada aparece un bloque "🎯 FOCUS TOUCHPOINT ENRICHMENT", DEBES añadir al final del HTML una sección dedicada con el siguiente formato:
+    Si en los datos de entrada aparece un bloque "🎯 FOCUS TOUCHPOINT ENRICHMENT", DEBES añadir al final del texto una sección dedicada con el siguiente formato:
 
-    `<br><br><b><u>ANÁLISIS DE [NOMBRE TOUCHPOINT EN MAYÚSCULAS]</u></b><br>`
+    `**ANÁLISIS DE [NOMBRE TOUCHPOINT EN MAYÚSCULAS]**`
 
     **Estructura obligatoria del contenido (según segmento raíz):**
     - **Si el segmento raíz del informe es Global:** es **OBLIGATORIO** cubrir **tres párrafos o subsecciones en este orden:** **(1) Global, (2) SH, (3) LH**. En cada uno incluye, cuando haya datos: **CSAT y gap vs target**, **verbatims** (temas positivos/negativos; si no hay, dilo), **% issues** (L7D y variación vs comparativo; si no hay, dilo). **No omitas** uno de los tres niveles por falta de datos: escribe el párrafo e indica "no disponible" / "sin verbatims" donde corresponda.
@@ -630,7 +630,7 @@ hierarchical_diagnostic_helpers:
     
     Para cada agregación, construye el párrafo siguiendo estrictamente estas reglas de fuente y narrativa:
     
-    - **Título:** `<b><u>[AGREGACIÓN]: [Titular descriptivo]</u></b><br>`
+    - **Título:** `**[AGREGACIÓN]: [Titular descriptivo]**` (en línea propia, separada por línea en blanco)
     
     - **PARA RADIOS (SH, LH):**
       *   **Fuente:** Usa el análisis del nodo radio.
@@ -679,11 +679,11 @@ hierarchical_diagnostic_helpers:
     - "operative_data_tool" → "métricas operativas"
 
     **🎯 SECCIÓN OBLIGATORIA DE FOCUS TOUCHPOINT:**
-    Si en el tree_data aparece cualquier bloque marcado con "🎯 FOCUS TOUCHPOINT" o "FOCUS TOUCHPOINT ENRICHMENT", DEBES añadir al final del HTML (antes del cierre) la siguiente sección (mismas reglas de **mínimo Global + SH + LH en orden** cuando el segmento raíz es Global, y niveles acotados al segmento cuando no lo es, como en el bloque "🎯 SECCIÓN OBLIGATORIA DE FOCUS TOUCHPOINT (cuando aplique)" más arriba):
+    Si en el tree_data aparece cualquier bloque marcado con "🎯 FOCUS TOUCHPOINT" o "FOCUS TOUCHPOINT ENRICHMENT", DEBES añadir al final del texto la siguiente sección (mismas reglas de **mínimo Global + SH + LH en orden** cuando el segmento raíz es Global, y niveles acotados al segmento cuando no lo es, como en el bloque "🎯 SECCIÓN OBLIGATORIA DE FOCUS TOUCHPOINT (cuando aplique)" más arriba):
 
-    `<br><br><b><u>ANÁLISIS DE [NOMBRE_TOUCHPOINT]</u></b><br>`
+    `**ANÁLISIS DE [NOMBRE_TOUCHPOINT]**`
 
-    ⚠️ **EL TÍTULO DEBE SER EXACTAMENTE** `<b><u>ANÁLISIS DE CABIN CREW</u></b>` (o el nombre del touchpoint en mayúsculas). NO uses títulos alternativos como "DETERIORO EN CABIN CREW" o "CABIN CREW - ANÁLISIS". El formato exacto es obligatorio.
+    ⚠️ **EL TÍTULO DEBE SER EXACTAMENTE** `**ANÁLISIS DE CABIN CREW**` (o el nombre del touchpoint en mayúsculas). NO uses títulos alternativos como "DETERIORO EN CABIN CREW" o "CABIN CREW - ANÁLISIS". El formato exacto es obligatorio.
 
     Contenido obligatorio de esta sección (además del desglose por nivel/párrafo exigido arriba):
     1. **CSAT del período**: Cita el valor CSAT del touchpoint y su diferencia vs target (formato: "CSAT=[valor], diff vs target=[diff] pts"). Si aparece también la variación vs período comparativo (Sat_diff), cítala como métrica separada: "variación vs período anterior: [Sat_diff] pts".
@@ -751,6 +751,8 @@ step6_generate_adaptive_card:
     - Devuelve SOLO el JSON minificado en una sola línea.
     - NO incluyas bloques de código markdown ni texto explicativo.
     - Escapa las comillas internas si es necesario para que sea un string JSON válido.
+    - **SALTOS DE LÍNEA EN CAMPOS `text`:** Cuando incrustes texto multi-párrafo en un campo `"text"` de TextBlock, reemplaza cada salto de línea real por `\n` (secuencia de escape JSON). NUNCA dejes retornos de carro literales dentro del string JSON — romperían el JSON.
+    - **FORMATO MARKDOWN EN `text`:** Usa `**texto**` para negritas y `*texto*` para cursivas. NO uses etiquetas HTML (`<b>`, `<i>`, `<br>`): se mostrarían como texto literal en Teams.
 
   input_template: |
     {focus_touchpoint_block}SÍNTESIS EJECUTIVA:
@@ -836,15 +838,16 @@ step8a_trim_company_details:
     3. NO modifiques: GLOBAL, SH, LH, Business SH, Economy SH, Business LH, Premium LH, Economy LH
     4. Mantén la estructura JSON válida y minificada
     
-    **FORMATO HTML APLICABLE (Teams-compatible):**
-    - Usa <b>...</b> para negritas en datos clave: NPS, variaciones, rutas
-    - Usa <i>...</i> sparingly para énfasis menor (causas secundarias)
-    - Separa elementos con <br> cuando haya lista de factores
-    - Mantén coherencia narrativa: no fragmentes el texto en listas sueltas
+    **FORMATO MARKDOWN EN TEXTBLOCKS (CRÍTICO — NO usar HTML):**
+    Los campos `text` de los `TextBlock` usan Markdown, no HTML. Las etiquetas HTML como `<b>` o `<i>` se muestran como texto literal en Teams. Usa siempre:
+    - Negritas: `**texto**`  (no `<b>texto</b>`)
+    - Cursivas: `*texto*`    (no `<i>texto</i>`)
+    - Saltos de línea: `\n` (no `<br>`)
+    Si el JSON que recibes ya contiene etiquetas HTML en campos `text`, CONVIÉRTELAS al equivalente Markdown.
     
     **EJEMPLO DE REDUCCIÓN CON FORMATO:**
     ANTES: "La cabina Business SH de Iberia registró un NPS de 42.3 con +5.2 pts respecto a la semana anterior, impulsada por mejoras en puntualidad y servicio de cabina, aunque se detectaron incidencias en rutas específicas como MAD-Barcelona con 3 casos de equipaje."
-    DESPUÉS: "<b>Business SH IB:</b> NPS 42.3 (<b>+5.2 pts</b>), mejora en puntualidad y servicio."
+    DESPUÉS: "**Business SH IB:** NPS 42.3 (**+5.2 pts**), mejora en puntualidad y servicio."
     
     **OBJETIVO:** Reducir ~10-15% del tamaño total manteniendo legibilidad.
     
@@ -865,15 +868,16 @@ step8b_trim_lh_cabins:
     3. NO modifiques: GLOBAL, SH, LH, Business SH, Economy SH, ni las secciones de compañía IB/YW
     4. Mantén la estructura JSON válida y minificada
     
-    **FORMATO HTML APLICABLE (Teams-compatible):**
-    - Usa <b>...</b> para negritas en datos clave: NPS, variaciones, nombres de rutas
-    - Usa <i>...</i> sparingly para énfasis menor (causas secundarias, matices)
-    - Separa elementos con <br> cuando haya lista de factores relacionados
-    - Mantén coherencia narrativa: el texto debe leerse fluidamente, no como lista de bullets
+    **FORMATO MARKDOWN EN TEXTBLOCKS (CRÍTICO — NO usar HTML):**
+    Los campos `text` de los `TextBlock` usan Markdown, no HTML. Las etiquetas HTML como `<b>` o `<i>` se muestran como texto literal en Teams. Usa siempre:
+    - Negritas: `**texto**`  (no `<b>texto</b>`)
+    - Cursivas: `*texto*`    (no `<i>texto</i>`)
+    - Saltos de línea: `\n` (no `<br>`)
+    Si el JSON que recibes ya contiene etiquetas HTML en campos `text`, CONVIÉRTELAS al equivalente Markdown.
     
     **EJEMPLO DE REDUCCIÓN CON FORMATO:**
     ANTES: "La cabina Economy LH registró un NPS de 18.2 con una caída de 8.4 pts respecto a la semana anterior, afectada principalmente por problemas de puntualidad en rutas transatlánticas como MAD-JFK y MAD-SFO, con un impacto significativo en el perfil de pasajeros de código compartido."
-    DESPUÉS: "<b>Economy LH:</b> NPS 18.2 (<b>–8.4 pts</b>), caída por puntualidad en rutas transatlánticas <b>MAD-JFK</b>, <b>MAD-SFO</b>. Afecta especialmente a pasajeros <i>código compartido</i>."
+    DESPUÉS: "**Economy LH:** NPS 18.2 (**–8.4 pts**), caída por puntualidad en rutas transatlánticas **MAD-JFK**, **MAD-SFO**. Afecta especialmente a pasajeros *código compartido*."
     
     **OBJETIVO:** Reducir ~10-15% del tamaño total manteniendo legibilidad y estructura narrativa.
     
@@ -894,15 +898,16 @@ step8c_trim_sh_cabins:
     3. NO modifiques: GLOBAL, SH, LH, ni las secciones de compañía IB/YW
     4. Mantén la estructura JSON válida y minificada
     
-    **FORMATO HTML APLICABLE (Teams-compatible):**
-    - Usa <b>...</b> para negritas en datos clave: NPS, variaciones, nombres de compañías (IB/YW), rutas
-    - Usa <i>...</i> sparingly para énfasis menor (causas secundarias, matices)
-    - Separa elementos con <br> cuando haya lista de factores relacionados
-    - Mantén coherencia narrativa: el texto debe leerse fluidamente, no como lista de bullets
+    **FORMATO MARKDOWN EN TEXTBLOCKS (CRÍTICO — NO usar HTML):**
+    Los campos `text` de los `TextBlock` usan Markdown, no HTML. Las etiquetas HTML como `<b>` o `<i>` se muestran como texto literal en Teams. Usa siempre:
+    - Negritas: `**texto**`  (no `<b>texto</b>`)
+    - Cursivas: `*texto*`    (no `<i>texto</i>`)
+    - Saltos de línea: `\n` (no `<br>`)
+    Si el JSON que recibes ya contiene etiquetas HTML en campos `text`, CONVIÉRTELAS al equivalente Markdown.
     
     **EJEMPLO DE REDUCCIÓN CON FORMATO:**
     ANTES: "La cabina Economy SH registró un NPS de 24.5 con una caída de 6.2 pts respecto a la semana anterior, afectada principalmente por problemas de puntualidad y servicio de cabina en las rutas europeas, con un impacto más pronunciado en Iberia que en Young Wings según los datos de ambas compañías."
-    DESPUÉS: "<b>Economy SH:</b> NPS 24.5 (<b>–6.2 pts</b>), caída por puntualidad y servicio en rutas europeas. Mayor impacto en <b>IB</b> que en <b>YW</b>."
+    DESPUÉS: "**Economy SH:** NPS 24.5 (**–6.2 pts**), caída por puntualidad y servicio en rutas europeas. Mayor impacto en **IB** que en **YW**."
     
     **OBJETIVO:** Reducir ~10-15% del tamaño total manteniendo legibilidad y estructura narrativa.
     

@@ -148,16 +148,16 @@ step2_integrate_final:
     
     **ESTRUCTURA ESPERADA:**
     ```
-    <b>SÍNTESIS EJECUTIVA</b>
+    **SÍNTESIS EJECUTIVA**
     [Párrafo introductorio semanal - NPS global, tendencias generales]
-    
+
     [PÁRRAFO DE CONTEXTO DIARIO DE **GLOBAL** - "A nivel diario, ..."]
-    
-    <b><u>DETALLE POR CABINA</u></b>
-    
-    <b><u>ECONOMY SH: Deterioro por Cancelaciones</u></b>
+
+    **DETALLE POR CABINA**
+
+    **ECONOMY SH: Deterioro por Cancelaciones**
     [PÁRRAFO SEMANAL INTACTO - palabra por palabra]
-    
+
     [PÁRRAFO DE CONTEXTO DIARIO - "A nivel diario, ..."]
     ```
 
@@ -183,13 +183,13 @@ step3_extract_synthesis:
     Tu ÚNICA tarea es extraer la sección de SÍNTESIS EJECUTIVA del informe completo,
     DESCARTANDO todas las secciones técnicas previas.
     
-    ⚠️ **IMPORTANTE: El output debe estar en formato HTML para Microsoft Teams.**
+    ⚠️ **IMPORTANTE: El output debe estar en formato Markdown (NO HTML). Las etiquetas HTML como `<b>` se muestran como texto literal en las Adaptive Cards de Teams.**
     
     **REGLAS CRÍTICAS DE ESTILO:**
     - 🚫 **PROHIBIDO:** "Young Wings" (Usa **YW**).
-    - 🚫 **TERMINOLOGÍA PROHIBIDA:** NUNCA uses "anomalía positiva", "anomalía negativa", "transferencia", "dilución", "dominancia" o "burbujeo" en el informe HTML. Usa en su lugar "**subida de NPS**", "**bajada de NPS**", "**mejora**" o "**deterioro**".
+    - 🚫 **TERMINOLOGÍA PROHIBIDA:** NUNCA uses "anomalía positiva", "anomalía negativa", "transferencia", "dilución", "dominancia" o "burbujeo" en el informe. Usa en su lugar "**subida de NPS**", "**bajada de NPS**", "**mejora**" o "**deterioro**".
     - 🔢 **REDONDEO:** 1 decimal para todo (NPS, SHAP, %). Enteros para conteos.
-    - 📝 **HTML:** Estructura clara con títulos subrayados.
+    - 📝 **Markdown:** Estructura clara con títulos en negrita (`**Título**`).
     - 🗣️ **TONO MODERADO (OBLIGATORIO):** Evita lenguaje catastrofista o alarmista. NO uses palabras como "masivas", "crisis", "colapso", "caótico", "dramático", "extrema", "hundió". USA alternativas más neutras: "significativas", "notables", "incidencias", "situación", "saturación", "dificultades", "notable", "elevada", "redujo", "afectó".
     - 🎯 **FOCUS TOUCHPOINT (cuando aplique):** Si en el informe aparece información de un FOCUS TOUCHPOINT (marcado con 🎯), incluye una sección dedicada **obligatoria**. **Si el informe es a nivel Global**, esa sección debe contener **siempre tres párrafos o subsecciones en este orden:** **(1) Global, (2) SH, (3) LH**. En cada uno desarrolla las tres dimensiones siguientes (aunque falte dato: indica explícitamente "no disponible" / "sin verbatims" y **no omitas** el párrafo del nivel):
       1. **CSAT por nivel:** CSAT actual del focus touchpoint, gap vs target (CSAT − Target) y, en modo comparative, variación vs período anterior (satisfaction diff). En modo single, omitir la comparación vs período anterior.
@@ -249,48 +249,41 @@ step3_extract_synthesis:
     
     ---
     
-    ⚠️ **FORMATO HTML PARA TEAMS (OBLIGATORIO):**
-    
-    El output DEBE estar en HTML. Usa estas conversiones:
-    
-    | Markdown | HTML para Teams |
-    |----------|-----------------|
-    | **texto** | <b>texto</b> |
-    | Salto de línea | <br> |
-    | Párrafo nuevo | <br><br> |
-    | • bullet | • (el emoji funciona directamente) |
-    
-    **EJEMPLO DE OUTPUT HTML CORRECTO:**
-    ```html
-    <b>SÍNTESIS EJECUTIVA</b><br>
-    Durante la semana del <b>5 al 11 de diciembre</b>, hemos identificado 3 factores clave que explican las variaciones de NPS. El NPS global subió <b>+3.2 pts</b> con respecto a la semana anterior.<br><br>
-    
-    A nivel diario, el fuerte repunte del <b>06-dic</b> (+6.1 pts) explica gran parte de la mejora semanal.<br><br>
-    
-    <b><u>ECONOMY SH: Desempeño estable</u></b><br>
-    La cabina Economy de SH registró un NPS de <b>36.6</b> con <b>+3.4 pts</b> con respecto a la semana anterior. Desglose por compañía: <b>IB</b> obtuvo 35.4 con +3.5 pts, y <b>YW</b> 39.0 con +2.9 pts.<br><br>
-    
-    A nivel diario, la cabina Economy SH evidenció una trayectoria uniforme sin picos ni caídas relevantes.<br><br>
-    
-    <b><u>BUSINESS SH: Impacto conjunto de puntualidad y producto</u></b><br>
-    En Business de SH, el NPS fue <b>29.3</b> con <b>–10.0 pts</b> con respecto a la semana anterior...<br><br>
+    ⚠️ **FORMATO MARKDOWN (OBLIGATORIO — NO HTML):**
+
+    El output DEBE estar en Markdown. Las etiquetas HTML (`<b>`, `<br>`, etc.) se muestran como texto literal en Teams Adaptive Cards.
+
+    **EJEMPLO DE OUTPUT MARKDOWN CORRECTO:**
+    ```
+    **SÍNTESIS EJECUTIVA**
+    Durante la semana del **5 al 11 de diciembre**, hemos identificado 3 factores clave que explican las variaciones de NPS. El NPS global subió **+3.2 pts** con respecto a la semana anterior.
+
+    A nivel diario, el fuerte repunte del **06-dic** (+6.1 pts) explica gran parte de la mejora semanal.
+
+    **ECONOMY SH: Desempeño estable**
+    La cabina Economy de SH registró un NPS de **36.6** con **+3.4 pts** con respecto a la semana anterior. Desglose por compañía: **IB** obtuvo 35.4 con +3.5 pts, y **YW** 39.0 con +2.9 pts.
+
+    A nivel diario, la cabina Economy SH evidenció una trayectoria uniforme sin picos ni caídas relevantes.
+
+    **BUSINESS SH: Impacto conjunto de puntualidad y producto**
+    En Business de SH, el NPS fue **29.3** con **–10.0 pts** con respecto a la semana anterior...
     ```
 
     **REGLAS ESTRICTAS DE PROCESAMIENTO:**
     1.  **Sustitución de Entidades:** Si el texto original dice "Young Wings", cámbialo a **YW**.
     2.  **Redondeo:** Recorre TODOS los números decimales y redondéalos a un dígito (ej: `15.23` -> `15.2`).
-    3.  **Formato de Títulos:** Usa `<b><u>TITULO DE CABINA</u></b><br>` para separar secciones claramente.
-    
+    3.  **Formato de Títulos:** Usa `**TITULO DE CABINA**` (en línea propia, separada por línea en blanco) para separar secciones claramente.
+
     **REGLAS DE EXTRACCIÓN:**
     ❌ NO modifiques el significado del texto
     ❌ NO parafrasees (copia literal)
     ❌ NO añadas información nueva
     ❌ NO incluyas las secciones técnicas
     ❌ NO incluyas el footer
-    ❌ NO uses ```html ni bloques de código
-    
-    ✅ Convierte negritas a <b>
-    ✅ Usa <br> para saltos
+    ❌ NO uses etiquetas HTML (`<b>`, `<br>`, `<u>`, etc.)
+
+    ✅ Usa `**texto**` para negritas
+    ✅ Usa línea en blanco para separar párrafos
     ✅ Incluye TODAS las cabinas que aparezcan en la síntesis
 
 # =============================================================================
@@ -340,6 +333,8 @@ step4_generate_adaptive_card:
     - Devuelve SOLO el JSON minificado en una sola línea.
     - NO incluyas bloques de código markdown ni texto explicativo.
     - Escapa las comillas internas si es necesario para que sea un string JSON válido.
+    - **SALTOS DE LÍNEA EN CAMPOS `text`:** Cuando incrustes texto multi-párrafo en un campo `"text"` de TextBlock, reemplaza cada salto de línea real por `\n` (secuencia de escape JSON). NUNCA dejes retornos de carro literales dentro del string JSON — romperían el JSON.
+    - **FORMATO MARKDOWN EN `text`:** Usa `**texto**` para negritas y `*texto*` para cursivas. NO uses etiquetas HTML (`<b>`, `<i>`, `<br>`): se mostrarían como texto literal en Teams.
 
   input_template: |
     {focus_touchpoint_block}INFORME:
